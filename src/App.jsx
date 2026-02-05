@@ -420,13 +420,12 @@ function App() {
             <div className="space-y-2 max-h-48 overflow-y-auto">
               {lineas.map((linea) => (
                 <div key={linea.id} className="flex gap-2 items-center">
-                  <select value={linea.cliente} onChange={(e) => actualizarLineaVenta(tipo, linea.id, 'cliente', e.target.value)} className="flex-1 bg-white border border-blue-200 rounded px-2 py-1 text-xs font-medium text-slate-700 focus:outline-none">
-                    {dataSheets.clientes && dataSheets.clientes.length > 0 ? (
-                      dataSheets.clientes.map(c => <option key={c} value={c}>{c}</option>)
-                    ) : (
-                      <option value="">Cargando clientes...</option>
-                    )}
-                  </select>
+                 <select value={linea.cliente} onChange={(e) => actualizarLineaVenta(tipo, linea.id, 'cliente', e.target.value)} className="flex-1 bg-white border border-blue-200 rounded px-2 py-1 text-xs font-medium text-slate-700 focus:outline-none">
+  <option value="">Seleccionar cliente...</option>
+  {dataSheets.clientes && dataSheets.clientes.length > 0 ? (
+    dataSheets.clientes.map(c => <option key={c} value={c}>{c}</option>)
+  ) : null}
+</select>
                   <input type="text" value={linea.monto === '' ? '' : formatNum(linea.monto)} onChange={(e) => {
                       const raw = e.target.value.replace(/\./g, '').replace(/\s/g, '');
                       const num = raw === '' ? '' : parseFloat(raw) || 0;
@@ -522,9 +521,10 @@ function App() {
                   return (
                     <tr key={e.id} className="border-t border-purple-50 hover:bg-purple-50/30 transition">
                       <td className="p-4">
-                        <select value={e.cliente} onChange={(ev) => actualizarFila(e.id, 'cliente', ev.target.value)} className="bg-transparent focus:outline-none font-medium">
-                          {dataSheets.clientes && dataSheets.clientes.length > 0 ? dataSheets.clientes.map(c => <option key={c} value={c}>{c}</option>) : <option value="">Sin clientes</option>}
-                        </select>
+                       <select value={e.cliente} onChange={(ev) => actualizarFila(e.id, 'cliente', ev.target.value)} className="bg-transparent focus:outline-none font-medium w-full">
+  <option value="">Seleccionar cliente...</option>
+  {dataSheets.clientes && dataSheets.clientes.length > 0 ? dataSheets.clientes.map(c => <option key={c} value={c}>{c}</option>) : null}
+</select>
                       </td>
                       <td className="p-4">
                         <select value={e.tipoIdx} onChange={(ev) => actualizarFila(e.id, 'tipoIdx', ev.target.value)} className="bg-transparent focus:outline-none text-purple-600 font-bold text-xs">
@@ -546,20 +546,20 @@ function App() {
                         />
                       </td>
                       <td className="p-4 text-right">
-                        {isStaff ? (
-                          <input
-                            type="text"
-                            value={sueldoBrutoStr}
-                            onChange={(ev) => {
-                              const val = ev.target.value.replace(/\D/g, '');
-                              actualizarFila(e.id, 'sueldoBruto', val === '' ? 0 : Number(val));
-                            }}
-                            className="w-24 text-right bg-pink-50 text-pink-700 font-bold rounded px-2 border border-pink-200"
-                          />
-                        ) : (
-                          <span className="text-slate-300">-</span>
-                        )}
-                      </td>
+  {isStaff ? (
+    <input
+      type="text"
+      value={sueldoBrutoStr}
+      onChange={(ev) => {
+        const val = ev.target.value.replace(/\D/g, '');
+        actualizarFila(e.id, 'sueldoBruto', val === '' ? 0 : Number(val));
+      }}
+      className="w-24 text-right bg-pink-50 text-pink-700 font-bold rounded px-2 border border-pink-200"
+    />
+  ) : (
+    <span className="text-slate-300">-</span>
+  )}
+</td>
                       <td className="p-4 text-right font-mono text-red-500 text-xs">-{format(costoTotal)}</td>
                       <td className="p-4 text-right font-bold text-green-600">{format(res)}</td>
                       <td className="p-4 text-center">
