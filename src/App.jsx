@@ -1,5 +1,3 @@
-import React, { useState, useEffect, useMemo } from 'react';
-
 const SHEET_ID = '1fJVmm7i5g1IfOLHDTByRM-W01pWIF46k7aDOYsH4UKA';
 
 // Limpia y convierte strings numéricos a Number de forma robusta
@@ -37,18 +35,64 @@ const tolerantGet = (mapObj, key) => {
   return mapObj[key] !== undefined ? mapObj[key] : 0;
 };
 
+// Parser CSV robusto que maneja comillas y comas dentro de campos
+const parseCSV = (text) => {
+  const rows = [];
+  let row = [];
+  let cur = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    const next = text[i + 1];
+
+    if (ch === '"') {
+      if (inQuotes && next === '"') {
+        cur += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (ch === ',' && !inQuotes) {
+      row.push(cur);
+      cur = '';
+    } else if ((ch === '\n' || ch === '\r') && !inQuotes) {
+      if (ch === '\r' && next === '\n') i++;
+      row.push(cur);
+      cur = '';
+      if (row.some(cell => String(cell).trim() !== '')) rows.push(row);
+      row = [];
+    } else {
+      cur += ch;
+    }
+  }
+  row.push(cur);
+  if (row.some(cell => String(cell).trim() !== '')) rows.push(row);
+  return rows;
+};
+
 const fetchSheet = async (sheetName) => {
   const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
   const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status} leyendo sheet "${sheetName}"`);
+  }
+
   const text = await response.text();
-  const lines = text.split('\n').filter(l => l.trim() !== '');
-  if (lines.length === 0) return [];
-  const headers = lines[0].replace(/(^"|"$)/g, '').split(',').map(h => h.trim());
-  return lines.slice(1).map(line => {
-    const cells = line.replace(/(^"|"$)/g, '').split(',').map(c => c.trim());
+
+  if (text.trim().startsWith('<!DOCTYPE html') || text.includes('<html')) {
+    throw new Error(`Respuesta HTML leyendo "${sheetName}". Revisar publicación/permisos o nombre del tab.`);
+  }
+
+  const table = parseCSV(text);
+  if (!table || table.length === 0) return [];
+
+  const headers = table[0].map(h => String(h ?? '').trim().replace(/^"|"$/g, ''));
+  return table.slice(1).map((cells) => {
     const obj = {};
     for (let i = 0; i < headers.length; i++) {
-      obj[headers[i]] = cells[i] !== undefined ? cells[i] : '';
+      obj[headers[i]] = (cells[i] ?? '').toString().trim().replace(/^"|"$/g, '');
     }
     return obj;
   });
@@ -102,6 +146,11 @@ function App() {
           fetchSheet('EERRBase')
         ]);
 
+        console.log('✅ Precios rows:', precios.length, precios[0]);
+        console.log('✅ Clientes rows:', clientes.length, clientes[0]);
+        console.log('✅ Config rows:', cfg.length, cfg[0]);
+        console.log('✅ EERR rows:', eerr.length, eerr[0]);
+
         const configObj = {};
         cfg.forEach(row => {
           const key = row['Parámetro'] ?? row['Parametro'] ?? row['Key'] ?? Object.values(row)[0];
@@ -126,14 +175,17 @@ function App() {
         const preciosProcesados = precios.map(p => ({
           categoria: p['Categoria'] ?? p['Categoría'] ?? p['categoria'] ?? p['category'] ?? Object.values(p)[0] ?? 'Otros',
           tipo: p['Tipo'] ?? p['tipo'] ?? p['Type'] ?? Object.values(p)[1] ?? 'Default',
-          valor: cleanNum(p['Valor'] ?? p['Precio'] ?? Object.values(p)[2]),
-          sueldoSugerido: cleanNum(p['Sueldo'] ?? p['Sueldo bruto'] ?? Object.values(p)[3]),
-          costoFijo: cleanNum(p['Costo'] ?? p['Costo Fijo'] ?? Object.values(p)[4])
+          valor: cleanNum(p['Valor (ARS)'] ?? p['Valor'] ?? p['Precio'] ?? Object.values(p)[2]),
+          sueldoSugerido: cleanNum(p['Sueldo Sugerido (ARS)'] ?? p['Sueldo'] ?? p['Sueldo bruto'] ?? Object.values(p)[3]),
+          costoFijo: cleanNum(p['Costo Fijo (ARS)'] ?? p['Costo'] ?? p['Costo Fijo'] ?? Object.values(p)[4])
         }));
 
         const clientesProcesados = clientes.map(c => {
           return c['Cliente'] ?? c['cliente'] ?? c['Name'] ?? Object.values(c)[0] ?? '';
         }).filter(Boolean);
+
+        console.log('✅ Clientes procesados:', clientesProcesados);
+        console.log('✅ Precios procesados:', preciosProcesados);
 
         setDataSheets({
           preciosNuevos: preciosProcesados,
@@ -163,8 +215,8 @@ function App() {
           setEscenarios([]);
         }
       } catch (error) {
-        console.error('Error cargando sheets', error);
-        setDataSheets(prev => ({ ...prev, loading: false, error: 'Error cargando datos desde Google Sheets.' }));
+        console.error('❌ Error cargando sheets:', error);
+        setDataSheets(prev => ({ ...prev, loading: false, error: `Error cargando datos: ${error.message}` }));
       }
     };
     cargarDatos();
@@ -420,12 +472,12 @@ function App() {
             <div className="space-y-2 max-h-48 overflow-y-auto">
               {lineas.map((linea) => (
                 <div key={linea.id} className="flex gap-2 items-center">
-                 <select value={linea.cliente} onChange={(e) => actualizarLineaVenta(tipo, linea.id, 'cliente', e.target.value)} className="flex-1 bg-white border border-blue-200 rounded px-2 py-1 text-xs font-medium text-slate-700 focus:outline-none">
-  <option value="">Seleccionar cliente...</option>
-  {dataSheets.clientes && dataSheets.clientes.length > 0 ? (
-    dataSheets.clientes.map(c => <option key={c} value={c}>{c}</option>)
-  ) : null}
-</select>
+                  <select value={linea.cliente} onChange={(e) => actualizarLineaVenta(tipo, linea.id, 'cliente', e.target.value)} className="flex-1 bg-white border border-blue-200 rounded px-2 py-1 text-xs font-medium text-slate-700 focus:outline-none">
+                    <option value="">Seleccionar cliente...</option>
+                    {dataSheets.clientes && dataSheets.clientes.length > 0 ? (
+                      dataSheets.clientes.map(c => <option key={c} value={c}>{c}</option>)
+                    ) : null}
+                  </select>
                   <input type="text" value={linea.monto === '' ? '' : formatNum(linea.monto)} onChange={(e) => {
                       const raw = e.target.value.replace(/\./g, '').replace(/\s/g, '');
                       const num = raw === '' ? '' : parseFloat(raw) || 0;
@@ -453,7 +505,6 @@ function App() {
   return (
     <div className="p-8 bg-gradient-to-br from-slate-50 to-purple-50 min-h-screen font-sans text-slate-900">
       <div className="max-w-7xl mx-auto">
-        {/* HEADER */}
         <div className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-3xl font-black tracking-tight bg-gradient-to-r from-purple-600 via-pink-500 to-blue-500 bg-clip-text text-transparent uppercase">Horizon Finance Engine 2026</h1>
@@ -479,7 +530,6 @@ function App() {
           </div>
         </div>
 
-        {/* TABLA SIMULACIÓN */}
         <div className="bg-white rounded-xl shadow-sm border border-purple-100 overflow-hidden mb-6">
           <div className="p-4 border-b border-purple-50 flex justify-between items-center bg-gradient-to-r from-purple-50 to-pink-50">
             <h2 className="font-bold text-slate-700 text-sm">💼 Simulación de Servicios (Propuesta)</h2>
@@ -500,17 +550,18 @@ function App() {
               <tbody className="text-sm">
                 {escenarios.map(e => {
                   const p = dataSheets.preciosNuevos && dataSheets.preciosNuevos[e.tipoIdx];
-                  const isStaff = p && (p.categoria || '').toLowerCase().includes('staff');
+                  if (!p) return null;
+
+                  const isStaff = (p.categoria || '').toLowerCase().includes('staff');
                   let costoTotal = 0;
-                  if (p) {
-                    if (isStaff) {
-                      const sueldo = (Number(e.cantidad) || 0) * (Number(e.sueldoBruto) || 0);
-                      costoTotal = sueldo + (sueldo * pctCostoLaboral/100) + (sueldo * pctIndirectos/100);
-                    } else {
-                      const base = (Number(e.cantidad) || 0) * (Number(p.costoFijo) || 0);
-                      costoTotal = base + (base * pctIndirectos/100);
-                    }
+                  if (isStaff) {
+                    const sueldo = (Number(e.cantidad) || 0) * (Number(e.sueldoBruto) || 0);
+                    costoTotal = sueldo + (sueldo * pctCostoLaboral/100) + (sueldo * pctIndirectos/100);
+                  } else {
+                    const base = (Number(e.cantidad) || 0) * (Number(p.costoFijo) || 0);
+                    costoTotal = base + (base * pctIndirectos/100);
                   }
+
                   const venta = (Number(e.cantidad) || 0) * (Number(e.ventaUnit) || 0);
                   const res = venta - costoTotal;
                   const mgn = venta > 0 ? (res / venta) * 100 : 0;
@@ -521,10 +572,10 @@ function App() {
                   return (
                     <tr key={e.id} className="border-t border-purple-50 hover:bg-purple-50/30 transition">
                       <td className="p-4">
-                       <select value={e.cliente} onChange={(ev) => actualizarFila(e.id, 'cliente', ev.target.value)} className="bg-transparent focus:outline-none font-medium w-full">
-  <option value="">Seleccionar cliente...</option>
-  {dataSheets.clientes && dataSheets.clientes.length > 0 ? dataSheets.clientes.map(c => <option key={c} value={c}>{c}</option>) : null}
-</select>
+                        <select value={e.cliente} onChange={(ev) => actualizarFila(e.id, 'cliente', ev.target.value)} className="bg-transparent focus:outline-none font-medium w-full">
+                          <option value="">Seleccionar cliente...</option>
+                          {dataSheets.clientes && dataSheets.clientes.length > 0 ? dataSheets.clientes.map(c => <option key={c} value={c}>{c}</option>) : null}
+                        </select>
                       </td>
                       <td className="p-4">
                         <select value={e.tipoIdx} onChange={(ev) => actualizarFila(e.id, 'tipoIdx', ev.target.value)} className="bg-transparent focus:outline-none text-purple-600 font-bold text-xs">
@@ -546,20 +597,20 @@ function App() {
                         />
                       </td>
                       <td className="p-4 text-right">
-  {isStaff ? (
-    <input
-      type="text"
-      value={sueldoBrutoStr}
-      onChange={(ev) => {
-        const val = ev.target.value.replace(/\D/g, '');
-        actualizarFila(e.id, 'sueldoBruto', val === '' ? 0 : Number(val));
-      }}
-      className="w-24 text-right bg-pink-50 text-pink-700 font-bold rounded px-2 border border-pink-200"
-    />
-  ) : (
-    <span className="text-slate-300">-</span>
-  )}
-</td>
+                        {isStaff ? (
+                          <input
+                            type="text"
+                            value={sueldoBrutoStr}
+                            onChange={(ev) => {
+                              const val = ev.target.value.replace(/\D/g, '');
+                              actualizarFila(e.id, 'sueldoBruto', val === '' ? 0 : Number(val));
+                            }}
+                            className="w-24 text-right bg-pink-50 text-pink-700 font-bold rounded px-2 border border-pink-200"
+                          />
+                        ) : (
+                          <span className="text-slate-300">-</span>
+                        )}
+                      </td>
                       <td className="p-4 text-right font-mono text-red-500 text-xs">-{format(costoTotal)}</td>
                       <td className="p-4 text-right font-bold text-green-600">{format(res)}</td>
                       <td className="p-4 text-center">
@@ -578,199 +629,6 @@ function App() {
           </div>
         </div>
 
-        {/* HISTORIAL */}
-        {mostrarHistorial && (
-          <div className="bg-white rounded-xl shadow-sm border border-purple-100 overflow-hidden mb-6">
-            <div className="p-4 border-b border-purple-50 bg-gradient-to-r from-purple-50 to-pink-50 flex justify-between items-center">
-              <h2 className="font-bold text-slate-700 text-sm">📋 Historial de Escenarios Guardados</h2>
-              <button onClick={() => setMostrarHistorial(false)} className="text-slate-400 hover:text-slate-600 text-xs">Cerrar</button>
-            </div>
-            <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {historial.length === 0 ? (
-                <div className="col-span-full text-center py-8 text-slate-400 text-sm italic">No hay escenarios guardados en este navegador.</div>
-              ) : (
-                historial.map(item => (
-                  <div key={item.id} className="border border-purple-100 rounded-lg p-4 hover:border-purple-400 transition bg-white shadow-sm">
-                    <div className="flex justify-between items-start mb-2">
-                      <h3 className="font-black text-purple-700 text-sm uppercase truncate pr-2">{item.nombre}</h3>
-                      <button onClick={() => { if(window.confirm('¿Eliminar este escenario?')) setHistorial(prev => prev.filter(h => h.id !== item.id)) }} className="text-slate-300 hover:text-red-500">✕</button>
-                    </div>
-                    <p className="text-[10px] text-slate-400 font-bold mb-3">{item.fecha}</p>
-                    <div className="space-y-1 mb-4">
-                      <div className="flex justify-between text-xs"><span className="text-slate-500">Venta Propuesta:</span><span className="font-bold text-green-600">{format(item.eerr.propuesta.ventasTotales)}</span></div>
-                      <div className="flex justify-between text-xs"><span className="text-slate-500">Ganancia Neta:</span><span className="font-bold text-blue-600">{format(item.eerr.gananciaNetaTotal)}</span></div>
-                    </div>
-                    <button onClick={() => {
-                      if(window.confirm(`¿Cargar el escenario "${item.nombre}"? Se perderán los cambios actuales.`)) {
-                        setEscenarios(JSON.parse(JSON.stringify(item.escenarios)));
-                        setPctIndirectos(item.config.pctIndirectos);
-                        setPctCostoLaboral(item.config.pctCostoLaboral);
-                        setGastosOperativos(item.config.gastosOperativos);
-                        setMargenObjetivo(item.config.margenObjetivo);
-                        setLineasVentaTotal(item.config.lineasVentaTotal);
-                        setLineasRenovacion(item.config.lineasRenovacion);
-                        setLineasIncremental(item.config.lineasIncremental);
-                        setMostrarHistorial(false);
-                      }
-                    }} className="w-full bg-purple-50 text-purple-700 py-2 rounded font-black text-[10px] uppercase hover:bg-purple-600 hover:text-white transition">Cargar Escenario</button>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* EERR COMPARATIVO */}
-        <div className="bg-white rounded-xl shadow-lg border border-purple-200 overflow-hidden mb-6">
-          <div className="p-4 border-b border-purple-100 flex justify-between items-center bg-gradient-to-r from-purple-600 to-pink-600 text-white">
-            <h2 className="font-bold text-sm">📊 Estado de Resultados Comparativo</h2>
-            <button onClick={() => setMostrarEERR(!mostrarEERR)} className="bg-white/20 hover:bg-white/40 px-3 py-1 rounded text-[10px] font-black uppercase transition">
-              {mostrarEERR ? '✕ Ocultar Panel' : '👁️ Mostrar Panel'}
-            </button>
-          </div>
-          {mostrarEERR && (
-            <>
-              <div className="overflow-x-auto animate-in zoom-in-95 duration-200">
-                <table className="w-full text-left border-collapse text-xs">
-                  <thead>
-                    <tr className="bg-purple-50 text-purple-600 font-bold uppercase text-[10px]">
-                      <th className="p-3 border-r border-purple-100"></th>
-                      <th className="p-3 text-right border-r border-purple-100">EERR Dic-25</th>
-                      <th className="p-3 text-right border-r border-purple-100">%</th>
-                      <th className="p-3 text-right bg-green-50 border-r border-green-200">Propuesta</th>
-                      <th className="p-3 text-right bg-green-50 border-r border-green-200">%</th>
-                      <th className="p-3 text-right bg-blue-50 border-r border-blue-200">EERR Total</th>
-                      <th className="p-3 text-right bg-blue-50">%</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr className="border-b border-purple-50 hover:bg-purple-50/30">
-                      <td className="p-3 font-bold text-slate-700">Ingreso</td>
-                      <td className="p-3 text-right font-mono border-r border-purple-100">{format(tolerantGet(dataSheets.eerrBase, 'Ingreso'))}</td>
-                      <td className="p-3 text-right font-bold border-r border-purple-100">100%</td>
-                      <td className="p-3 text-right font-mono bg-green-50 border-r border-green-200 text-green-700 font-bold">{format(propuesta.ventasTotales)}</td>
-                      <td className="p-3 text-right font-bold bg-green-50 border-r border-green-200">100%</td>
-                      <td className="p-3 text-right font-mono bg-blue-50 border-r border-blue-200 text-blue-700 font-bold">{format(eerr.ingresoTotal)}</td>
-                      <td className="p-3 text-right font-bold bg-blue-50">100%</td>
-                    </tr>
-                    <tr className="border-b border-purple-50 hover:bg-purple-50/30">
-                      <td className="p-3 font-bold text-slate-700">Costo de ingresos</td>
-                      <td className="p-3 text-right font-mono border-r border-purple-100">{format(tolerantGet(dataSheets.eerrBase, 'Costo de ingresos'))}</td>
-                      <td className="p-3 text-right font-bold border-r border-purple-100">{((tolerantGet(dataSheets.eerrBase, 'Costo de ingresos') / (tolerantGet(dataSheets.eerrBase, 'Ingreso') || 1)) * 100).toFixed(0)}%</td>
-                      <td className="p-3 text-right font-mono bg-green-50 border-r border-green-200 text-red-600 font-bold">-{format(propuesta.costosTotales)}</td>
-                      <td className="p-3 text-right font-bold bg-green-50 border-r border-green-200">{propuesta.ventasTotales ? ((propuesta.costosTotales / propuesta.ventasTotales) * 100).toFixed(0) + '%' : '0%'}</td>
-                      <td className="p-3 text-right font-mono bg-blue-50 border-r border-blue-200 text-red-600 font-bold">-{format(eerr.costoIngresosTotal)}</td>
-                      <td className="p-3 text-right font-bold bg-blue-50">{eerr.ingresoTotal ? ((eerr.costoIngresosTotal / eerr.ingresoTotal) * 100).toFixed(0) + '%' : '0%'}</td>
-                    </tr>
-                    <tr className="border-b border-purple-50 hover:bg-purple-50/30">
-                      <td className="p-3 font-bold text-slate-700">Ganancia bruta</td>
-                      <td className="p-3 text-right font-mono border-r border-purple-100">{format(tolerantGet(dataSheets.eerrBase, 'Ganancia bruta'))}</td>
-                      <td className="p-3 text-right font-bold border-r border-purple-100">{((tolerantGet(dataSheets.eerrBase, 'Ganancia bruta') / (tolerantGet(dataSheets.eerrBase, 'Ingreso') || 1)) * 100).toFixed(0)}%</td>
-                      <td className="p-3 text-right font-mono bg-green-50 border-r border-green-200 font-bold">{format(propuesta.ventasTotales - propuesta.costosTotales)}</td>
-                      <td className="p-3 text-right font-bold bg-green-50 border-r border-green-200">{propuesta.ventasTotales ? (((propuesta.ventasTotales - propuesta.costosTotales) / propuesta.ventasTotales) * 100).toFixed(0) + '%' : '0%'}</td>
-                      <td className="p-3 text-right font-mono bg-blue-50 border-r border-blue-200 font-bold">{format(eerr.gananciaBrutaTotal)}</td>
-                      <td className="p-3 text-right font-bold bg-blue-50">{eerr.ingresoTotal ? ((eerr.gananciaBrutaTotal / eerr.ingresoTotal) * 100).toFixed(0) + '%' : '0%'}</td>
-                    </tr>
-                    <tr className="border-b border-purple-50 hover:bg-purple-50/30">
-                      <td className="p-3 font-bold text-slate-700 pl-6">Menos gasto de operación</td>
-                      <td className="p-3 text-right font-mono text-red-600 border-r border-purple-100">{format(tolerantGet(dataSheets.eerrBase, 'Menos gasto de operación'))}</td>
-                      <td className="p-3 text-right font-bold border-r border-purple-100">{((tolerantGet(dataSheets.eerrBase, 'Menos gasto de operación') / (tolerantGet(dataSheets.eerrBase, 'Ingreso') || 1)) * 100).toFixed(0)}%</td>
-                      <td className="p-3 text-right font-mono bg-green-50 border-r border-green-200 text-slate-400">0.00</td>
-                      <td className="p-3 text-right font-bold bg-green-50 border-r border-green-200">0%</td>
-                      <td className="p-3 text-right font-mono text-red-600 bg-blue-50 border-r border-blue-200">{format(eerr.gastoOperacionTotal)}</td>
-                      <td className="p-3 text-right font-bold bg-blue-50">{eerr.ingresoTotal ? ((eerr.gastoOperacionTotal / eerr.ingresoTotal) * 100).toFixed(0) + '%' : '0%'}</td>
-                    </tr>
-                    <tr className="border-b border-purple-50 hover:bg-purple-50/30">
-                      <td className="p-3 font-bold text-slate-700">Ingreso de operación (o pérdida)</td>
-                      <td className="p-3 text-right font-mono text-purple-700 border-r border-purple-100">{format(tolerantGet(dataSheets.eerrBase, 'Ingreso de operación'))}</td>
-                      <td className="p-3 text-right font-bold border-r border-purple-100">{((tolerantGet(dataSheets.eerrBase, 'Ingreso de operación') / (tolerantGet(dataSheets.eerrBase, 'Ingreso') || 1)) * 100).toFixed(0)}%</td>
-                      <td className="p-3 text-right font-mono font-bold text-green-700 bg-green-50 border-r border-green-200">{format(eerr.ingresoOperacionTotal)}</td>
-                      <td className="p-3 text-right font-bold bg-green-50 border-r border-green-200">{formatPct((eerr.ingresoOperacionTotal / eerr.ingresoTotal) * 100)}</td>
-                      <td className="p-3 text-right font-mono font-bold text-blue-700 bg-blue-50 border-r border-blue-200">{format(eerr.ingresoOperacionTotal)}</td>
-                      <td className="p-3 text-right font-bold bg-blue-50">{formatPct((eerr.ingresoOperacionTotal / eerr.ingresoTotal) * 100)}</td>
-                    </tr>
-                    <tr className="border-b border-purple-50 hover:bg-purple-50/30">
-                      <td className="p-3 font-bold text-slate-700">Más otros ingresos</td>
-                      <td className="p-3 text-right font-mono text-purple-700 border-r border-purple-100">{format(tolerantGet(dataSheets.eerrBase, 'Más otros ingresos'))}</td>
-                      <td className="p-3 text-right font-bold border-r border-purple-100">{((tolerantGet(dataSheets.eerrBase, 'Más otros ingresos') / (tolerantGet(dataSheets.eerrBase, 'Ingreso') || 1)) * 100).toFixed(0)}%</td>
-                      <td className="p-3 text-right font-mono bg-green-50 border-r border-green-200 text-slate-400">0.00</td>
-                      <td className="p-3 text-right font-bold bg-green-50 border-r border-green-200">0%</td>
-                      <td className="p-3 text-right font-mono text-purple-700 bg-blue-50 border-r border-blue-200">{format(eerr.otrosIngresosTotal)}</td>
-                      <td className="p-3 text-right font-bold bg-blue-50">{formatPct((eerr.otrosIngresosTotal / eerr.ingresoTotal) * 100)}</td>
-                    </tr>
-                    <tr className="border-b border-purple-50 hover:bg-purple-50/30">
-                      <td className="p-3 font-bold text-slate-700">Menos gastos de otro tipo</td>
-                      <td className="p-3 text-right font-mono text-red-600 border-r border-purple-100">{format(tolerantGet(dataSheets.eerrBase, 'Menos gastos de otro tipo'))}</td>
-                      <td className="p-3 text-right font-bold border-r border-purple-100">{((tolerantGet(dataSheets.eerrBase, 'Menos gastos de otro tipo') / (tolerantGet(dataSheets.eerrBase, 'Ingreso') || 1)) * 100).toFixed(0)}%</td>
-                      <td className="p-3 text-right font-mono bg-green-50 border-r border-green-200 text-slate-400">0.00</td>
-                      <td className="p-3 text-right font-bold bg-green-50 border-r border-green-200">0%</td>
-                      <td className="p-3 text-right font-mono text-red-600 bg-blue-50 border-r border-blue-200">{format(eerr.otrosGastosTotal)}</td>
-                      <td className="p-3 text-right font-bold bg-blue-50">{formatPct((eerr.otrosGastosTotal / eerr.ingresoTotal) * 100)}</td>
-                    </tr>
-                    <tr className="bg-gradient-to-r from-purple-100 to-pink-100 border-t-4 border-purple-400">
-                      <td className="p-4 font-black text-slate-900 text-sm">Ganancia neta</td>
-                      <td className="p-4 text-right font-mono font-black text-purple-700 border-r border-purple-200 text-sm">{format(tolerantGet(dataSheets.eerrBase, 'Ganancia neta'))}</td>
-                      <td className="p-4 text-right font-black border-r border-purple-200">{formatPct((tolerantGet(dataSheets.eerrBase, 'Ganancia neta') / tolerantGet(dataSheets.eerrBase, 'Ingreso')) * 100)}</td>
-                      <td className="p-4 text-right font-mono font-black text-green-700 bg-green-100 border-r border-green-300 text-sm">{format(propuesta.margenBruto)}</td>
-                      <td className="p-4 text-right font-black bg-green-100 border-r border-green-300">{formatPct(propuesta.margenBrutoPct)}</td>
-                      <td className="p-4 text-right font-mono font-black text-blue-700 bg-blue-100 border-r border-blue-300 text-sm">{format(eerr.gananciaNetaTotal)}</td>
-                      <td className="p-4 text-right font-black bg-blue-100">{formatPct(eerr.margenNetoPct)}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-
-              {/* DESVÍO VS BASE DIC-25 */}
-              <div className="bg-purple-100 rounded-xl shadow-lg border border-purple-400 p-6 mt-6">
-                <div className="flex justify-between items-center">
-                  <div className="text-purple-900 font-black uppercase text-sm">DESVÍO VS BASE DIC-25</div>
-                  <div className="text-right font-black text-lg text-purple-900">MARGEN NETO TOTAL <br /> <span className="text-3xl">{eerr.margenNetoPct ? eerr.margenNetoPct.toFixed(1) : '0.0'}%</span></div>
-                </div>
-                <div className="mt-4 flex gap-6 text-sm font-bold">
-                  <div className="text-green-700">Ingreso: +{format(desvioVsBase.ingreso)}</div>
-                  <div className="text-red-600">Costo: +{format(desvioVsBase.costo)}</div>
-                  <div className="text-green-700">Ganancia Neta: +{format(desvioVsBase.gananciaNeta)}</div>
-                </div>
-              </div>
-
-              {/* APORTE POR CLIENTE */}
-              <div className="bg-white rounded-xl shadow-sm border border-blue-200 overflow-hidden mb-6 p-4">
-                <h2 className="font-bold text-blue-700 text-sm mb-4 uppercase">Aporte por Cliente (Propuesta)</h2>
-                <table className="w-full text-left border-collapse text-xs">
-                  <thead>
-                    <tr className="bg-blue-50 text-blue-600 font-bold uppercase text-[10px]">
-                      <th className="p-3 border border-blue-200">Cliente</th>
-                      <th className="p-3 border border-blue-200 text-right">Venta Total</th>
-                      <th className="p-3 border border-blue-200 text-right">Costo Total</th>
-                      <th className="p-3 border border-blue-200 text-right">Resultado</th>
-                      <th className="p-3 border border-blue-200 text-right">Margen %</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {Object.entries(aportePorCliente).length === 0 ? (
-                      <tr><td className="p-4" colSpan={5}>Sin datos</td></tr>
-                    ) : Object.entries(aportePorCliente).map(([cliente, datos]) => (
-                      <tr key={cliente} className="border-b border-blue-100 hover:bg-blue-50/30">
-                        <td className="p-3 font-bold text-blue-700">{cliente}</td>
-                        <td className="p-3 text-right font-mono">{format(datos.venta)}</td>
-                        <td className="p-3 text-right font-mono text-red-600">{format(datos.costo)}</td>
-                        <td className="p-3 text-right font-bold text-green-600">{format(datos.resultado)}</td>
-                        <td className={`p-3 text-right font-black text-[10px] px-2 py-1 rounded ${
-                          datos.margen >= margenObjetivo ? 'bg-green-100 text-green-700' :
-                          datos.margen >= 15 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'
-                        }`}>
-                          {datos.margen.toFixed(1)}%
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* VELOCÍMETROS */}
         <div className="mb-6">
           <h2 className="text-lg font-black text-slate-700 uppercase mb-4">🎯 Objetivos 2026 - Tracking de Ventas</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -784,4 +642,4 @@ function App() {
   );
 }
 
-export default App;
+App;
