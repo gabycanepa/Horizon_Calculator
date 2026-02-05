@@ -53,11 +53,17 @@ function App() {
         ]);
 
         // Procesar Configuración
-        const configObj = {};
-        cfg.forEach(row => {
-            const key = row['Parámetro'] || row['Parametro'];
-            configObj[key] = cleanNum(row['Valor']);
+const configObj = {};
+cfg.forEach(row => {
+  // Usa cualquiera de las dos variantes de nombre de columna
+  const key = row['Parámetro'] || row['Parametro'] || row['Parámetro '] || row['Parametro '];
+  const valRaw = row['Valor'] || row['Valor '];
+  console.log('Configuracion fila:', key, valRaw);
+  configObj[key] = cleanNum(valRaw);
+});
         });
+
+      console.log('Configuracion procesada:', configObj);
 
         // Procesar EERR Base
         const eerrObj = {};
