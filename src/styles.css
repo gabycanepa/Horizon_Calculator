@@ -1,3 +1,8 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Si tenías otros estilos antes, déjalos debajo de estas líneas */
 :root{
   --bg:#f6f5fb;
   --violet-1: #7b3fe4;
