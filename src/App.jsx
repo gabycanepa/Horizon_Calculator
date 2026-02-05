@@ -638,7 +638,7 @@ function App() {
           )}
         </div>
 
-        {/* VELOCÍMETROS /}
+        {/* VELOCÍMETROS */}
         <div className="mb-6">
           <h2 className="text-lg font-black text-slate-700 uppercase mb-4">🎯 Objetivos 2026 - Tracking de Ventas</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
