@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-// 1. REEMPLAZA CON TU ID
+// 1. TU ID DE SIEMPRE
 const SHEET_ID = '1vTJQrYIRPWBawtIIUdL4NvJcbDDwNCQf8YiXKl7t6BFi1mfVwQT4nuFAqX2YTKA5Q05Y6nBGhALckdf'; 
 
 function App() {
@@ -15,12 +15,18 @@ function App() {
 
   const [escenarios, setEscenarios] = useState([]);
 
-  // Función para limpiar números de Google Sheets (quita puntos de miles, cambia coma decimal por punto)
+  // Limpiador de números ultra-robusto
   const cleanNum = (val) => {
-    if (!val) return 0;
-    // Quita el símbolo $, quita los puntos de miles, y cambia la coma por punto
-    const clean = val.toString().replace(/[$.]/g, '').replace(',', '.').trim();
+    if (val === undefined || val === null || val === '') return 0;
+    // Elimina todo lo que no sea número o coma
+    let clean = val.toString().replace(/[$.]/g, '').replace(',', '.').trim();
     return parseFloat(clean) || 0;
+  };
+
+  // Buscador de propiedades ignorando mayúsculas/minúsculas y espacios
+  const getProp = (obj, name) => {
+    const key = Object.keys(obj).find(k => k.toLowerCase().replace(/\s/g, '').includes(name.toLowerCase().replace(/\s/g, '')));
+    return obj[key];
   };
 
   const fetchSheet = async (sheetName) => {
@@ -52,46 +58,44 @@ function App() {
           fetchSheet('EERRBase')
         ]);
 
-        // Procesar Configuración
-const configObj = {};
-cfg.forEach(row => {
-  // Usa cualquiera de las dos variantes de nombre de columna
-  const key = row['Parámetro'] || row['Parametro'] || row['Parámetro '] || row['Parametro '];
-  const valRaw = row['Valor'] || row['Valor '];
-  console.log('Configuracion fila:', key, valRaw);
-  configObj[key] = cleanNum(valRaw);
-});
+        // Procesar Configuración con buscador flexible
+        const configObj = {};
+        cfg.forEach(row => {
+            const key = getProp(row, 'Parámetro') || getProp(row, 'Parametro');
+            const val = getProp(row, 'Valor');
+            if (key) configObj[key.trim()] = cleanNum(val);
         });
-
-      console.log('Configuracion procesada:', configObj);
 
         // Procesar EERR Base
         const eerrObj = {};
         eerr.forEach(row => {
-            eerrObj[row['Concepto']] = cleanNum(row['Monto (ARS)'] || row['# Monto (ARS)']);
+            const concepto = getProp(row, 'Concepto');
+            const monto = getProp(row, 'Monto');
+            if (concepto) eerrObj[concepto.trim()] = cleanNum(monto);
         });
 
         const preciosProcesados = precios.map(p => ({
-          categoria: p['Categoria'],
-          tipo: p['Tipo'],
-          valor: cleanNum(p['Valor (ARS)']),
-          sueldoSugerido: cleanNum(p['Sueldo Sugerido (ARS)']),
-          costoFijo: cleanNum(p['Costo Fijo (ARS)'])
+          categoria: getProp(p, 'Categoria'),
+          tipo: getProp(p, 'Tipo'),
+          valor: cleanNum(getProp(p, 'Valor')),
+          sueldoSugerido: cleanNum(getProp(p, 'Sueldo')),
+          costoFijo: cleanNum(getProp(p, 'Costo'))
         }));
+
+        const clientesProcesados = cls.map(c => getProp(c, 'Cliente')).filter(c => c);
 
         setDataSheets({
           preciosNuevos: preciosProcesados,
-          clientes: cls.map(c => c['Cliente']).filter(c => c),
+          clientes: clientesProcesados,
           config: configObj,
           eerrBase: eerrObj,
           loading: false
         });
 
-        // Inicializar primer fila
         if (preciosProcesados.length > 0) {
           setEscenarios([{ 
             id: Date.now(), 
-            cliente: cls[0]?.Cliente || 'Nuevo Cliente', 
+            cliente: clientesProcesados[0] || 'Nuevo Cliente', 
             tipoIdx: 0, 
             cantidad: 1, 
             sueldoBruto: preciosProcesados[0].sueldoSugerido, 
@@ -100,7 +104,8 @@ cfg.forEach(row => {
         }
 
       } catch (err) {
-        setDataSheets(prev => ({ ...prev, loading: false, error: "Error de conexión. Verifica que el Sheet esté publicado como Web." }));
+        console.error(err);
+        setDataSheets(prev => ({ ...prev, loading: false, error: "Error de conexión. Revisa la consola." }));
       }
     };
     cargarTodo();
@@ -109,19 +114,25 @@ cfg.forEach(row => {
   const calcularPropuesta = () => {
     let ventasTotales = 0;
     let costosTotales = 0;
+    
+    // Buscamos los porcentajes en el objeto config de forma flexible
+    const pctLaboral = dataSheets.config['% Costo Laboral'] || 0;
+    const pctIndirectos = dataSheets.config['% Indirectos'] || 0;
+
     escenarios.forEach(e => {
       const p = dataSheets.preciosNuevos[e.tipoIdx];
       if (!p) return;
       const v = e.cantidad * e.ventaUnit;
       let costoTotalFila = 0;
+      
       if (p.categoria === 'Staff Augmentation') {
         const sueldoTotal = e.cantidad * e.sueldoBruto;
-        const costoLaboral = sueldoTotal * (dataSheets.config['% Costo Laboral'] / 100);
-        const indirectos = sueldoTotal * (dataSheets.config['% Indirectos'] / 100);
+        const costoLaboral = sueldoTotal * (pctLaboral / 100);
+        const indirectos = sueldoTotal * (pctIndirectos / 100);
         costoTotalFila = sueldoTotal + costoLaboral + indirectos;
       } else {
         const base = e.cantidad * p.costoFijo;
-        const indirectos = base * (dataSheets.config['% Indirectos'] / 100);
+        const indirectos = base * (pctIndirectos / 100);
         costoTotalFila = base + indirectos;
       }
       ventasTotales += v;
@@ -133,11 +144,12 @@ cfg.forEach(row => {
   const format = (n) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n);
 
   if (dataSheets.loading) return <div className="p-20 text-center font-black text-purple-600 animate-pulse">SINCRONIZANDO CON HORIZON CLOUD...</div>;
-  if (dataSheets.error) return <div className="p-20 text-center text-red-500 font-bold">{dataSheets.error}</div>;
-
+  
   const propuesta = calcularPropuesta();
   const netaBase = dataSheets.eerrBase['Ganancia neta'] || 0;
   const netaTotal = netaBase + propuesta.margenBruto;
+  const gastosOp = dataSheets.config['Gastos Operativos'] || 0;
+  const margenObj = dataSheets.config['Margen Objetivo (%)'] || 0;
 
   return (
     <div className="p-8 bg-slate-50 min-h-screen font-sans">
@@ -146,16 +158,16 @@ cfg.forEach(row => {
         <div className="flex justify-between items-end mb-8">
           <div>
             <span className="bg-green-500 text-white text-[10px] font-black px-2 py-1 rounded uppercase mb-2 inline-block shadow-sm">● Live Sheets Connected</span>
-            <h1 className="text-4xl font-black text-slate-800 tracking-tighter">HORIZON <span className="text-purple-600">CALCULATOR</span></h1>
+            <h1 className="text-4xl font-black text-slate-800 tracking-tighter uppercase">Horizon <span className="text-purple-600">Calculator</span></h1>
           </div>
           <div className="flex gap-6 text-right bg-white p-4 rounded-xl shadow-sm border border-slate-100">
             <div>
               <p className="text-[10px] font-bold text-slate-400 uppercase">Gastos Op. Base</p>
-              <p className="font-black text-slate-700">{format(dataSheets.config['Gastos Operativos'])}</p>
+              <p className="font-black text-slate-700">{format(gastosOp)}</p>
             </div>
             <div className="border-l pl-6">
               <p className="text-[10px] font-bold text-slate-400 uppercase">Margen Obj.</p>
-              <p className="font-black text-purple-600">{dataSheets.config['Margen Objetivo (%)']}%</p>
+              <p className="font-black text-purple-600">{margenObj}%</p>
             </div>
           </div>
         </div>
@@ -164,7 +176,7 @@ cfg.forEach(row => {
           <div className="p-5 bg-slate-900 text-white flex justify-between items-center">
             <h2 className="font-black text-xs uppercase tracking-widest">Simulador de Escenarios</h2>
             <button 
-              onClick={() => setEscenarios([...escenarios, { id: Date.now(), cliente: dataSheets.clientes[0], tipoIdx: 0, cantidad: 1, sueldoBruto: dataSheets.preciosNuevos[0].valor * 0.4, ventaUnit: dataSheets.preciosNuevos[0].valor }])}
+              onClick={() => setEscenarios([...escenarios, { id: Date.now(), cliente: dataSheets.clientes[0], tipoIdx: 0, cantidad: 1, sueldoBruto: dataSheets.preciosNuevos[0].sueldoSugerido, ventaUnit: dataSheets.preciosNuevos[0].valor }])}
               className="bg-purple-600 hover:bg-purple-500 px-6 py-2 rounded-full text-[10px] font-black transition-all transform hover:scale-105 shadow-lg"
             >
               + AGREGAR SERVICIO
@@ -190,7 +202,7 @@ cfg.forEach(row => {
                   <tr key={e.id} className="border-b border-slate-50 hover:bg-purple-50/30 transition">
                     <td className="p-4">
                       <select className="font-bold text-slate-700 bg-transparent focus:outline-none cursor-pointer" value={e.cliente} onChange={(ev) => setEscenarios(escenarios.map(x => x.id === e.id ? {...x, cliente: ev.target.value} : x))}>
-                        {dataSheets.clientes.map(c => <option key={c}>{c}</option>)}
+                        {dataSheets.clientes.map(c => <option key={c} value={c}>{c}</option>)}
                       </select>
                     </td>
                     <td className="p-4">
