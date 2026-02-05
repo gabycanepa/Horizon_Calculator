@@ -194,7 +194,7 @@ function App() {
       fecha: timestamp,
       escenarios: JSON.parse(JSON.stringify(escenarios)),
       eerr: eerr,
-      config: { pctIndirectos, pctCostoLaboral, gastosOperativos, margenObjetivo }
+      config: { pctIndirectos, pctCostoLaboral, gastosOperativos, margenObjetivo, lineasVentaTotal, lineasRenovacion, lineasIncremental }
     };
     setHistorial([nuevoHistorial, ...historial]);
     alert(`✅ Escenario "${nombre}" guardado.`);
@@ -421,6 +421,9 @@ function App() {
                         setPctCostoLaboral(item.config.pctCostoLaboral);
                         setGastosOperativos(item.config.gastosOperativos);
                         setMargenObjetivo(item.config.margenObjetivo);
+                        setLineasVentaTotal(item.config.lineasVentaTotal);
+                        setLineasRenovacion(item.config.lineasRenovacion);
+                        setLineasIncremental(item.config.lineasIncremental);
                         setMostrarHistorial(false);
                       }
                     }} className="w-full bg-purple-50 text-purple-700 py-2 rounded font-black text-[10px] uppercase hover:bg-purple-600 hover:text-white transition">Cargar Escenario</button>
@@ -435,7 +438,6 @@ function App() {
         <div className="bg-white rounded-xl shadow-lg border border-purple-200 overflow-hidden mb-6">
           <div className="p-4 border-b border-purple-100 flex justify-between items-center bg-gradient-to-r from-purple-600 to-pink-600 text-white">
             <h2 className="font-bold text-sm">📊 Estado de Resultados Comparativo</h2>
-            <button onClick={guardarEscenario} className="bg-green-600 hover:bg-green-700 px-3 py-1 rounded text-xs font-black uppercase transition">💾 Guardar Estado</button>
             <button onClick={() => setMostrarEERR(!mostrarEERR)} className="bg-white/20 hover:bg-white/40 px-3 py-1 rounded text-[10px] font-black uppercase transition">
               {mostrarEERR ? '✕ Ocultar Panel' : '👁️ Mostrar Panel'}
             </button>
@@ -535,10 +537,7 @@ function App() {
 
         {/* VELOCÍMETROS */}
         <div className="mb-6">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-black text-slate-700 uppercase">🎯 Objetivos 2026 - Tracking de Ventas</h2>
-            <button onClick={guardarEscenario} className="bg-green-600 hover:bg-green-700 px-3 py-1 rounded text-xs font-black uppercase transition">💾 Guardar Velocímetros</button>
-          </div>
+          <h2 className="text-lg font-black text-slate-700 uppercase mb-4">🎯 Objetivos 2026 - Tracking de Ventas</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {renderVelocimetro("Objetivo Ventas Total 2026", objVentasTotal, lineasVentaTotal, setLineasVentaTotal, "total", "#7c3aed")}
             {renderVelocimetro("Objetivo Renovación 2026", objRenovacion, lineasRenovacion, setLineasRenovacion, "renovacion", "#ec4899")}
