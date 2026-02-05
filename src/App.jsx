@@ -1,4 +1,4 @@
-ULTIMO CODIGO QUE FUNCIONÓ CON CONEXION A SHEETS
+//ULTIMO CODIGO QUE FUNCIONÓ CON CONEXION A SHEETS
 
 import React, { useState, useEffect, useMemo } from 'react';
 
