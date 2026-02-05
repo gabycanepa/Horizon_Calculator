@@ -182,7 +182,19 @@ function App() {
     };
   };
 
-  // NUEVO: Cálculo del aporte por cliente (resumen agrupado)
+  // CORREGIDO: Declarar solo una vez las constantes desvioVsBase y aportePorCliente
+
+  // Cálculo del desvío vs base dic-25
+  const desvioVsBase = React.useMemo(() => {
+    const propuesta = calcularPropuesta();
+    const eerr = calcularEERRTotal();
+    const ingreso = propuesta.ventasTotales;
+    const costo = propuesta.costosTotales;
+    const gananciaNeta = eerr.gananciaNetaTotal - eerrBase.gananciaNeta;
+    return { ingreso, costo, gananciaNeta };
+  }, [escenarios, pctCostoLaboral, pctIndirectos, gastosOperativos]);
+
+  // Cálculo del aporte por cliente (resumen agrupado)
   const aportePorCliente = React.useMemo(() => {
     const resumen = {};
     escenarios.forEach(e => {
@@ -216,14 +228,6 @@ function App() {
 
     return resumen;
   }, [escenarios, pctCostoLaboral, pctIndirectos, preciosNuevos]);
-
-  // NUEVO: Cálculo del desvío vs base dic-25
-  const desvioVsBase = React.useMemo(() => {
-    const ingreso = propuesta.ventasTotales;
-    const costo = propuesta.costosTotales;
-    const gananciaNeta = eerr.gananciaNetaTotal - eerrBase.gananciaNeta;
-    return { ingreso, costo, gananciaNeta };
-  }, [propuesta, eerr, eerrBase]);
 
   const guardarEscenario = () => {
     const nombre = window.prompt("Ingrese un nombre para este escenario:", `Escenario ${historial.length + 1}`);
@@ -308,49 +312,6 @@ function App() {
 
   const eerr = calcularEERRTotal();
   const propuesta = eerr.propuesta;
-
-  // NUEVO: Cálculo del desvío vs base dic-25
-  const desvioVsBase = React.useMemo(() => {
-    const ingreso = propuesta.ventasTotales;
-    const costo = propuesta.costosTotales;
-    const gananciaNeta = eerr.gananciaNetaTotal - eerrBase.gananciaNeta;
-    return { ingreso, costo, gananciaNeta };
-  }, [propuesta, eerr, eerrBase]);
-
-  // NUEVO: Cálculo del aporte por cliente (resumen agrupado)
-  const aportePorCliente = React.useMemo(() => {
-    const resumen = {};
-    escenarios.forEach(e => {
-      const p = preciosNuevos[e.tipoIdx];
-      const isStaff = p.categoria === 'Staff Augmentation';
-      const venta = e.cantidad * e.ventaUnit;
-      let costoTotal = 0;
-      if (isStaff) {
-        const sueldo = e.cantidad * e.sueldoBruto;
-        costoTotal = sueldo + (sueldo * pctCostoLaboral / 100) + (sueldo * pctIndirectos / 100);
-      } else {
-        const base = e.cantidad * p.costoFijo;
-        costoTotal = base + (base * pctIndirectos / 100);
-      }
-      const resultado = venta - costoTotal;
-      const margen = venta > 0 ? (resultado / venta) * 100 : 0;
-
-      if (!resumen[e.cliente]) {
-        resumen[e.cliente] = { venta: 0, costo: 0, resultado: 0, margen: 0 };
-      }
-      resumen[e.cliente].venta += venta;
-      resumen[e.cliente].costo += costoTotal;
-      resumen[e.cliente].resultado += resultado;
-    });
-
-    // Calcular margen % por cliente
-    Object.keys(resumen).forEach(cliente => {
-      const r = resumen[cliente];
-      r.margen = r.venta > 0 ? (r.resultado / r.venta) * 100 : 0;
-    });
-
-    return resumen;
-  }, [escenarios, pctCostoLaboral, pctIndirectos, preciosNuevos]);
 
   return (
     <div className="p-8 bg-gradient-to-br from-slate-50 to-purple-50 min-h-screen font-sans text-slate-900">
@@ -632,40 +593,40 @@ function App() {
                   <div className="text-green-700">Ganancia Neta: +{format(desvioVsBase.gananciaNeta)}</div>
                 </div>
               </div>
+
+              {/* APORTE POR CLIENTE */}
+              <div className="bg-white rounded-xl shadow-sm border border-blue-200 overflow-hidden mb-6 p-4">
+                <h2 className="font-bold text-blue-700 text-sm mb-4 uppercase">Aporte por Cliente (Propuesta)</h2>
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-blue-50 text-blue-600 font-bold uppercase text-[10px]">
+                      <th className="p-3 border border-blue-200">Cliente</th>
+                      <th className="p-3 border border-blue-200 text-right">Venta Total</th>
+                      <th className="p-3 border border-blue-200 text-right">Costo Total</th>
+                      <th className="p-3 border border-blue-200 text-right">Resultado</th>
+                      <th className="p-3 border border-blue-200 text-right">Margen %</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.entries(aportePorCliente).map(([cliente, datos]) => (
+                      <tr key={cliente} className="border-b border-blue-100 hover:bg-blue-50/30">
+                        <td className="p-3 font-bold text-blue-700">{cliente}</td>
+                        <td className="p-3 text-right font-mono">{format(datos.venta)}</td>
+                        <td className="p-3 text-right font-mono text-red-600">{format(datos.costo)}</td>
+                        <td className="p-3 text-right font-bold text-green-600">{format(datos.resultado)}</td>
+                        <td className={`p-3 text-right font-black text-[10px] px-2 py-1 rounded ${
+                          datos.margen >= margenObjetivo ? 'bg-green-100 text-green-700' :
+                          datos.margen >= 15 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'
+                        }`}>
+                          {datos.margen.toFixed(1)}%
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </>
           )}
-        </div>
-
-        {/* APORTE POR CLIENTE */}
-        <div className="bg-white rounded-xl shadow-sm border border-blue-200 overflow-hidden mb-6 p-4">
-          <h2 className="font-bold text-blue-700 text-sm mb-4 uppercase">Aporte por Cliente (Propuesta)</h2>
-          <table className="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr className="bg-blue-50 text-blue-600 font-bold uppercase text-[10px]">
-                <th className="p-3 border border-blue-200">Cliente</th>
-                <th className="p-3 border border-blue-200 text-right">Venta Total</th>
-                <th className="p-3 border border-blue-200 text-right">Costo Total</th>
-                <th className="p-3 border border-blue-200 text-right">Resultado</th>
-                <th className="p-3 border border-blue-200 text-right">Margen %</th>
-              </tr>
-            </thead>
-            <tbody>
-              {Object.entries(aportePorCliente).map(([cliente, datos]) => (
-                <tr key={cliente} className="border-b border-blue-100 hover:bg-blue-50/30">
-                  <td className="p-3 font-bold text-blue-700">{cliente}</td>
-                  <td className="p-3 text-right font-mono">{format(datos.venta)}</td>
-                  <td className="p-3 text-right font-mono text-red-600">{format(datos.costo)}</td>
-                  <td className="p-3 text-right font-bold text-green-600">{format(datos.resultado)}</td>
-                  <td className={`p-3 text-right font-black text-[10px] px-2 py-1 rounded ${
-                    datos.margen >= margenObjetivo ? 'bg-green-100 text-green-700' :
-                    datos.margen >= 15 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'
-                  }`}>
-                    {datos.margen.toFixed(1)}%
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </div>
 
         {/* VELOCÍMETROS */}
