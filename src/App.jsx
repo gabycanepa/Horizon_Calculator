@@ -755,7 +755,7 @@ function App() {
                       <td className="p-3 text-right font-mono bg-green-50 border-r border-green-200 text-slate-400">0.00</td>
                       <td className="p-3 text-right font-bold bg-green-50 border-r border-green-200">0%</td>
                       <td className="p-3 text-right font-mono text-red-600 bg-blue-50 border-r border-blue-200">{format(eerr.otrosGastosTotal)}</td>
-                      <td className="p-3 text-right font-bold bg-blue-50">{formatPct((eerr.otrosGastosTotal / eerr.ingresoTotal) * 100)}</td
+                      <td className="p-3 text-right font-bold bg-blue-50">{formatPct((eerr.otrosGastosTotal / eerr.ingresoTotal) * 100)}</td>
 </tr>
                     <tr className="bg-gradient-to-r from-purple-100 to-pink-100 font-black">
                       <td className="p-3 text-purple-700 uppercase">Ganancia neta</td>
