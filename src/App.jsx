@@ -148,11 +148,26 @@ function App() {
     const ingresoTotal = eerrBase.ingreso + propuesta.ventasTotales;
     const costoIngresosTotal = eerrBase.costoIngresos + propuesta.costosTotales;
     const gananciaBrutaTotal = ingresoTotal - costoIngresosTotal;
-    const gananciaNetaTotal = gananciaBrutaTotal - gastosOperativos + eerrBase.otrosIngresos;
+    const gastoOperacionTotal = gastosOperativos;
+    const ingresoOperacionTotal = gananciaBrutaTotal - gastoOperacionTotal;
+    const otrosIngresosTotal = eerrBase.otrosIngresos;
+    const otrosGastosTotal = eerrBase.otrosGastos;
+    const gananciaNetaTotal = ingresoOperacionTotal + otrosIngresosTotal - otrosGastosTotal;
+
     return {
-      ingresoTotal, costoIngresosTotal, gananciaBrutaTotal, gananciaNetaTotal,
+      ingresoTotal,
+      costoIngresosTotal,
+      gananciaBrutaTotal,
+      gastoOperacionTotal,
+      ingresoOperacionTotal,
+      otrosIngresosTotal,
+      otrosGastosTotal,
+      gananciaNetaTotal,
       margenBrutoPct: ingresoTotal > 0 ? (gananciaBrutaTotal / ingresoTotal) * 100 : 0,
+      margenOperacionPct: ingresoTotal > 0 ? (ingresoOperacionTotal / ingresoTotal) * 100 : 0,
       margenNetoPct: ingresoTotal > 0 ? (gananciaNetaTotal / ingresoTotal) * 100 : 0,
+      desvioIngreso: propuesta.ventasTotales,
+      desvioCosto: propuesta.costosTotales,
       desvioGananciaNeta: gananciaNetaTotal - eerrBase.gananciaNeta,
       propuesta
     };
@@ -323,7 +338,7 @@ function App() {
           </div>
         </div>
 
-        {/* HISTORIAL DE ESCENARIOS (NUEVO) */}
+        {/* HISTORIAL DE ESCENARIOS */}
         {mostrarHistorial && (
           <div className="bg-white rounded-xl shadow-sm border border-purple-100 overflow-hidden mb-6 animate-in fade-in slide-in-from-top-4 duration-300">
             <div className="p-4 border-b border-purple-50 bg-gradient-to-r from-purple-50 to-pink-50 flex justify-between items-center">
@@ -373,13 +388,90 @@ function App() {
           {mostrarEERR && (
             <div className="overflow-x-auto animate-in zoom-in-95 duration-200">
               <table className="w-full text-left border-collapse text-xs">
-                <thead><tr className="bg-purple-50 text-purple-600 font-bold uppercase text-[10px]"><th className="p-3 border-r border-purple-100"></th><th className="p-3 text-right border-r border-purple-100">EERR Dic-25</th><th className="p-3 text-right border-r border-purple-100">%</th><th className="p-3 text-right bg-green-50 border-r border-green-200">Propuesta</th><th className="p-3 text-right bg-green-50 border-r border-green-200">%</th><th className="p-3 text-right bg-blue-50 border-r border-blue-200">EERR Total</th><th className="p-3 text-right bg-blue-50">%</th></tr></thead>
+                <thead>
+                  <tr className="bg-purple-50 text-purple-600 font-bold uppercase text-[10px]">
+                    <th className="p-3 border-r border-purple-100"></th>
+                    <th className="p-3 text-right border-r border-purple-100">EERR Dic-25</th>
+                    <th className="p-3 text-right border-r border-purple-100">%</th>
+                    <th className="p-3 text-right bg-green-50 border-r border-green-200">Propuesta</th>
+                    <th className="p-3 text-right bg-green-50 border-r border-green-200">%</th>
+                    <th className="p-3 text-right bg-blue-50 border-r border-blue-200">EERR Total</th>
+                    <th className="p-3 text-right bg-blue-50">%</th>
+                  </tr>
+                </thead>
                 <tbody>
-                  <tr className="border-b border-purple-50 hover:bg-purple-50/30"><td className="p-3 font-bold text-slate-700">Ingreso</td><td className="p-3 text-right font-mono border-r border-purple-100">{format(eerrBase.ingreso)}</td><td className="p-3 text-right font-bold border-r border-purple-100">100%</td><td className="p-3 text-right font-mono bg-green-50 border-r border-green-200 text-green-700 font-bold">{format(propuesta.ventasTotales)}</td><td className="p-3 text-right font-bold bg-green-50 border-r border-green-200">100%</td><td className="p-3 text-right font-mono bg-blue-50 border-r border-blue-200 text-blue-700 font-bold">{format(eerr.ingresoTotal)}</td><td className="p-3 text-right font-bold bg-blue-50">100%</td></tr>
-                  <tr className="border-b border-purple-50 hover:bg-purple-50/30"><td className="p-3 font-bold text-slate-700">Costo de ingresos</td><td className="p-3 text-right font-mono text-red-600 border-r border-purple-100">{format(eerrBase.costoIngresos)}</td><td className="p-3 text-right font-bold border-r border-purple-100">{formatPct((eerrBase.costoIngresos / eerrBase.ingreso) * 100)}</td><td className="p-3 text-right font-mono text-red-600 bg-green-50 border-r border-green-200">{format(propuesta.costosTotales)}</td><td className="p-3 text-right font-bold bg-green-50 border-r border-green-200">{propuesta.ventasTotales > 0 ? formatPct((propuesta.costosTotales / propuesta.ventasTotales) * 100) : '0%'}</td><td className="p-3 text-right font-mono text-red-600 bg-blue-50 border-r border-blue-200">{format(eerr.costoIngresosTotal)}</td><td className="p-3 text-right font-bold bg-blue-50">{formatPct((eerr.costoIngresosTotal / eerr.ingresoTotal) * 100)}</td></tr>
-                  <tr className="border-b-2 border-purple-200 bg-purple-50/50"><td className="p-3 font-black text-slate-800">Ganancia bruta</td><td className="p-3 text-right font-mono font-bold text-purple-700 border-r border-purple-100">{format(eerrBase.gananciaBruta)}</td><td className="p-3 text-right font-bold border-r border-purple-100">{formatPct((eerrBase.gananciaBruta / eerrBase.ingreso) * 100)}</td><td className="p-3 text-right font-mono font-bold text-green-700 bg-green-50 border-r border-green-200">{format(propuesta.margenBruto)}</td><td className="p-3 text-right font-bold bg-green-50 border-r border-green-200">{formatPct(propuesta.margenBrutoPct)}</td><td className="p-3 text-right font-mono font-bold text-blue-700 bg-blue-50 border-r border-blue-200">{format(eerr.gananciaBrutaTotal)}</td><td className="p-3 text-right font-bold bg-blue-50">{formatPct(eerr.margenBrutoPct)}</td></tr>
-                  <tr className="border-b border-purple-50 hover:bg-purple-50/30"><td className="p-3 font-bold text-slate-700 pl-6">Menos gasto de operación</td><td className="p-3 text-right font-mono text-red-600 border-r border-purple-100">{format(eerrBase.gastoOperacion)}</td><td className="p-3 text-right font-bold border-r border-purple-100">{formatPct((eerrBase.gastoOperacion / eerrBase.ingreso) * 100)}</td><td className="p-3 text-right font-mono bg-green-50 border-r border-green-200 text-slate-400">0.00</td><td className="p-3 text-right font-bold bg-green-50 border-r border-green-200">0%</td><td className="p-3 text-right font-mono text-red-600 bg-blue-50 border-r border-blue-200">{format(eerr.gastoOperacionTotal)}</td><td className="p-3 text-right font-bold bg-blue-50">{formatPct((eerr.gastoOperacionTotal / eerr.ingresoTotal) * 100)}</td></tr>
-                  <tr className="bg-gradient-to-r from-purple-100 to-pink-100 border-t-4 border-purple-400"><td className="p-4 font-black text-slate-900 text-sm">Ganancia neta</td><td className="p-4 text-right font-mono font-black text-purple-700 border-r border-purple-200 text-sm">{format(eerrBase.gananciaNeta)}</td><td className="p-4 text-right font-black border-r border-purple-200">{formatPct((eerrBase.gananciaNeta / eerrBase.ingreso) * 100)}</td><td className="p-4 text-right font-mono font-black text-green-700 bg-green-100 border-r border-green-300 text-sm">{format(propuesta.margenBruto)}</td><td className="p-4 text-right font-black bg-green-100 border-r border-green-300">{formatPct(propuesta.margenBrutoPct)}</td><td className="p-4 text-right font-mono font-black text-blue-700 bg-blue-100 border-r border-blue-300 text-sm">{format(eerr.gananciaNetaTotal)}</td><td className="p-4 text-right font-black bg-blue-100">{formatPct(eerr.margenNetoPct)}</td></tr>
+                  <tr className="border-b border-purple-50 hover:bg-purple-50/30">
+                    <td className="p-3 font-bold text-slate-700">Ingreso</td>
+                    <td className="p-3 text-right font-mono border-r border-purple-100">{format(eerrBase.ingreso)}</td>
+                    <td className="p-3 text-right font-bold border-r border-purple-100">100%</td>
+                    <td className="p-3 text-right font-mono bg-green-50 border-r border-green-200 text-green-700 font-bold">{format(propuesta.ventasTotales)}</td>
+                    <td className="p-3 text-right font-bold bg-green-50 border-r border-green-200">100%</td>
+                    <td className="p-3 text-right font-mono bg-blue-50 border-r border-blue-200 text-blue-700 font-bold">{format(eerr.ingresoTotal)}</td>
+                    <td className="p-3 text-right font-bold bg-blue-50">100%</td>
+                  </tr>
+                  <tr className="border-b border-purple-50 hover:bg-purple-50/30">
+                    <td className="p-3 font-bold text-slate-700">Costo de ingresos</td>
+                    <td className="p-3 text-right font-mono text-red-600 border-r border-purple-100">{format(eerrBase.costoIngresos)}</td>
+                    <td className="p-3 text-right font-bold border-r border-purple-100">{formatPct((eerrBase.costoIngresos / eerrBase.ingreso) * 100)}</td>
+                    <td className="p-3 text-right font-mono text-red-600 bg-green-50 border-r border-green-200">{format(propuesta.costosTotales)}</td>
+                    <td className="p-3 text-right font-bold bg-green-50 border-r border-green-200">{propuesta.ventasTotales > 0 ? formatPct((propuesta.costosTotales / propuesta.ventasTotales) * 100) : '0%'}</td>
+                    <td className="p-3 text-right font-mono text-red-600 bg-blue-50 border-r border-blue-200">{format(eerr.costoIngresosTotal)}</td>
+                    <td className="p-3 text-right font-bold bg-blue-50">{formatPct((eerr.costoIngresosTotal / eerr.ingresoTotal) * 100)}</td>
+                  </tr>
+                  <tr className="border-b-2 border-purple-200 bg-purple-50/50">
+                    <td className="p-3 font-black text-slate-800">Ganancia bruta</td>
+                    <td className="p-3 text-right font-mono font-bold text-purple-700 border-r border-purple-100">{format(eerrBase.gananciaBruta)}</td>
+                    <td className="p-3 text-right font-bold border-r border-purple-100">{formatPct((eerrBase.gananciaBruta / eerrBase.ingreso) * 100)}</td>
+                    <td className="p-3 text-right font-mono font-bold text-green-700 bg-green-50 border-r border-green-200">{format(propuesta.margenBruto)}</td>
+                    <td className="p-3 text-right font-bold bg-green-50 border-r border-green-200">{formatPct(propuesta.margenBrutoPct)}</td>
+                    <td className="p-3 text-right font-mono font-bold text-blue-700 bg-blue-50 border-r border-blue-200">{format(eerr.gananciaBrutaTotal)}</td>
+                    <td className="p-3 text-right font-bold bg-blue-50">{formatPct(eerr.margenBrutoPct)}</td>
+                  </tr>
+                  <tr className="border-b border-purple-50 hover:bg-purple-50/30">
+                    <td className="p-3 font-bold text-slate-700 pl-6">Menos gasto de operación</td>
+                    <td className="p-3 text-right font-mono text-red-600 border-r border-purple-100">{format(eerrBase.gastoOperacion)}</td>
+                    <td className="p-3 text-right font-bold border-r border-purple-100">{formatPct((eerrBase.gastoOperacion / eerrBase.ingreso) * 100)}</td>
+                    <td className="p-3 text-right font-mono bg-green-50 border-r border-green-200 text-slate-400">0.00</td>
+                    <td className="p-3 text-right font-bold bg-green-50 border-r border-green-200">0%</td>
+                    <td className="p-3 text-right font-mono text-red-600 bg-blue-50 border-r border-blue-200">{format(eerr.gastoOperacionTotal)}</td>
+                    <td className="p-3 text-right font-bold bg-blue-50">{formatPct((eerr.gastoOperacionTotal / eerr.ingresoTotal) * 100)}</td>
+                  </tr>
+                  <tr className="border-b border-purple-50 hover:bg-purple-50/30">
+                    <td className="p-3 font-bold text-slate-700">Ingreso de operación (o pérdida)</td>
+                    <td className="p-3 text-right font-mono text-purple-700 border-r border-purple-100">{format(eerrBase.ingresoOperacion)}</td>
+                    <td className="p-3 text-right font-bold border-r border-purple-100">{formatPct((eerrBase.ingresoOperacion / eerrBase.ingreso) * 100)}</td>
+                    <td className="p-3 text-right font-mono font-bold text-green-700 bg-green-50 border-r border-green-200">{format(eerr.ingresoOperacionTotal)}</td>
+                    <td className="p-3 text-right font-bold bg-green-50 border-r border-green-200">{formatPct((eerr.ingresoOperacionTotal / eerr.ingresoTotal) * 100)}</td>
+                    <td className="p-3 text-right font-mono font-bold text-blue-700 bg-blue-50 border-r border-blue-200">{format(eerr.ingresoOperacionTotal)}</td>
+                    <td className="p-3 text-right font-bold bg-blue-50">{formatPct((eerr.ingresoOperacionTotal / eerr.ingresoTotal) * 100)}</td>
+                  </tr>
+                  <tr className="border-b border-purple-50 hover:bg-purple-50/30">
+                    <td className="p-3 font-bold text-slate-700">Más otros ingresos</td>
+                    <td className="p-3 text-right font-mono text-purple-700 border-r border-purple-100">{format(eerrBase.otrosIngresos)}</td>
+                    <td className="p-3 text-right font-bold border-r border-purple-100">{formatPct((eerrBase.otrosIngresos / eerrBase.ingreso) * 100)}</td>
+                    <td className="p-3 text-right font-mono bg-green-50 border-r border-green-200 text-slate-400">0.00</td>
+                    <td className="p-3 text-right font-bold bg-green-50 border-r border-green-200">0%</td>
+                    <td className="p-3 text-right font-mono text-purple-700 bg-blue-50 border-r border-blue-200">{format(eerr.otrosIngresosTotal)}</td>
+                    <td className="p-3 text-right font-bold bg-blue-50">{formatPct((eerr.otrosIngresosTotal / eerr.ingresoTotal) * 100)}</td>
+                  </tr>
+                  <tr className="border-b border-purple-50 hover:bg-purple-50/30">
+                    <td className="p-3 font-bold text-slate-700">Menos gastos de otro tipo</td>
+                    <td className="p-3 text-right font-mono text-red-600 border-r border-purple-100">{format(eerrBase.otrosGastos)}</td>
+                    <td className="p-3 text-right font-bold border-r border-purple-100">{formatPct((eerrBase.otrosGastos / eerrBase.ingreso) * 100)}</td>
+                    <td className="p-3 text-right font-mono bg-green-50 border-r border-green-200 text-slate-400">0.00</td>
+                    <td className="p-3 text-right font-bold bg-green-50 border-r border-green-200">0%</td>
+                    <td className="p-3 text-right font-mono text-red-600 bg-blue-50 border-r border-blue-200">{format(eerr.otrosGastosTotal)}</td>
+                    <td className="p-3 text-right font-bold bg-blue-50">{formatPct((eerr.otrosGastosTotal / eerr.ingresoTotal) * 100)}</td>
+                  </tr>
+                  <tr className="bg-gradient-to-r from-purple-100 to-pink-100 border-t-4 border-purple-400">
+                    <td className="p-4 font-black text-slate-900 text-sm">Ganancia neta</td>
+                    <td className="p-4 text-right font-mono font-black text-purple-700 border-r border-purple-200 text-sm">{format(eerrBase.gananciaNeta)}</td>
+                    <td className="p-4 text-right font-black border-r border-purple-200">{formatPct((eerrBase.gananciaNeta / eerrBase.ingreso) * 100)}</td>
+                    <td className="p-4 text-right font-mono font-black text-green-700 bg-green-100 border-r border-green-300 text-sm">{format(propuesta.margenBruto)}</td>
+                    <td className="p-4 text-right font-black bg-green-100 border-r border-green-300">{formatPct(propuesta.margenBrutoPct)}</td>
+                    <td className="p-4 text-right font-mono font-black text-blue-700 bg-blue-100 border-r border-blue-300 text-sm">{format(eerr.gananciaNetaTotal)}</td>
+                    <td className="p-4 text-right font-black bg-blue-100">{formatPct(eerr.margenNetoPct)}</td>
+                  </tr>
                 </tbody>
               </table>
             </div>
