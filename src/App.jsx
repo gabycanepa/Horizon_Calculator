@@ -1,303 +1,150 @@
 import React, { useState, useEffect, useMemo } from 'react';
 
-const SHEET_ID = '1vTJQrYIRPWBawtIIUdL4NvJcbDDwNCQf8YiXKl7t6BFi1mfVwQT4nuFAqX2YTKA5Q05Y6nBGhALckdf';
-
-// Limpia y convierte strings numéricos a Number de forma robusta
-const cleanNum = (val) => {
-  if (val === undefined || val === null || val === '') return 0;
-  let s = String(val);
-  // eliminar signos de moneda, espacios, no-dígitos salvo coma/punto, y puntos miles
-  s = s.replace(/[$€£\s]/g, '');
-  // Si hay más de una coma/punto, asumimos que los puntos son separador de miles -> removerlos
-  // Normalizamos: quitar puntos (miles), reemplazar coma por punto (decimales)
-  // Primero eliminar cualquier caracter que no sea dígito, coma o punto o signo menos
-  s = s.replace(/[^\d,.\-]/g, '');
-  // Si hay tanto coma como punto, asumimos que punto es miles y coma decimal: 1.234,56 -> 1234.56
-  if (s.indexOf('.') !== -1 && s.indexOf(',') !== -1) {
-    s = s.replace(/\./g, '').replace(',', '.');
-  } else {
-    // si solo hay puntos y parecen miles (más de 1 punto o grupo), quitarlos
-    // heurística: si hay puntos y los grupos de 3 dígitos sugieren miles, borrarlos
-    // simplificamos quitando todos los puntos y luego dejando la coma -> punto
-    s = s.replace(/\./g, '').replace(',', '.');
-  }
-  const n = parseFloat(s);
-  return isNaN(n) ? 0 : n;
-};
-
-// Normaliza keys para búsqueda tolerante (quita acentos, espacios, minúsculas)
-const normalizeKey = (k) => {
-  if (!k && k !== 0) return '';
-  const s = String(k).toLowerCase().trim();
-  // quitar tildes
-  const accentMap = { 'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u', 'ñ': 'n' };
-  let out = s.replace(/[áéíóúñ]/g, m => accentMap[m]);
-  // quitar todo no alfanumérico
-  out = out.replace(/[^a-z0-9]/g, '');
-  return out;
-};
-
-// Busca en un objeto map original por clave tolerante
-const tolerantGet = (mapObj, key) => {
-  if (!mapObj) return 0;
-  const nk = normalizeKey(key);
-  // buscar coincidencia exacta en keys normalizadas
-  for (const k of Object.keys(mapObj)) {
-    if (normalizeKey(k) === nk) return mapObj[k];
-  }
-  // si no encontramos, intentar acceder directo
-  return mapObj[key] !== undefined ? mapObj[key] : 0;
-};
-
-const fetchSheet = async (sheetName) => {
-  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
-  const response = await fetch(url);
-  const text = await response.text();
-  // parse CSV simple
-  const lines = text.split('\n').filter(l => l.trim() !== '');
-  if (lines.length === 0) return [];
-  const headers = lines[0].replace(/(^"|"$)/g, '').split(',').map(h => h.trim());
-  return lines.slice(1).map(line => {
-    // dividir respetando comillas simples si vienen
-    const cells = line.replace(/(^"|"$)/g, '').split(',').map(c => c.trim());
-    const obj = {};
-    for (let i = 0; i < headers.length; i++) {
-      obj[headers[i]] = cells[i] !== undefined ? cells[i] : '';
-    }
-    return obj;
-  });
-};
-
 function App() {
-  const [dataSheets, setDataSheets] = useState({
-    preciosNuevos: [],
-    clientes: [],
-    config: {},
-    eerrBase: {},
-    eerrBaseNorm: {},
-    loading: true,
-    error: null
+  // 1. TABLA DE PRECIOS FIJOS (NUEVOS)
+  const preciosNuevos = [
+    { categoria: 'Staff Augmentation', tipo: 'Analista Jr', valor: 6000000, sueldoSugerido: 2500000 },
+    { categoria: 'Staff Augmentation', tipo: 'Analista SSR', valor: 7000000, sueldoSugerido: 3000000 },
+    { categoria: 'Staff Augmentation', tipo: 'Analista SR', valor: 7500000, sueldoSugerido: 3500000 },
+    { categoria: 'Staff Augmentation', tipo: 'Team Leader', valor: 8500000, sueldoSugerido: 4000000 },
+    { categoria: 'Staff Augmentation', tipo: 'Jefe', valor: 10000000, sueldoSugerido: 5000000 },
+    { categoria: 'Staff Augmentation', tipo: 'Gerente', valor: 14000000, sueldoSugerido: 7000000 },
+    { categoria: 'Staff Augmentation', tipo: 'Project Manager', valor: 10000000, sueldoSugerido: 5000000 },
+    { categoria: 'Staff Augmentation', tipo: 'Scrum Master', valor: 8000000, sueldoSugerido: 4000000 },
+    { categoria: 'Workshop', tipo: 'Workshop', valor: 5500000, costoFijo: 2200000 },
+    { categoria: 'Coaching', tipo: 'Coaching', valor: 3000000, costoFijo: 1200000 },
+    { categoria: 'Programas', tipo: 'Programa de..', valor: 7000000, costoFijo: 2800000 }
+  ];
+
+  const clientesDisponibles = ['Arcos Dorados', 'Unilever', 'Macro', 'Nuevo Cliente'];
+
+  // 2. ESTADOS CON CARGA INICIAL DESDE LOCALSTORAGE
+  const [eerrBase] = useState({
+    ingreso: 116791002.48,
+    costoIngresos: 59212837.65,
+    gananciaBruta: 57578164.83,
+    gastoOperacion: 46539684.59,
+    ingresoOperacion: 11038480.24,
+    otrosIngresos: 2376982.05,
+    otrosGastos: 0,
+    gananciaNeta: 13415462.29
   });
 
-  const [escenarios, setEscenarios] = useState([]);
+  const [margenObjetivo, setMargenObjetivo] = useState(() => Number(localStorage.getItem('hzn_margenObj')) || 25);
+  const [pctIndirectos, setPctIndirectos] = useState(() => Number(localStorage.getItem('hzn_pctInd')) || 37);
+  const [pctCostoLaboral, setPctCostoLaboral] = useState(() => Number(localStorage.getItem('hzn_pctLab')) || 45);
+  const [gastosOperativos, setGastosOperativos] = useState(() => Number(localStorage.getItem('hzn_gastosOp')) || 46539684.59);
+
+  const [escenarios, setEscenarios] = useState(() => {
+    const saved = localStorage.getItem('hzn_escenarios');
+    return saved ? JSON.parse(saved) : [{ id: 1, cliente: 'Nuevo Cliente', tipoIdx: 0, cantidad: 1, sueldoBruto: 2500000, ventaUnit: 6000000 }];
+  });
+
   const [historial, setHistorial] = useState(() => {
     const saved = localStorage.getItem('hzn_historial');
     return saved ? JSON.parse(saved) : [];
   });
 
-  // Parámetros configurables
-  const [pctIndirectos, setPctIndirectos] = useState(0);
-  const [pctCostoLaboral, setPctCostoLaboral] = useState(0);
-  const [gastosOperativos, setGastosOperativos] = useState(0);
-  const [margenObjetivo, setMargenObjetivo] = useState(0);
-
-  // Velocímetros y líneas de ventas (iniciales guardadas/localStorage)
+  // Velocímetros
   const [objVentasTotal] = useState(2195176117);
-  const [lineasVentaTotal, setLineasVentaTotal] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('hzn_lineasVenta')) || [{ id: 1, cliente: '', monto: '' }]; } catch(e){ return [{ id:1, cliente:'', monto:'' }]; }
-  });
+  const [lineasVentaTotal, setLineasVentaTotal] = useState(() => JSON.parse(localStorage.getItem('hzn_lineasVenta')) || [{ id: 1, cliente: 'Arcos Dorados', monto: '' }]);
   const [objRenovacion] = useState(1225673502);
-  const [lineasRenovacion, setLineasRenovacion] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('hzn_lineasReno')) || [{ id: 1, cliente: '', monto: '' }]; } catch(e){ return [{ id:1, cliente:'', monto:'' }]; }
-  });
+  const [lineasRenovacion, setLineasRenovacion] = useState(() => JSON.parse(localStorage.getItem('hzn_lineasReno')) || [{ id: 1, cliente: 'Arcos Dorados', monto: '' }]);
   const [objIncremental] = useState(969002614);
-  const [lineasIncremental, setLineasIncremental] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('hzn_lineasIncr')) || [{ id: 1, cliente: '', monto: '' }]; } catch(e){ return [{ id:1, cliente:'', monto:'' }]; }
-  });
+  const [lineasIncremental, setLineasIncremental] = useState(() => JSON.parse(localStorage.getItem('hzn_lineasIncr')) || [{ id: 1, cliente: 'Nuevo Cliente', monto: '' }]);
 
   const [mostrarHistorial, setMostrarHistorial] = useState(false);
   const [mostrarEERR, setMostrarEERR] = useState(true);
 
-  // Carga datos desde Sheets
-  useEffect(() => {
-    const cargarDatos = async () => {
-      try {
-        const [precios, clientes, cfg, eerr] = await Promise.all([
-          fetchSheet('PreciosNuevos'),
-          fetchSheet('Clientes'),
-          fetchSheet('Configuracion'),
-          fetchSheet('EERRBase')
-        ]);
-
-        // Procesar config
-        const configObj = {};
-        cfg.forEach(row => {
-          // posible header "Parámetro" / "Parametro" / "Key"
-          const key = row['Parámetro'] ?? row['Parametro'] ?? row['Key'] ?? Object.values(row)[0];
-          const valCell = row['Valor'] ?? row['Value'] ?? Object.values(row)[1];
-          if (key) configObj[String(key).trim()] = cleanNum(valCell);
-        });
-
-        // Procesar EERR base
-        const eerrObj = {};
-        eerr.forEach(row => {
-          // header 'Concepto' y 'Monto (ARS)' o 'Monto' o similar
-          const concepto = row['Concepto'] ?? Object.values(row)[0];
-          const montoCell = row['Monto (ARS)'] ?? row['Monto'] ?? Object.values(row)[1];
-          if (concepto !== undefined) {
-            eerrObj[String(concepto).trim()] = cleanNum(montoCell);
-          }
-        });
-
-        // crear versión normalizada (keys normalizadas) para búsquedas tolerantes
-        const eerrNorm = {};
-        Object.keys(eerrObj).forEach(k => {
-          eerrNorm[normalizeKey(k)] = eerrObj[k];
-        });
-
-        // Precios nuevos procesados
-        const preciosProcesados = precios.map(p => ({
-          categoria: p['Categoria'] ?? p['Categoría'] ?? p['categoria'] ?? p['category'] ?? Object.values(p)[0] ?? 'Otros',
-          tipo: p['Tipo'] ?? p['tipo'] ?? p['Type'] ?? Object.values(p)[1] ?? 'Default',
-          valor: cleanNum(p['Valor'] ?? p['Precio'] ?? Object.values(p)[2]),
-          sueldoSugerido: cleanNum(p['Sueldo'] ?? p['Sueldo bruto'] ?? Object.values(p)[3]),
-          costoFijo: cleanNum(p['Costo'] ?? p['Costo Fijo'] ?? Object.values(p)[4])
-        }));
-
-        const clientesProcesados = clientes.map(c => {
-          // intentar varios headers posibles
-          return c['Cliente'] ?? c['cliente'] ?? c['Name'] ?? Object.values(c)[0] ?? '';
-        }).filter(Boolean);
-
-        setDataSheets({
-          preciosNuevos: preciosProcesados,
-          clientes: clientesProcesados,
-          config: configObj,
-          eerrBase: eerrObj,
-          eerrBaseNorm: eerrNorm,
-          loading: false,
-          error: null
-        });
-
-        // Inicializar parámetros y escenarios
-        setPctIndirectos(configObj['% Indirectos'] ?? configObj['Indirectos'] ?? 37);
-        setPctCostoLaboral(configObj['% Costo Laboral'] ?? configObj['Costo Laboral'] ?? 45);
-        setGastosOperativos(configObj['Gastos Operativos'] ?? 46539684.59);
-        setMargenObjetivo(configObj['Margen Objetivo (%)'] ?? 25);
-
-        // iniciar escenarios mínimos si hay precios
-        if (preciosProcesados.length > 0) {
-          setEscenarios([{
-            id: Date.now(),
-            cliente: clientesProcesados[0] || 'Nuevo Cliente',
-            tipoIdx: 0,
-            cantidad: 1,
-            sueldoBruto: preciosProcesados[0].sueldoSugerido || 0,
-            ventaUnit: preciosProcesados[0].valor || 0
-          }]);
-        } else {
-          // mantener vacío pero seguro
-          setEscenarios([]);
-        }
-      } catch (error) {
-        console.error('Error cargando sheets', error);
-        setDataSheets(prev => ({ ...prev, loading: false, error: 'Error cargando datos desde Google Sheets.' }));
-      }
-    };
-    cargarDatos();
-  }, []);
-
-  // Guardado en localStorage
+  // 3. EFECTO PARA GUARDAR AUTOMÁTICAMENTE
   useEffect(() => {
     localStorage.setItem('hzn_escenarios', JSON.stringify(escenarios));
     localStorage.setItem('hzn_historial', JSON.stringify(historial));
+    localStorage.setItem('hzn_margenObj', margenObjetivo);
     localStorage.setItem('hzn_pctInd', pctIndirectos);
     localStorage.setItem('hzn_pctLab', pctCostoLaboral);
     localStorage.setItem('hzn_gastosOp', gastosOperativos);
-    localStorage.setItem('hzn_margenObj', margenObjetivo);
     localStorage.setItem('hzn_lineasVenta', JSON.stringify(lineasVentaTotal));
     localStorage.setItem('hzn_lineasReno', JSON.stringify(lineasRenovacion));
     localStorage.setItem('hzn_lineasIncr', JSON.stringify(lineasIncremental));
-  }, [escenarios, historial, pctIndirectos, pctCostoLaboral, gastosOperativos, margenObjetivo, lineasVentaTotal, lineasRenovacion, lineasIncremental]);
+  }, [escenarios, historial, margenObjetivo, pctIndirectos, pctCostoLaboral, gastosOperativos, lineasVentaTotal, lineasRenovacion, lineasIncremental]);
 
-  // Funciones de lógica
+  // FUNCIONES DE LÓGICA
   const agregarFila = () => {
-    if (dataSheets.loading) {
-      alert('Aún cargando datos. Intentá de nuevo en un momento.');
-      return;
-    }
-    const precioDefault = (dataSheets.preciosNuevos && dataSheets.preciosNuevos.length > 0)
-      ? dataSheets.preciosNuevos[0]
-      : { sueldoSugerido: 0, valor: 0, costoFijo: 0, categoria: 'Otros', tipo: 'Default' };
-
-    setEscenarios(prev => ([
-      ...prev,
-      {
-        id: Date.now(),
-        cliente: (dataSheets.clientes && dataSheets.clientes[0]) || 'Nuevo Cliente',
-        tipoIdx: 0,
-        cantidad: 1,
-        sueldoBruto: precioDefault.sueldoSugerido || 0,
-        ventaUnit: precioDefault.valor || 0
-      }
-    ]));
+    setEscenarios([...escenarios, { 
+      id: Date.now(), 
+      cliente: 'Nuevo Cliente', 
+      tipoIdx: 0, 
+      cantidad: 1,
+      sueldoBruto: 2500000,
+      ventaUnit: 6000000
+    }]);
   };
 
   const actualizarFila = (id, campo, valor) => {
-    setEscenarios(prev => prev.map(e => {
-      if (e.id !== id) return e;
-      const updated = { ...e };
-      if (campo === 'ventaUnit' || campo === 'sueldoBruto') {
-        const num = typeof valor === 'string' ? parseInt(valor.replace(/\D/g, '')) || 0 : Number(valor || 0);
-        updated[campo] = num;
-      } else if (campo === 'tipoIdx') {
-        updated.tipoIdx = Number(valor) || 0;
-        // sincronizar sueldos/venta por tipo si existe
-        const p = dataSheets.preciosNuevos[Number(valor)];
-        if (p) {
-          updated.sueldoBruto = p.sueldoSugerido || updated.sueldoBruto;
-          updated.ventaUnit = p.valor || updated.ventaUnit;
+    setEscenarios(escenarios.map(e => {
+      if (e.id === id) {
+        const updated = { ...e };
+        if (campo === 'ventaUnit' || campo === 'sueldoBruto') {
+          // Parse string with thousands separators to number
+          const num = typeof valor === 'string' ? parseInt(valor.replace(/\D/g, '')) || 0 : valor;
+          updated[campo] = num;
+        } else if (campo === 'tipoIdx') {
+          updated.tipoIdx = valor;
+          const p = preciosNuevos[valor];
+          updated.sueldoBruto = p.sueldoSugerido || 0;
+          updated.ventaUnit = p.valor;
+        } else if (campo === 'cantidad') {
+          updated.cantidad = valor;
+        } else if (campo === 'cliente') {
+          updated.cliente = valor;
         }
-      } else if (campo === 'cantidad') {
-        updated.cantidad = Number(valor) || 0;
-      } else if (campo === 'cliente') {
-        updated.cliente = valor;
+        return updated;
       }
-      return updated;
+      return e;
     }));
   };
 
   const agregarLineaVenta = (tipo) => {
-    const nuevaLinea = { id: Date.now(), cliente: '', monto: '' };
-    if (tipo === 'total') setLineasVentaTotal(prev => [...prev, nuevaLinea]);
-    if (tipo === 'renovacion') setLineasRenovacion(prev => [...prev, nuevaLinea]);
-    if (tipo === 'incremental') setLineasIncremental(prev => [...prev, nuevaLinea]);
+    const nuevaLinea = { id: Date.now(), cliente: 'Nuevo Cliente', monto: '' };
+    if (tipo === 'total') setLineasVentaTotal([...lineasVentaTotal, nuevaLinea]);
+    if (tipo === 'renovacion') setLineasRenovacion([...lineasRenovacion, nuevaLinea]);
+    if (tipo === 'incremental') setLineasIncremental([...lineasIncremental, nuevaLinea]);
   };
 
   const actualizarLineaVenta = (tipo, id, campo, valor) => {
     const actualizar = (lineas) => lineas.map(l => l.id === id ? { ...l, [campo]: valor } : l);
-    if (tipo === 'total') setLineasVentaTotal(prev => actualizar(prev));
-    if (tipo === 'renovacion') setLineasRenovacion(prev => actualizar(prev));
-    if (tipo === 'incremental') setLineasIncremental(prev => actualizar(prev));
+    if (tipo === 'total') setLineasVentaTotal(actualizar(lineasVentaTotal));
+    if (tipo === 'renovacion') setLineasRenovacion(actualizar(lineasRenovacion));
+    if (tipo === 'incremental') setLineasIncremental(actualizar(lineasIncremental));
   };
 
   const eliminarLineaVenta = (tipo, id) => {
-    if (tipo === 'total') setLineasVentaTotal(prev => prev.filter(l => l.id !== id));
-    if (tipo === 'renovacion') setLineasRenovacion(prev => prev.filter(l => l.id !== id));
-    if (tipo === 'incremental') setLineasIncremental(prev => prev.filter(l => l.id !== id));
+    if (tipo === 'total' && lineasVentaTotal.length > 1) setLineasVentaTotal(lineasVentaTotal.filter(l => l.id !== id));
+    if (tipo === 'renovacion' && lineasRenovacion.length > 1) setLineasRenovacion(lineasRenovacion.filter(l => l.id !== id));
+    if (tipo === 'incremental' && lineasIncremental.length > 1) setLineasIncremental(lineasIncremental.filter(l => l.id !== id));
   };
 
-  const calcularTotalLineas = (lineas) => lineas.reduce((sum, l) => sum + (Number(l.monto) || 0), 0);
+  const calcularTotalLineas = (lineas) => lineas.reduce((sum, l) => sum + (parseFloat(l.monto) || 0), 0);
 
   const calcularPropuesta = () => {
     let ventasTotales = 0;
     let costosTotales = 0;
     escenarios.forEach(e => {
-      const p = dataSheets.preciosNuevos && dataSheets.preciosNuevos[e.tipoIdx];
-      if (!p) return;
-      const ventaFila = (Number(e.cantidad) || 0) * (Number(e.ventaUnit) || 0);
+      const p = preciosNuevos[e.tipoIdx];
+      const v = e.cantidad * e.ventaUnit;
       let costoTotalFila = 0;
-      if ((p.categoria || '').toLowerCase().includes('staff')) {
-        const sueldoTotal = (Number(e.cantidad) || 0) * (Number(e.sueldoBruto) || 0);
+      if (p.categoria === 'Staff Augmentation') {
+        const sueldoTotal = e.cantidad * e.sueldoBruto;
         const costoLaboral = sueldoTotal * (pctCostoLaboral / 100);
         const indirectos = sueldoTotal * (pctIndirectos / 100);
         costoTotalFila = sueldoTotal + costoLaboral + indirectos;
       } else {
-        const base = (Number(e.cantidad) || 0) * (Number(p.costoFijo) || 0);
+        const base = e.cantidad * p.costoFijo;
         const indirectos = base * (pctIndirectos / 100);
         costoTotalFila = base + indirectos;
       }
-      ventasTotales += ventaFila;
+      ventasTotales += v;
       costosTotales += costoTotalFila;
     });
     const margenBruto = ventasTotales - costosTotales;
@@ -307,36 +154,16 @@ function App() {
 
   const calcularEERRTotal = () => {
     const propuesta = calcularPropuesta();
-
-    // leer base desde dataSheets con tolerancia en nombres
-    const eerr = dataSheets.eerrBase ?? {};
-    const eerrNorm = dataSheets.eerrBaseNorm ?? {};
-
-    const ingresoBase = tolerantGet(eerr, 'Ingreso') || tolerantGet(eerrNorm, normalizeKey('Ingreso')) || 0;
-    const costoIngresoBase = tolerantGet(eerr, 'Costo de ingresos') || tolerantGet(eerrNorm, normalizeKey('Costo de ingresos')) || 0;
-    const gananciaBrutaBase = tolerantGet(eerr, 'Ganancia bruta') || tolerantGet(eerrNorm, normalizeKey('Ganancia bruta')) || 0;
-    const gastoOperacionBase = tolerantGet(eerr, 'Menos gasto de operación') || tolerantGet(eerrNorm, normalizeKey('Menos gasto de operación')) || 0;
-    const otrosIngresosBase = tolerantGet(eerr, 'Más otros ingresos') || tolerantGet(eerrNorm, normalizeKey('Más otros ingresos')) || 0;
-    const otrosGastosBase = tolerantGet(eerr, 'Menos gastos de otro tipo') || tolerantGet(eerrNorm, normalizeKey('Menos gastos de otro tipo')) || 0;
-    const gananciaNetaBase = tolerantGet(eerr, 'Ganancia neta') || tolerantGet(eerrNorm, normalizeKey('Ganancia neta')) || 0;
-
-    const ingresoTotal = ingresoBase + propuesta.ventasTotales;
-    const costoIngresosTotal = costoIngresoBase + propuesta.costosTotales;
+    const ingresoTotal = eerrBase.ingreso + propuesta.ventasTotales;
+    const costoIngresosTotal = eerrBase.costoIngresos + propuesta.costosTotales;
     const gananciaBrutaTotal = ingresoTotal - costoIngresosTotal;
-    const gastoOperacionTotal = gastosOperativos || gastoOperacionBase;
+    const gastoOperacionTotal = gastosOperativos;
     const ingresoOperacionTotal = gananciaBrutaTotal - gastoOperacionTotal;
-    const otrosIngresosTotal = otrosIngresosBase;
-    const otrosGastosTotal = otrosGastosBase;
+    const otrosIngresosTotal = eerrBase.otrosIngresos;
+    const otrosGastosTotal = eerrBase.otrosGastos;
     const gananciaNetaTotal = ingresoOperacionTotal + otrosIngresosTotal - otrosGastosTotal;
 
     return {
-      ingresoBase,
-      costoIngresoBase,
-      gananciaBrutaBase,
-      gastoOperacionBase,
-      otrosIngresosBase,
-      otrosGastosBase,
-      gananciaNetaBase,
       ingresoTotal,
       costoIngresosTotal,
       gananciaBrutaTotal,
@@ -350,53 +177,62 @@ function App() {
       margenNetoPct: ingresoTotal > 0 ? (gananciaNetaTotal / ingresoTotal) * 100 : 0,
       desvioIngreso: propuesta.ventasTotales,
       desvioCosto: propuesta.costosTotales,
-      desvioGananciaNeta: gananciaNetaTotal - gananciaNetaBase,
+      desvioGananciaNeta: gananciaNetaTotal - eerrBase.gananciaNeta,
       propuesta
     };
   };
 
-  // Desvío vs base
-  const desvioVsBase = useMemo(() => {
+  // CORREGIDO: Declarar solo una vez las constantes desvioVsBase y aportePorCliente
+
+  // Cálculo del desvío vs base dic-25
+  const desvioVsBase = React.useMemo(() => {
     const propuesta = calcularPropuesta();
     const eerr = calcularEERRTotal();
     const ingreso = propuesta.ventasTotales;
     const costo = propuesta.costosTotales;
-    const gananciaNeta = eerr.gananciaNetaTotal - (eerr.gananciaNetaBase || 0);
+    const gananciaNeta = eerr.gananciaNetaTotal - eerrBase.gananciaNeta;
     return { ingreso, costo, gananciaNeta };
-  }, [escenarios, pctCostoLaboral, pctIndirectos, gastosOperativos, dataSheets.eerrBase]);
+  }, [escenarios, pctCostoLaboral, pctIndirectos, gastosOperativos]);
 
-  // Aporte por cliente
-  const aportePorCliente = useMemo(() => {
+  // Cálculo del aporte por cliente (resumen agrupado)
+  const aportePorCliente = React.useMemo(() => {
     const resumen = {};
     escenarios.forEach(e => {
-      const p = dataSheets.preciosNuevos && dataSheets.preciosNuevos[e.tipoIdx];
-      if (!p) return;
-      const isStaff = (p.categoria || '').toLowerCase().includes('staff');
-      const venta = (Number(e.cantidad) || 0) * (Number(e.ventaUnit) || 0);
+      const p = preciosNuevos[e.tipoIdx];
+      const isStaff = p.categoria === 'Staff Augmentation';
+      const venta = e.cantidad * e.ventaUnit;
       let costoTotal = 0;
       if (isStaff) {
-        const sueldo = (Number(e.cantidad) || 0) * (Number(e.sueldoBruto) || 0);
+        const sueldo = e.cantidad * e.sueldoBruto;
         costoTotal = sueldo + (sueldo * pctCostoLaboral / 100) + (sueldo * pctIndirectos / 100);
       } else {
-        const base = (Number(e.cantidad) || 0) * (Number(p.costoFijo) || 0);
+        const base = e.cantidad * p.costoFijo;
         costoTotal = base + (base * pctIndirectos / 100);
       }
       const resultado = venta - costoTotal;
-      if (!resumen[e.cliente]) resumen[e.cliente] = { venta: 0, costo: 0, resultado: 0, margen: 0 };
+      const margen = venta > 0 ? (resultado / venta) * 100 : 0;
+
+      if (!resumen[e.cliente]) {
+        resumen[e.cliente] = { venta: 0, costo: 0, resultado: 0, margen: 0 };
+      }
       resumen[e.cliente].venta += venta;
       resumen[e.cliente].costo += costoTotal;
       resumen[e.cliente].resultado += resultado;
     });
+
+    // Calcular margen % por cliente
     Object.keys(resumen).forEach(cliente => {
       const r = resumen[cliente];
       r.margen = r.venta > 0 ? (r.resultado / r.venta) * 100 : 0;
     });
+
     return resumen;
-  }, [escenarios, pctCostoLaboral, pctIndirectos, dataSheets.preciosNuevos]);
+  }, [escenarios, pctCostoLaboral, pctIndirectos, preciosNuevos]);
 
   const guardarEscenario = () => {
     const nombre = window.prompt("Ingrese un nombre para este escenario:", `Escenario ${historial.length + 1}`);
     if (!nombre) return;
+
     const eerr = calcularEERRTotal();
     const timestamp = new Date().toLocaleString('es-AR');
     const nuevoHistorial = {
@@ -407,14 +243,14 @@ function App() {
       eerr: eerr,
       config: { pctIndirectos, pctCostoLaboral, gastosOperativos, margenObjetivo, lineasVentaTotal, lineasRenovacion, lineasIncremental }
     };
-    setHistorial(prev => [nuevoHistorial, ...prev]);
+    setHistorial([nuevoHistorial, ...historial]);
     alert(`✅ Escenario "${nombre}" guardado.`);
   };
 
   const format = (n) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n);
   const formatNum = (n) => new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 }).format(n);
+  const formatPct = (n) => `${n.toFixed(0)}%`;
 
-  // Render Velocímetro (componente pequeño)
   const renderVelocimetro = (titulo, objetivo, lineas, setLineas, tipo, color) => {
     const totalReal = calcularTotalLineas(lineas);
     const pctCumplimiento = objetivo > 0 ? Math.min((totalReal / objetivo) * 100, 100) : 0;
@@ -428,7 +264,7 @@ function App() {
 
     return (
       <div className="bg-white rounded-xl shadow-lg border border-purple-200 p-6 flex-1">
-        <h3 className="text-sm font-black text-center mb-2 uppercase" style={{ color }}>{titulo}</h3>
+        <h3 className="text-sm font-black text-center mb-2 uppercase" style={{ color: color }}>{titulo}</h3>
         <div className="relative w-full flex justify-center mb-4">
           <svg viewBox="0 0 200 120" className="w-full max-w-xs">
             <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#e2e8f0" strokeWidth="20" strokeLinecap="round" />
@@ -454,15 +290,11 @@ function App() {
               {lineas.map((linea) => (
                 <div key={linea.id} className="flex gap-2 items-center">
                   <select value={linea.cliente} onChange={(e) => actualizarLineaVenta(tipo, linea.id, 'cliente', e.target.value)} className="flex-1 bg-white border border-blue-200 rounded px-2 py-1 text-xs font-medium text-slate-700 focus:outline-none">
-                    {dataSheets.clientes && dataSheets.clientes.length > 0 ? (
-                      dataSheets.clientes.map(c => <option key={c} value={c}>{c}</option>)
-                    ) : (
-                      <option value="">Cargando clientes...</option>
-                    )}
+                    {clientesDisponibles.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                   <input type="text" value={linea.monto === '' ? '' : formatNum(linea.monto)} onChange={(e) => {
-                      const raw = e.target.value.replace(/\./g, '').replace(/\s/g, '');
-                      const num = raw === '' ? '' : parseFloat(raw) || 0;
+                      const raw = e.target.value.replace(/\./g, '');
+                      const num = raw === '' ? '' : parseFloat(raw) || '';
                       actualizarLineaVenta(tipo, linea.id, 'monto', num);
                     }} className="w-32 bg-white border-2 border-blue-400 rounded px-2 py-1 text-xs font-bold text-blue-700 focus:outline-none" placeholder="0" />
                   {lineas.length > 1 && <button onClick={() => eliminarLineaVenta(tipo, linea.id)} className="text-slate-400 hover:text-red-500 text-sm font-bold">✕</button>}
@@ -471,7 +303,7 @@ function App() {
             </div>
           </div>
           <div className="pt-2 border-t-2 border-purple-300">
-            <div className="flex justify-between text-xs mb-1"><span className="text-slate-500 font-bold uppercase">Total Real:</span><span className="font-black text-blue-700">{format(calcularTotalLineas(lineas))}</span></div>
+            <div className="flex justify-between text-xs mb-1"><span className="text-slate-500 font-bold uppercase">Total Real:</span><span className="font-black text-blue-700">{format(totalReal)}</span></div>
           </div>
         </div>
       </div>
@@ -493,19 +325,19 @@ function App() {
           <div className="flex gap-3">
              <div className="bg-white px-4 py-2 rounded-lg shadow-sm border border-purple-100">
                 <span className="text-[10px] font-bold text-purple-400 block uppercase">Gastos Op.</span>
-                <input type="number" value={gastosOperativos} onChange={e => setGastosOperativos(cleanNum(e.target.value))} className="w-32 font-bold text-red-600 focus:outline-none text-xs" />
+                <input type="number" value={gastosOperativos} onChange={e => setGastosOperativos(parseFloat(e.target.value))} className="w-32 font-bold text-red-600 focus:outline-none text-xs" />
              </div>
              <div className="bg-white px-4 py-2 rounded-lg shadow-sm border border-blue-100">
                 <span className="text-[10px] font-bold text-blue-400 block uppercase">Indirectos</span>
-                <input type="number" value={pctIndirectos} onChange={e => setPctIndirectos(cleanNum(e.target.value))} className="w-16 font-bold text-blue-600 focus:outline-none" />%
+                <input type="number" value={pctIndirectos} onChange={e => setPctIndirectos(parseFloat(e.target.value))} className="w-16 font-bold text-blue-600 focus:outline-none" />%
              </div>
              <div className="bg-white px-4 py-2 rounded-lg shadow-sm border border-pink-100">
                 <span className="text-[10px] font-bold text-pink-400 block uppercase">Costo Lab.</span>
-                <input type="number" value={pctCostoLaboral} onChange={e => setPctCostoLaboral(cleanNum(e.target.value))} className="w-16 font-bold text-pink-600 focus:outline-none" />%
+                <input type="number" value={pctCostoLaboral} onChange={e => setPctCostoLaboral(parseFloat(e.target.value))} className="w-16 font-bold text-pink-600 focus:outline-none" />%
              </div>
              <div className="bg-white px-4 py-2 rounded-lg shadow-sm border border-purple-100">
                 <span className="text-[10px] font-bold text-purple-400 block uppercase">Margen Obj.</span>
-                <input type="number" value={margenObjetivo} onChange={e => setMargenObjetivo(cleanNum(e.target.value))} className="w-16 font-bold text-purple-600 focus:outline-none" />%
+                <input type="number" value={margenObjetivo} onChange={e => setMargenObjetivo(parseFloat(e.target.value))} className="w-16 font-bold text-purple-600 focus:outline-none" />%
              </div>
           </div>
         </div>
@@ -518,7 +350,7 @@ function App() {
                <button onClick={() => setMostrarHistorial(!mostrarHistorial)} className={`text-xs font-bold px-3 py-1 border rounded-lg transition ${mostrarHistorial ? 'bg-purple-600 text-white border-purple-600' : 'text-slate-600 border-purple-200 hover:text-purple-600'}`}>📋 Historial ({historial.length})</button>
                <button onClick={guardarEscenario} className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold hover:shadow-lg transition">💾 Guardar Escenario</button>
                <button onClick={() => { if(window.confirm('¿Limpiar todos los campos?')) setEscenarios([]); }} className="text-slate-400 hover:text-slate-600 text-xs font-bold px-3 py-1">Limpiar</button>
-               <button onClick={agregarFila} disabled={dataSheets.loading} className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold hover:shadow-lg transition disabled:opacity-60">+ Agregar</button>
+               <button onClick={agregarFila} className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold hover:shadow-lg transition">+ Agregar</button>
             </div>
           </div>
           <div className="overflow-x-auto">
@@ -530,47 +362,46 @@ function App() {
               </thead>
               <tbody className="text-sm">
                 {escenarios.map(e => {
-                  const p = dataSheets.preciosNuevos && dataSheets.preciosNuevos[e.tipoIdx];
-                  const isStaff = p && (p.categoria || '').toLowerCase().includes('staff');
+                  const p = preciosNuevos[e.tipoIdx];
+                  const isStaff = p.categoria === 'Staff Augmentation';
                   let costoTotal = 0;
-                  if (p) {
-                    if (isStaff) {
-                      const sueldo = (Number(e.cantidad) || 0) * (Number(e.sueldoBruto) || 0);
-                      costoTotal = sueldo + (sueldo * pctCostoLaboral/100) + (sueldo * pctIndirectos/100);
-                    } else {
-                      const base = (Number(e.cantidad) || 0) * (Number(p.costoFijo) || 0);
-                      costoTotal = base + (base * pctIndirectos/100);
-                    }
+                  if (isStaff) {
+                    const sueldo = e.cantidad * e.sueldoBruto;
+                    costoTotal = sueldo + (sueldo * pctCostoLaboral/100) + (sueldo * pctIndirectos/100);
+                  } else {
+                    const base = e.cantidad * p.costoFijo;
+                    costoTotal = base + (base * pctIndirectos/100);
                   }
-                  const venta = (Number(e.cantidad) || 0) * (Number(e.ventaUnit) || 0);
+                  const venta = e.cantidad * e.ventaUnit;
                   const res = venta - costoTotal;
                   const mgn = venta > 0 ? (res / venta) * 100 : 0;
 
-                  const ventaUnitStr = (Number(e.ventaUnit) || 0).toLocaleString('es-AR');
-                  const sueldoBrutoStr = (Number(e.sueldoBruto) || 0).toLocaleString('es-AR');
+                  // Formatear valores para mostrar en inputs
+                  const ventaUnitStr = e.ventaUnit.toLocaleString('es-AR');
+                  const sueldoBrutoStr = e.sueldoBruto.toLocaleString('es-AR');
 
                   return (
                     <tr key={e.id} className="border-t border-purple-50 hover:bg-purple-50/30 transition">
                       <td className="p-4">
-                        <select value={e.cliente} onChange={(ev) => actualizarFila(e.id, 'cliente', ev.target.value)} className="bg-transparent focus:outline-none font-medium">
-                          {dataSheets.clientes && dataSheets.clientes.length > 0 ? dataSheets.clientes.map(c => <option key={c} value={c}>{c}</option>) : <option value="">Sin clientes</option>}
+                        <select value={e.cliente} onChange={ev => actualizarFila(e.id, 'cliente', ev.target.value)} className="bg-transparent focus:outline-none font-medium">
+                          {clientesDisponibles.map(c => <option key={c}>{c}</option>)}
                         </select>
                       </td>
                       <td className="p-4">
-                        <select value={e.tipoIdx} onChange={(ev) => actualizarFila(e.id, 'tipoIdx', ev.target.value)} className="bg-transparent focus:outline-none text-purple-600 font-bold text-xs">
-                          {dataSheets.preciosNuevos && dataSheets.preciosNuevos.length > 0 ? dataSheets.preciosNuevos.map((p, i) => <option key={i} value={i}>{p.categoria} - {p.tipo}</option>) : <option value={0}>Sin servicios</option>}
+                        <select value={e.tipoIdx} onChange={ev => actualizarFila(e.id, 'tipoIdx', parseInt(ev.target.value))} className="bg-transparent focus:outline-none text-purple-600 font-bold text-xs">
+                          {preciosNuevos.map((p, i) => <option key={i} value={i}>{p.categoria} - {p.tipo}</option>)}
                         </select>
                       </td>
                       <td className="p-4 text-center">
-                        <input type="number" value={e.cantidad} onChange={(ev) => actualizarFila(e.id, 'cantidad', ev.target.value)} className="w-10 text-center bg-purple-50 rounded font-bold" min="0" />
+                        <input type="number" value={e.cantidad} onChange={ev => actualizarFila(e.id, 'cantidad', parseInt(ev.target.value) || 0)} className="w-10 text-center bg-purple-50 rounded font-bold" min="0" />
                       </td>
                       <td className="p-4 text-right">
                         <input
                           type="text"
                           value={ventaUnitStr}
-                          onChange={(ev) => {
+                          onChange={ev => {
                             const val = ev.target.value.replace(/\D/g, '');
-                            actualizarFila(e.id, 'ventaUnit', val === '' ? 0 : Number(val));
+                            actualizarFila(e.id, 'ventaUnit', val === '' ? 0 : parseInt(val));
                           }}
                           className="w-28 text-right bg-blue-50 text-blue-700 font-bold rounded px-2 border border-blue-200"
                         />
@@ -580,9 +411,9 @@ function App() {
                           <input
                             type="text"
                             value={sueldoBrutoStr}
-                            onChange={(ev) => {
+                            onChange={ev => {
                               const val = ev.target.value.replace(/\D/g, '');
-                              actualizarFila(e.id, 'sueldoBruto', val === '' ? 0 : Number(val));
+                              actualizarFila(e.id, 'sueldoBruto', val === '' ? 0 : parseInt(val));
                             }}
                             className="w-24 text-right bg-pink-50 text-pink-700 font-bold rounded px-2 border border-pink-200"
                           />
@@ -598,7 +429,7 @@ function App() {
                         </span>
                       </td>
                       <td className="p-4 text-right">
-                        <button onClick={() => setEscenarios(prev => prev.filter(x => x.id !== e.id))} className="text-slate-300 hover:text-red-500">✕</button>
+                        <button onClick={() => setEscenarios(escenarios.filter(x => x.id !== e.id))} className="text-slate-300 hover:text-red-500">✕</button>
                       </td>
                     </tr>
                   );
@@ -608,9 +439,9 @@ function App() {
           </div>
         </div>
 
-        {/* HISTORIAL */}
+        {/* HISTORIAL DE ESCENARIOS */}
         {mostrarHistorial && (
-          <div className="bg-white rounded-xl shadow-sm border border-purple-100 overflow-hidden mb-6">
+          <div className="bg-white rounded-xl shadow-sm border border-purple-100 overflow-hidden mb-6 animate-in fade-in slide-in-from-top-4 duration-300">
             <div className="p-4 border-b border-purple-50 bg-gradient-to-r from-purple-50 to-pink-50 flex justify-between items-center">
               <h2 className="font-bold text-slate-700 text-sm">📋 Historial de Escenarios Guardados</h2>
               <button onClick={() => setMostrarHistorial(false)} className="text-slate-400 hover:text-slate-600 text-xs">Cerrar</button>
@@ -623,7 +454,7 @@ function App() {
                   <div key={item.id} className="border border-purple-100 rounded-lg p-4 hover:border-purple-400 transition bg-white shadow-sm">
                     <div className="flex justify-between items-start mb-2">
                       <h3 className="font-black text-purple-700 text-sm uppercase truncate pr-2">{item.nombre}</h3>
-                      <button onClick={() => { if(window.confirm('¿Eliminar este escenario?')) setHistorial(prev => prev.filter(h => h.id !== item.id)) }} className="text-slate-300 hover:text-red-500">✕</button>
+                      <button onClick={() => { if(window.confirm('¿Eliminar este escenario?')) setHistorial(historial.filter(h => h.id !== item.id)) }} className="text-slate-300 hover:text-red-500">✕</button>
                     </div>
                     <p className="text-[10px] text-slate-400 font-bold mb-3">{item.fecha}</p>
                     <div className="space-y-1 mb-4">
@@ -650,7 +481,7 @@ function App() {
           </div>
         )}
 
-        {/* EERR COMPARATIVO */}
+        {/* EERR COMPARATIVO CON TOGGLE */}
         <div className="bg-white rounded-xl shadow-lg border border-purple-200 overflow-hidden mb-6">
           <div className="p-4 border-b border-purple-100 flex justify-between items-center bg-gradient-to-r from-purple-600 to-pink-600 text-white">
             <h2 className="font-bold text-sm">📊 Estado de Resultados Comparativo</h2>
@@ -660,7 +491,7 @@ function App() {
           </div>
           {mostrarEERR && (
             <>
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto animate-in zoom-in-95 duration-200">
                 <table className="w-full text-left border-collapse text-xs">
                   <thead>
                     <tr className="bg-purple-50 text-purple-600 font-bold uppercase text-[10px]">
@@ -676,7 +507,7 @@ function App() {
                   <tbody>
                     <tr className="border-b border-purple-50 hover:bg-purple-50/30">
                       <td className="p-3 font-bold text-slate-700">Ingreso</td>
-                      <td className="p-3 text-right font-mono border-r border-purple-100">{format(tolerantGet(dataSheets.eerrBase, 'Ingreso'))}</td>
+                      <td className="p-3 text-right font-mono border-r border-purple-100">{format(eerrBase.ingreso)}</td>
                       <td className="p-3 text-right font-bold border-r border-purple-100">100%</td>
                       <td className="p-3 text-right font-mono bg-green-50 border-r border-green-200 text-green-700 font-bold">{format(propuesta.ventasTotales)}</td>
                       <td className="p-3 text-right font-bold bg-green-50 border-r border-green-200">100%</td>
@@ -685,32 +516,76 @@ function App() {
                     </tr>
                     <tr className="border-b border-purple-50 hover:bg-purple-50/30">
                       <td className="p-3 font-bold text-slate-700">Costo de ingresos</td>
-                      <td className="p-3 text-right font-mono border-r border-purple-100">{format(tolerantGet(dataSheets.eerrBase, 'Costo de ingresos'))}</td>
-                      <td className="p-3 text-right font-bold border-r border-purple-100">{((tolerantGet(dataSheets.eerrBase, 'Costo de ingresos') / (tolerantGet(dataSheets.eerrBase, 'Ingreso') || 1)) * 100).toFixed(0)}%</td>
-                      <td className="p-3 text-right font-mono bg-green-50 border-r border-green-200 text-red-600 font-bold">-{format(propuesta.costosTotales)}</td>
-                      <td className="p-3 text-right font-bold bg-green-50 border-r border-green-200">{propuesta.ventasTotales ? ((propuesta.costosTotales / propuesta.ventasTotales) * 100).toFixed(0) + '%' : '0%'}</td>
-                      <td className="p-3 text-right font-mono bg-blue-50 border-r border-blue-200 text-red-600 font-bold">-{format(eerr.costoIngresosTotal)}</td>
-                      <td className="p-3 text-right font-bold bg-blue-50">{eerr.ingresoTotal ? ((eerr.costoIngresosTotal / eerr.ingresoTotal) * 100).toFixed(0) + '%' : '0%'}</td>
+                      <td className="p-3 text-right font-mono text-red-600 border-r border-purple-100">{format(eerrBase.costoIngresos)}</td>
+                      <td className="p-3 text-right font-bold border-r border-purple-100">{formatPct((eerrBase.costoIngresos / eerrBase.ingreso) * 100)}</td>
+                      <td className="p-3 text-right font-mono text-red-600 bg-green-50 border-r border-green-200">{format(propuesta.costosTotales)}</td>
+                      <td className="p-3 text-right font-bold bg-green-50 border-r border-green-200">{propuesta.ventasTotales > 0 ? formatPct((propuesta.costosTotales / propuesta.ventasTotales) * 100) : '0%'}</td>
+                      <td className="p-3 text-right font-mono text-red-600 bg-blue-50 border-r border-blue-200">{format(eerr.costoIngresosTotal)}</td>
+                      <td className="p-3 text-right font-bold bg-blue-50">{formatPct((eerr.costoIngresosTotal / eerr.ingresoTotal) * 100)}</td>
+                    </tr>
+                    <tr className="border-b-2 border-purple-200 bg-purple-50/50">
+                      <td className="p-3 font-black text-slate-800">Ganancia bruta</td>
+                      <td className="p-3 text-right font-mono font-bold text-purple-700 border-r border-purple-100">{format(eerrBase.gananciaBruta)}</td>
+                      <td className="p-3 text-right font-bold border-r border-purple-100">{formatPct((eerrBase.gananciaBruta / eerrBase.ingreso) * 100)}</td>
+                      <td className="p-3 text-right font-mono font-bold text-green-700 bg-green-50 border-r border-green-200">{format(propuesta.margenBruto)}</td>
+                      <td className="p-3 text-right font-bold bg-green-50 border-r border-green-200">{formatPct(propuesta.margenBrutoPct)}</td>
+                      <td className="p-3 text-right font-mono font-bold text-blue-700 bg-blue-50 border-r border-blue-200">{format(eerr.gananciaBrutaTotal)}</td>
+                      <td className="p-3 text-right font-bold bg-blue-50">{formatPct(eerr.margenBrutoPct)}</td>
                     </tr>
                     <tr className="border-b border-purple-50 hover:bg-purple-50/30">
-                      <td className="p-3 font-bold text-slate-700">Ganancia bruta</td>
-                      <td className="p-3 text-right font-mono border-r border-purple-100">{format(tolerantGet(dataSheets.eerrBase, 'Ganancia bruta'))}</td>
-                      <td className="p-3 text-right font-bold border-r border-purple-100">{((tolerantGet(dataSheets.eerrBase, 'Ganancia bruta') / (tolerantGet(dataSheets.eerrBase, 'Ingreso') || 1)) * 100).toFixed(0)}%</td>
-                      <td className="p-3 text-right font-mono bg-green-50 border-r border-green-200 font-bold">{format(propuesta.ventasTotales - propuesta.costosTotales)}</td>
-                      <td className="p-3 text-right font-bold bg-green-50 border-r border-green-200">{propuesta.ventasTotales ? (((propuesta.ventasTotales - propuesta.costosTotales) / propuesta.ventasTotales) * 100).toFixed(0) + '%' : '0%'}</td>
-                      <td className="p-3 text-right font-mono bg-blue-50 border-r border-blue-200 font-bold">{format(eerr.gananciaBrutaTotal)}</td>
-                      <td className="p-3 text-right font-bold bg-blue-50">{eerr.ingresoTotal ? ((eerr.gananciaBrutaTotal / eerr.ingresoTotal) * 100).toFixed(0) + '%' : '0%'}</td>
+                      <td className="p-3 font-bold text-slate-700 pl-6">Menos gasto de operación</td>
+                      <td className="p-3 text-right font-mono text-red-600 border-r border-purple-100">{format(eerrBase.gastoOperacion)}</td>
+                      <td className="p-3 text-right font-bold border-r border-purple-100">{formatPct((eerrBase.gastoOperacion / eerrBase.ingreso) * 100)}</td>
+                      <td className="p-3 text-right font-mono bg-green-50 border-r border-green-200 text-slate-400">0.00</td>
+                      <td className="p-3 text-right font-bold bg-green-50 border-r border-green-200">0%</td>
+                      <td className="p-3 text-right font-mono text-red-600 bg-blue-50 border-r border-blue-200">{format(eerr.gastoOperacionTotal)}</td>
+                      <td className="p-3 text-right font-bold bg-blue-50">{formatPct((eerr.gastoOperacionTotal / eerr.ingresoTotal) * 100)}</td>
                     </tr>
-                    {/* Más filas si quieres mostrarlas */}
+                    <tr className="border-b border-purple-50 hover:bg-purple-50/30">
+                      <td className="p-3 font-bold text-slate-700">Ingreso de operación (o pérdida)</td>
+                      <td className="p-3 text-right font-mono text-purple-700 border-r border-purple-100">{format(eerrBase.ingresoOperacion)}</td>
+                      <td className="p-3 text-right font-bold border-r border-purple-100">{formatPct((eerrBase.ingresoOperacion / eerrBase.ingreso) * 100)}</td>
+                      <td className="p-3 text-right font-mono font-bold text-green-700 bg-green-50 border-r border-green-200">{format(eerr.ingresoOperacionTotal)}</td>
+                      <td className="p-3 text-right font-bold bg-green-50 border-r border-green-200">{formatPct((eerr.ingresoOperacionTotal / eerr.ingresoTotal) * 100)}</td>
+                      <td className="p-3 text-right font-mono font-bold text-blue-700 bg-blue-50 border-r border-blue-200">{format(eerr.ingresoOperacionTotal)}</td>
+                      <td className="p-3 text-right font-bold bg-blue-50">{formatPct((eerr.ingresoOperacionTotal / eerr.ingresoTotal) * 100)}</td>
+                    </tr>
+                    <tr className="border-b border-purple-50 hover:bg-purple-50/30">
+                      <td className="p-3 font-bold text-slate-700">Más otros ingresos</td>
+                      <td className="p-3 text-right font-mono text-purple-700 border-r border-purple-100">{format(eerrBase.otrosIngresos)}</td>
+                      <td className="p-3 text-right font-bold border-r border-purple-100">{formatPct((eerrBase.otrosIngresos / eerrBase.ingreso) * 100)}</td>
+                      <td className="p-3 text-right font-mono bg-green-50 border-r border-green-200 text-slate-400">0.00</td>
+                      <td className="p-3 text-right font-bold bg-green-50 border-r border-green-200">0%</td>
+                      <td className="p-3 text-right font-mono text-purple-700 bg-blue-50 border-r border-blue-200">{format(eerr.otrosIngresosTotal)}</td>
+                      <td className="p-3 text-right font-bold bg-blue-50">{formatPct((eerr.otrosIngresosTotal / eerr.ingresoTotal) * 100)}</td>
+                    </tr>
+                    <tr className="border-b border-purple-50 hover:bg-purple-50/30">
+                      <td className="p-3 font-bold text-slate-700">Menos gastos de otro tipo</td>
+                      <td className="p-3 text-right font-mono text-red-600 border-r border-purple-100">{format(eerrBase.otrosGastos)}</td>
+                      <td className="p-3 text-right font-bold border-r border-purple-100">{formatPct((eerrBase.otrosGastos / eerrBase.ingreso) * 100)}</td>
+                      <td className="p-3 text-right font-mono bg-green-50 border-r border-green-200 text-slate-400">0.00</td>
+                      <td className="p-3 text-right font-bold bg-green-50 border-r border-green-200">0%</td>
+                      <td className="p-3 text-right font-mono text-red-600 bg-blue-50 border-r border-blue-200">{format(eerr.otrosGastosTotal)}</td>
+                      <td className="p-3 text-right font-bold bg-blue-50">{formatPct((eerr.otrosGastosTotal / eerr.ingresoTotal) * 100)}</td>
+                    </tr>
+                    <tr className="bg-gradient-to-r from-purple-100 to-pink-100 border-t-4 border-purple-400">
+                      <td className="p-4 font-black text-slate-900 text-sm">Ganancia neta</td>
+                      <td className="p-4 text-right font-mono font-black text-purple-700 border-r border-purple-200 text-sm">{format(eerrBase.gananciaNeta)}</td>
+                      <td className="p-4 text-right font-black border-r border-purple-200">{formatPct((eerrBase.gananciaNeta / eerrBase.ingreso) * 100)}</td>
+                      <td className="p-4 text-right font-mono font-black text-green-700 bg-green-100 border-r border-green-300 text-sm">{format(propuesta.margenBruto)}</td>
+                      <td className="p-4 text-right font-black bg-green-100 border-r border-green-300">{formatPct(propuesta.margenBrutoPct)}</td>
+                      <td className="p-4 text-right font-mono font-black text-blue-700 bg-blue-100 border-r border-blue-300 text-sm">{format(eerr.gananciaNetaTotal)}</td>
+                      <td className="p-4 text-right font-black bg-blue-100">{formatPct(eerr.margenNetoPct)}</td>
+                    </tr>
                   </tbody>
                 </table>
               </div>
 
-              {/* DESVÍO VS BASE */}
+              {/* DESVÍO VS BASE DIC-25 */}
               <div className="bg-purple-100 rounded-xl shadow-lg border border-purple-400 p-6 mt-6">
                 <div className="flex justify-between items-center">
                   <div className="text-purple-900 font-black uppercase text-sm">DESVÍO VS BASE DIC-25</div>
-                  <div className="text-right font-black text-lg text-purple-900">MARGEN NETO TOTAL <br /> <span className="text-3xl">{eerr.margenNetoPct ? eerr.margenNetoPct.toFixed(1) : '0.0'}%</span></div>
+                  <div className="text-right font-black text-lg text-purple-900">MARGEN NETO TOTAL <br /> <span className="text-3xl">{desvioVsBase.gananciaNeta > 0 ? '+' : ''}{((eerr.margenNetoPct) || 0).toFixed(1)}%</span></div>
                 </div>
                 <div className="mt-4 flex gap-6 text-sm font-bold">
                   <div className="text-green-700">Ingreso: +{format(desvioVsBase.ingreso)}</div>
@@ -733,9 +608,7 @@ function App() {
                     </tr>
                   </thead>
                   <tbody>
-                    {Object.entries(aportePorCliente).length === 0 ? (
-                      <tr><td className="p-4" colSpan={5}>Sin datos</td></tr>
-                    ) : Object.entries(aportePorCliente).map(([cliente, datos]) => (
+                    {Object.entries(aportePorCliente).map(([cliente, datos]) => (
                       <tr key={cliente} className="border-b border-blue-100 hover:bg-blue-50/30">
                         <td className="p-3 font-bold text-blue-700">{cliente}</td>
                         <td className="p-3 text-right font-mono">{format(datos.venta)}</td>
