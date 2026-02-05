@@ -1,4 +1,6 @@
-const { useState, useEffect, useMemo } = React;
+ULTIMO CODIGO QUE FUNCIONÓ CON CONEXION A SHEETS
+
+import React, { useState, useEffect, useMemo } from 'react';
 
 const SHEET_ID = '1vTJQrYIRPWBawtIIUdL4NvJcbDDwNCQf8YiXKl7t6BFi1mfVwQT4nuFAqX2YTKA5Q05Y6nBGhALckdf';
 
@@ -738,4 +740,50 @@ function App() {
                 <h2 className="font-bold text-blue-700 text-sm mb-4 uppercase">Aporte por Cliente (Propuesta)</h2>
                 <table className="w-full text-left border-collapse text-xs">
                   <thead>
-                    <tr className="bg-
+                    <tr className="bg-blue-50 text-blue-600 font-bold uppercase text-[10px]">
+                      <th className="p-3 border border-blue-200">Cliente</th>
+                      <th className="p-3 border border-blue-200 text-right">Venta Total</th>
+                      <th className="p-3 border border-blue-200 text-right">Costo Total</th>
+                      <th className="p-3 border border-blue-200 text-right">Resultado</th>
+                      <th className="p-3 border border-blue-200 text-right">Margen %</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.entries(aportePorCliente).length === 0 ? (
+                      <tr><td className="p-4" colSpan={5}>Sin datos</td></tr>
+                    ) : Object.entries(aportePorCliente).map(([cliente, datos]) => (
+                      <tr key={cliente} className="border-b border-blue-100 hover:bg-blue-50/30">
+                        <td className="p-3 font-bold text-blue-700">{cliente}</td>
+                        <td className="p-3 text-right font-mono">{format(datos.venta)}</td>
+                        <td className="p-3 text-right font-mono text-red-600">{format(datos.costo)}</td>
+                        <td className="p-3 text-right font-bold text-green-600">{format(datos.resultado)}</td>
+                        <td className={`p-3 text-right font-black text-[10px] px-2 py-1 rounded ${
+                          datos.margen >= margenObjetivo ? 'bg-green-100 text-green-700' :
+                          datos.margen >= 15 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'
+                        }`}>
+                          {datos.margen.toFixed(1)}%
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* VELOCÍMETROS */}
+        <div className="mb-6">
+          <h2 className="text-lg font-black text-slate-700 uppercase mb-4">🎯 Objetivos 2026 - Tracking de Ventas</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {renderVelocimetro("Objetivo Ventas Total 2026", objVentasTotal, lineasVentaTotal, setLineasVentaTotal, "total", "#7c3aed")}
+            {renderVelocimetro("Objetivo Renovación 2026", objRenovacion, lineasRenovacion, setLineasRenovacion, "renovacion", "#ec4899")}
+            {renderVelocimetro("Objetivo Ventas Incremental 2026", objIncremental, lineasIncremental, setLineasIncremental, "incremental", "#3b82f6")}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default App;
