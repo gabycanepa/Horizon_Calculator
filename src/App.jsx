@@ -84,11 +84,20 @@ function App() {
   const actualizarFila = (id, campo, valor) => {
     setEscenarios(escenarios.map(e => {
       if (e.id === id) {
-        const updated = { ...e, [campo]: valor };
-        if (campo === 'tipoIdx') {
+        const updated = { ...e };
+        if (campo === 'ventaUnit' || campo === 'sueldoBruto') {
+          // Parse string with thousands separators to number
+          const num = typeof valor === 'string' ? parseInt(valor.replace(/\D/g, '')) || 0 : valor;
+          updated[campo] = num;
+        } else if (campo === 'tipoIdx') {
+          updated.tipoIdx = valor;
           const p = preciosNuevos[valor];
           updated.sueldoBruto = p.sueldoSugerido || 0;
           updated.ventaUnit = p.valor;
+        } else if (campo === 'cantidad') {
+          updated.cantidad = valor;
+        } else if (campo === 'cliente') {
+          updated.cliente = valor;
         }
         return updated;
       }
@@ -319,17 +328,62 @@ function App() {
                   const venta = e.cantidad * e.ventaUnit;
                   const res = venta - costoTotal;
                   const mgn = venta > 0 ? (res / venta) * 100 : 0;
+
+                  // Formatear valores para mostrar en inputs
+                  const ventaUnitStr = e.ventaUnit.toLocaleString('es-AR');
+                  const sueldoBrutoStr = e.sueldoBruto.toLocaleString('es-AR');
+
                   return (
                     <tr key={e.id} className="border-t border-purple-50 hover:bg-purple-50/30 transition">
-                      <td className="p-4"><select value={e.cliente} onChange={ev => actualizarFila(e.id, 'cliente', ev.target.value)} className="bg-transparent focus:outline-none font-medium">{clientesDisponibles.map(c => <option key={c}>{c}</option>)}</select></td>
-                      <td className="p-4"><select value={e.tipoIdx} onChange={ev => actualizarFila(e.id, 'tipoIdx', parseInt(ev.target.value))} className="bg-transparent focus:outline-none text-purple-600 font-bold text-xs">{preciosNuevos.map((p, i) => <option key={i} value={i}>{p.categoria} - {p.tipo}</option>)}</select></td>
-                      <td className="p-4 text-center"><input type="number" value={e.cantidad} onChange={ev => actualizarFila(e.id, 'cantidad', parseInt(ev.target.value))} className="w-10 text-center bg-purple-50 rounded font-bold" /></td>
-                      <td className="p-4 text-right"><input type="number" value={e.ventaUnit} onChange={ev => actualizarFila(e.id, 'ventaUnit', parseInt(ev.target.value))} className="w-28 text-right bg-blue-50 text-blue-700 font-bold rounded px-2 border border-blue-200" /></td>
-                      <td className="p-4 text-right">{isStaff ? <input type="number" value={e.sueldoBruto} onChange={ev => actualizarFila(e.id, 'sueldoBruto', parseInt(ev.target.value))} className="w-24 text-right bg-pink-50 text-pink-700 font-bold rounded px-2 border border-pink-200" /> : <span className="text-slate-300">-</span>}</td>
+                      <td className="p-4">
+                        <select value={e.cliente} onChange={ev => actualizarFila(e.id, 'cliente', ev.target.value)} className="bg-transparent focus:outline-none font-medium">
+                          {clientesDisponibles.map(c => <option key={c}>{c}</option>)}
+                        </select>
+                      </td>
+                      <td className="p-4">
+                        <select value={e.tipoIdx} onChange={ev => actualizarFila(e.id, 'tipoIdx', parseInt(ev.target.value))} className="bg-transparent focus:outline-none text-purple-600 font-bold text-xs">
+                          {preciosNuevos.map((p, i) => <option key={i} value={i}>{p.categoria} - {p.tipo}</option>)}
+                        </select>
+                      </td>
+                      <td className="p-4 text-center">
+                        <input type="number" value={e.cantidad} onChange={ev => actualizarFila(e.id, 'cantidad', parseInt(ev.target.value) || 0)} className="w-10 text-center bg-purple-50 rounded font-bold" min="0" />
+                      </td>
+                      <td className="p-4 text-right">
+                        <input
+                          type="text"
+                          value={ventaUnitStr}
+                          onChange={ev => {
+                            const val = ev.target.value.replace(/\D/g, '');
+                            actualizarFila(e.id, 'ventaUnit', val === '' ? 0 : parseInt(val));
+                          }}
+                          className="w-28 text-right bg-blue-50 text-blue-700 font-bold rounded px-2 border border-blue-200"
+                        />
+                      </td>
+                      <td className="p-4 text-right">
+                        {isStaff ? (
+                          <input
+                            type="text"
+                            value={sueldoBrutoStr}
+                            onChange={ev => {
+                              const val = ev.target.value.replace(/\D/g, '');
+                              actualizarFila(e.id, 'sueldoBruto', val === '' ? 0 : parseInt(val));
+                            }}
+                            className="w-24 text-right bg-pink-50 text-pink-700 font-bold rounded px-2 border border-pink-200"
+                          />
+                        ) : (
+                          <span className="text-slate-300">-</span>
+                        )}
+                      </td>
                       <td className="p-4 text-right font-mono text-red-500 text-xs">-{format(costoTotal)}</td>
                       <td className="p-4 text-right font-bold text-green-600">{format(res)}</td>
-                      <td className="p-4 text-center"><span className={`text-[10px] font-black px-2 py-1 rounded ${mgn >= margenObjetivo ? 'bg-green-100 text-green-700' : mgn >= 15 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>{mgn.toFixed(1)}%</span></td>
-                      <td className="p-4 text-right"><button onClick={() => setEscenarios(escenarios.filter(x => x.id !== e.id))} className="text-slate-300 hover:text-red-500">✕</button></td>
+                      <td className="p-4 text-center">
+                        <span className={`text-[10px] font-black px-2 py-1 rounded ${mgn >= margenObjetivo ? 'bg-green-100 text-green-700' : mgn >= 15 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>
+                          {mgn.toFixed(1)}%
+                        </span>
+                      </td>
+                      <td className="p-4 text-right">
+                        <button onClick={() => setEscenarios(escenarios.filter(x => x.id !== e.id))} className="text-slate-300 hover:text-red-500">✕</button>
+                      </td>
                     </tr>
                   );
                 })}
@@ -381,6 +435,7 @@ function App() {
         <div className="bg-white rounded-xl shadow-lg border border-purple-200 overflow-hidden mb-6">
           <div className="p-4 border-b border-purple-100 flex justify-between items-center bg-gradient-to-r from-purple-600 to-pink-600 text-white">
             <h2 className="font-bold text-sm">📊 Estado de Resultados Comparativo</h2>
+            <button onClick={guardarEscenario} className="bg-green-600 hover:bg-green-700 px-3 py-1 rounded text-xs font-black uppercase transition">💾 Guardar Estado</button>
             <button onClick={() => setMostrarEERR(!mostrarEERR)} className="bg-white/20 hover:bg-white/40 px-3 py-1 rounded text-[10px] font-black uppercase transition">
               {mostrarEERR ? '✕ Ocultar Panel' : '👁️ Mostrar Panel'}
             </button>
@@ -480,7 +535,10 @@ function App() {
 
         {/* VELOCÍMETROS */}
         <div className="mb-6">
-          <div className="flex justify-between items-center mb-4"><h2 className="text-lg font-black text-slate-700 uppercase">🎯 Objetivos 2026 - Tracking de Ventas</h2></div>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-black text-slate-700 uppercase">🎯 Objetivos 2026 - Tracking de Ventas</h2>
+            <button onClick={guardarEscenario} className="bg-green-600 hover:bg-green-700 px-3 py-1 rounded text-xs font-black uppercase transition">💾 Guardar Velocímetros</button>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {renderVelocimetro("Objetivo Ventas Total 2026", objVentasTotal, lineasVentaTotal, setLineasVentaTotal, "total", "#7c3aed")}
             {renderVelocimetro("Objetivo Renovación 2026", objRenovacion, lineasRenovacion, setLineasRenovacion, "renovacion", "#ec4899")}
