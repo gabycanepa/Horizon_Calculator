@@ -183,7 +183,7 @@ function App() {
   };
 
   // NUEVO: Cálculo del aporte por cliente (resumen agrupado)
-  const aportePorCliente = useMemo(() => {
+  const aportePorCliente = React.useMemo(() => {
     const resumen = {};
     escenarios.forEach(e => {
       const p = preciosNuevos[e.tipoIdx];
@@ -216,6 +216,14 @@ function App() {
 
     return resumen;
   }, [escenarios, pctCostoLaboral, pctIndirectos, preciosNuevos]);
+
+  // NUEVO: Cálculo del desvío vs base dic-25
+  const desvioVsBase = React.useMemo(() => {
+    const ingreso = propuesta.ventasTotales;
+    const costo = propuesta.costosTotales;
+    const gananciaNeta = eerr.gananciaNetaTotal - eerrBase.gananciaNeta;
+    return { ingreso, costo, gananciaNeta };
+  }, [propuesta, eerr, eerrBase]);
 
   const guardarEscenario = () => {
     const nombre = window.prompt("Ingrese un nombre para este escenario:", `Escenario ${historial.length + 1}`);
@@ -302,12 +310,47 @@ function App() {
   const propuesta = eerr.propuesta;
 
   // NUEVO: Cálculo del desvío vs base dic-25
-  const desvioVsBase = useMemo(() => {
+  const desvioVsBase = React.useMemo(() => {
     const ingreso = propuesta.ventasTotales;
     const costo = propuesta.costosTotales;
     const gananciaNeta = eerr.gananciaNetaTotal - eerrBase.gananciaNeta;
     return { ingreso, costo, gananciaNeta };
   }, [propuesta, eerr, eerrBase]);
+
+  // NUEVO: Cálculo del aporte por cliente (resumen agrupado)
+  const aportePorCliente = React.useMemo(() => {
+    const resumen = {};
+    escenarios.forEach(e => {
+      const p = preciosNuevos[e.tipoIdx];
+      const isStaff = p.categoria === 'Staff Augmentation';
+      const venta = e.cantidad * e.ventaUnit;
+      let costoTotal = 0;
+      if (isStaff) {
+        const sueldo = e.cantidad * e.sueldoBruto;
+        costoTotal = sueldo + (sueldo * pctCostoLaboral / 100) + (sueldo * pctIndirectos / 100);
+      } else {
+        const base = e.cantidad * p.costoFijo;
+        costoTotal = base + (base * pctIndirectos / 100);
+      }
+      const resultado = venta - costoTotal;
+      const margen = venta > 0 ? (resultado / venta) * 100 : 0;
+
+      if (!resumen[e.cliente]) {
+        resumen[e.cliente] = { venta: 0, costo: 0, resultado: 0, margen: 0 };
+      }
+      resumen[e.cliente].venta += venta;
+      resumen[e.cliente].costo += costoTotal;
+      resumen[e.cliente].resultado += resultado;
+    });
+
+    // Calcular margen % por cliente
+    Object.keys(resumen).forEach(cliente => {
+      const r = resumen[cliente];
+      r.margen = r.venta > 0 ? (r.resultado / r.venta) * 100 : 0;
+    });
+
+    return resumen;
+  }, [escenarios, pctCostoLaboral, pctIndirectos, preciosNuevos]);
 
   return (
     <div className="p-8 bg-gradient-to-br from-slate-50 to-purple-50 min-h-screen font-sans text-slate-900">
@@ -338,17 +381,259 @@ function App() {
           </div>
         </div>
 
-        {/* DESVÍO VS BASE DIC-25 */}
-        <div className="bg-purple-100 rounded-xl shadow-lg border border-purple-400 p-6 mb-6">
-          <div className="flex justify-between items-center">
-            <div className="text-purple-900 font-black uppercase text-sm">DESVÍO VS BASE DIC-25</div>
-            <div className="text-right font-black text-lg text-purple-900">MARGEN NETO TOTAL <br /> <span className="text-3xl">{desvioVsBase.gananciaNeta > 0 ? '+' : ''}{((eerr.margenNetoPct) || 0).toFixed(1)}%</span></div>
+        {/* TABLA SIMULACIÓN */}
+        <div className="bg-white rounded-xl shadow-sm border border-purple-100 overflow-hidden mb-6">
+          <div className="p-4 border-b border-purple-50 flex justify-between items-center bg-gradient-to-r from-purple-50 to-pink-50">
+            <h2 className="font-bold text-slate-700 text-sm">💼 Simulación de Servicios (Propuesta)</h2>
+            <div className="flex gap-2">
+               <button onClick={() => setMostrarHistorial(!mostrarHistorial)} className={`text-xs font-bold px-3 py-1 border rounded-lg transition ${mostrarHistorial ? 'bg-purple-600 text-white border-purple-600' : 'text-slate-600 border-purple-200 hover:text-purple-600'}`}>📋 Historial ({historial.length})</button>
+               <button onClick={guardarEscenario} className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold hover:shadow-lg transition">💾 Guardar Escenario</button>
+               <button onClick={() => { if(window.confirm('¿Limpiar todos los campos?')) setEscenarios([]); }} className="text-slate-400 hover:text-slate-600 text-xs font-bold px-3 py-1">Limpiar</button>
+               <button onClick={agregarFila} className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold hover:shadow-lg transition">+ Agregar</button>
+            </div>
           </div>
-          <div className="mt-4 flex gap-6 text-sm font-bold">
-            <div className="text-green-700">Ingreso: +{format(desvioVsBase.ingreso)}</div>
-            <div className="text-red-600">Costo: +{format(desvioVsBase.costo)}</div>
-            <div className="text-green-700">Ganancia Neta: +{format(desvioVsBase.gananciaNeta)}</div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="text-[10px] font-bold text-purple-400 uppercase bg-purple-50/30">
+                  <th className="p-4">Cliente</th><th className="p-4">Servicio</th><th className="p-4 text-center">Cant</th><th className="p-4 text-right">Venta Unit</th><th className="p-4 text-right">Sueldo Bruto</th><th className="p-4 text-right">Costo Total</th><th className="p-4 text-right">Resultado</th><th className="p-4 text-center">Margen</th><th className="p-4"></th>
+                </tr>
+              </thead>
+              <tbody className="text-sm">
+                {escenarios.map(e => {
+                  const p = preciosNuevos[e.tipoIdx];
+                  const isStaff = p.categoria === 'Staff Augmentation';
+                  let costoTotal = 0;
+                  if (isStaff) {
+                    const sueldo = e.cantidad * e.sueldoBruto;
+                    costoTotal = sueldo + (sueldo * pctCostoLaboral/100) + (sueldo * pctIndirectos/100);
+                  } else {
+                    const base = e.cantidad * p.costoFijo;
+                    costoTotal = base + (base * pctIndirectos/100);
+                  }
+                  const venta = e.cantidad * e.ventaUnit;
+                  const res = venta - costoTotal;
+                  const mgn = venta > 0 ? (res / venta) * 100 : 0;
+
+                  // Formatear valores para mostrar en inputs
+                  const ventaUnitStr = e.ventaUnit.toLocaleString('es-AR');
+                  const sueldoBrutoStr = e.sueldoBruto.toLocaleString('es-AR');
+
+                  return (
+                    <tr key={e.id} className="border-t border-purple-50 hover:bg-purple-50/30 transition">
+                      <td className="p-4">
+                        <select value={e.cliente} onChange={ev => actualizarFila(e.id, 'cliente', ev.target.value)} className="bg-transparent focus:outline-none font-medium">
+                          {clientesDisponibles.map(c => <option key={c}>{c}</option>)}
+                        </select>
+                      </td>
+                      <td className="p-4">
+                        <select value={e.tipoIdx} onChange={ev => actualizarFila(e.id, 'tipoIdx', parseInt(ev.target.value))} className="bg-transparent focus:outline-none text-purple-600 font-bold text-xs">
+                          {preciosNuevos.map((p, i) => <option key={i} value={i}>{p.categoria} - {p.tipo}</option>)}
+                        </select>
+                      </td>
+                      <td className="p-4 text-center">
+                        <input type="number" value={e.cantidad} onChange={ev => actualizarFila(e.id, 'cantidad', parseInt(ev.target.value) || 0)} className="w-10 text-center bg-purple-50 rounded font-bold" min="0" />
+                      </td>
+                      <td className="p-4 text-right">
+                        <input
+                          type="text"
+                          value={ventaUnitStr}
+                          onChange={ev => {
+                            const val = ev.target.value.replace(/\D/g, '');
+                            actualizarFila(e.id, 'ventaUnit', val === '' ? 0 : parseInt(val));
+                          }}
+                          className="w-28 text-right bg-blue-50 text-blue-700 font-bold rounded px-2 border border-blue-200"
+                        />
+                      </td>
+                      <td className="p-4 text-right">
+                        {isStaff ? (
+                          <input
+                            type="text"
+                            value={sueldoBrutoStr}
+                            onChange={ev => {
+                              const val = ev.target.value.replace(/\D/g, '');
+                              actualizarFila(e.id, 'sueldoBruto', val === '' ? 0 : parseInt(val));
+                            }}
+                            className="w-24 text-right bg-pink-50 text-pink-700 font-bold rounded px-2 border border-pink-200"
+                          />
+                        ) : (
+                          <span className="text-slate-300">-</span>
+                        )}
+                      </td>
+                      <td className="p-4 text-right font-mono text-red-500 text-xs">-{format(costoTotal)}</td>
+                      <td className="p-4 text-right font-bold text-green-600">{format(res)}</td>
+                      <td className="p-4 text-center">
+                        <span className={`text-[10px] font-black px-2 py-1 rounded ${mgn >= margenObjetivo ? 'bg-green-100 text-green-700' : mgn >= 15 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>
+                          {mgn.toFixed(1)}%
+                        </span>
+                      </td>
+                      <td className="p-4 text-right">
+                        <button onClick={() => setEscenarios(escenarios.filter(x => x.id !== e.id))} className="text-slate-300 hover:text-red-500">✕</button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
+        </div>
+
+        {/* HISTORIAL DE ESCENARIOS */}
+        {mostrarHistorial && (
+          <div className="bg-white rounded-xl shadow-sm border border-purple-100 overflow-hidden mb-6 animate-in fade-in slide-in-from-top-4 duration-300">
+            <div className="p-4 border-b border-purple-50 bg-gradient-to-r from-purple-50 to-pink-50 flex justify-between items-center">
+              <h2 className="font-bold text-slate-700 text-sm">📋 Historial de Escenarios Guardados</h2>
+              <button onClick={() => setMostrarHistorial(false)} className="text-slate-400 hover:text-slate-600 text-xs">Cerrar</button>
+            </div>
+            <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {historial.length === 0 ? (
+                <div className="col-span-full text-center py-8 text-slate-400 text-sm italic">No hay escenarios guardados en este navegador.</div>
+              ) : (
+                historial.map(item => (
+                  <div key={item.id} className="border border-purple-100 rounded-lg p-4 hover:border-purple-400 transition bg-white shadow-sm">
+                    <div className="flex justify-between items-start mb-2">
+                      <h3 className="font-black text-purple-700 text-sm uppercase truncate pr-2">{item.nombre}</h3>
+                      <button onClick={() => { if(window.confirm('¿Eliminar este escenario?')) setHistorial(historial.filter(h => h.id !== item.id)) }} className="text-slate-300 hover:text-red-500">✕</button>
+                    </div>
+                    <p className="text-[10px] text-slate-400 font-bold mb-3">{item.fecha}</p>
+                    <div className="space-y-1 mb-4">
+                      <div className="flex justify-between text-xs"><span className="text-slate-500">Venta Propuesta:</span><span className="font-bold text-green-600">{format(item.eerr.propuesta.ventasTotales)}</span></div>
+                      <div className="flex justify-between text-xs"><span className="text-slate-500">Ganancia Neta:</span><span className="font-bold text-blue-600">{format(item.eerr.gananciaNetaTotal)}</span></div>
+                    </div>
+                    <button onClick={() => {
+                      if(window.confirm(`¿Cargar el escenario "${item.nombre}"? Se perderán los cambios actuales.`)) {
+                        setEscenarios(JSON.parse(JSON.stringify(item.escenarios)));
+                        setPctIndirectos(item.config.pctIndirectos);
+                        setPctCostoLaboral(item.config.pctCostoLaboral);
+                        setGastosOperativos(item.config.gastosOperativos);
+                        setMargenObjetivo(item.config.margenObjetivo);
+                        setLineasVentaTotal(item.config.lineasVentaTotal);
+                        setLineasRenovacion(item.config.lineasRenovacion);
+                        setLineasIncremental(item.config.lineasIncremental);
+                        setMostrarHistorial(false);
+                      }
+                    }} className="w-full bg-purple-50 text-purple-700 py-2 rounded font-black text-[10px] uppercase hover:bg-purple-600 hover:text-white transition">Cargar Escenario</button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* EERR COMPARATIVO CON TOGGLE */}
+        <div className="bg-white rounded-xl shadow-lg border border-purple-200 overflow-hidden mb-6">
+          <div className="p-4 border-b border-purple-100 flex justify-between items-center bg-gradient-to-r from-purple-600 to-pink-600 text-white">
+            <h2 className="font-bold text-sm">📊 Estado de Resultados Comparativo</h2>
+            <button onClick={() => setMostrarEERR(!mostrarEERR)} className="bg-white/20 hover:bg-white/40 px-3 py-1 rounded text-[10px] font-black uppercase transition">
+              {mostrarEERR ? '✕ Ocultar Panel' : '👁️ Mostrar Panel'}
+            </button>
+          </div>
+          {mostrarEERR && (
+            <>
+              <div className="overflow-x-auto animate-in zoom-in-95 duration-200">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-purple-50 text-purple-600 font-bold uppercase text-[10px]">
+                      <th className="p-3 border-r border-purple-100"></th>
+                      <th className="p-3 text-right border-r border-purple-100">EERR Dic-25</th>
+                      <th className="p-3 text-right border-r border-purple-100">%</th>
+                      <th className="p-3 text-right bg-green-50 border-r border-green-200">Propuesta</th>
+                      <th className="p-3 text-right bg-green-50 border-r border-green-200">%</th>
+                      <th className="p-3 text-right bg-blue-50 border-r border-blue-200">EERR Total</th>
+                      <th className="p-3 text-right bg-blue-50">%</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr className="border-b border-purple-50 hover:bg-purple-50/30">
+                      <td className="p-3 font-bold text-slate-700">Ingreso</td>
+                      <td className="p-3 text-right font-mono border-r border-purple-100">{format(eerrBase.ingreso)}</td>
+                      <td className="p-3 text-right font-bold border-r border-purple-100">100%</td>
+                      <td className="p-3 text-right font-mono bg-green-50 border-r border-green-200 text-green-700 font-bold">{format(propuesta.ventasTotales)}</td>
+                      <td className="p-3 text-right font-bold bg-green-50 border-r border-green-200">100%</td>
+                      <td className="p-3 text-right font-mono bg-blue-50 border-r border-blue-200 text-blue-700 font-bold">{format(eerr.ingresoTotal)}</td>
+                      <td className="p-3 text-right font-bold bg-blue-50">100%</td>
+                    </tr>
+                    <tr className="border-b border-purple-50 hover:bg-purple-50/30">
+                      <td className="p-3 font-bold text-slate-700">Costo de ingresos</td>
+                      <td className="p-3 text-right font-mono text-red-600 border-r border-purple-100">{format(eerrBase.costoIngresos)}</td>
+                      <td className="p-3 text-right font-bold border-r border-purple-100">{formatPct((eerrBase.costoIngresos / eerrBase.ingreso) * 100)}</td>
+                      <td className="p-3 text-right font-mono text-red-600 bg-green-50 border-r border-green-200">{format(propuesta.costosTotales)}</td>
+                      <td className="p-3 text-right font-bold bg-green-50 border-r border-green-200">{propuesta.ventasTotales > 0 ? formatPct((propuesta.costosTotales / propuesta.ventasTotales) * 100) : '0%'}</td>
+                      <td className="p-3 text-right font-mono text-red-600 bg-blue-50 border-r border-blue-200">{format(eerr.costoIngresosTotal)}</td>
+                      <td className="p-3 text-right font-bold bg-blue-50">{formatPct((eerr.costoIngresosTotal / eerr.ingresoTotal) * 100)}</td>
+                    </tr>
+                    <tr className="border-b-2 border-purple-200 bg-purple-50/50">
+                      <td className="p-3 font-black text-slate-800">Ganancia bruta</td>
+                      <td className="p-3 text-right font-mono font-bold text-purple-700 border-r border-purple-100">{format(eerrBase.gananciaBruta)}</td>
+                      <td className="p-3 text-right font-bold border-r border-purple-100">{formatPct((eerrBase.gananciaBruta / eerrBase.ingreso) * 100)}</td>
+                      <td className="p-3 text-right font-mono font-bold text-green-700 bg-green-50 border-r border-green-200">{format(propuesta.margenBruto)}</td>
+                      <td className="p-3 text-right font-bold bg-green-50 border-r border-green-200">{formatPct(propuesta.margenBrutoPct)}</td>
+                      <td className="p-3 text-right font-mono font-bold text-blue-700 bg-blue-50 border-r border-blue-200">{format(eerr.gananciaBrutaTotal)}</td>
+                      <td className="p-3 text-right font-bold bg-blue-50">{formatPct(eerr.margenBrutoPct)}</td>
+                    </tr>
+                    <tr className="border-b border-purple-50 hover:bg-purple-50/30">
+                      <td className="p-3 font-bold text-slate-700 pl-6">Menos gasto de operación</td>
+                      <td className="p-3 text-right font-mono text-red-600 border-r border-purple-100">{format(eerrBase.gastoOperacion)}</td>
+                      <td className="p-3 text-right font-bold border-r border-purple-100">{formatPct((eerrBase.gastoOperacion / eerrBase.ingreso) * 100)}</td>
+                      <td className="p-3 text-right font-mono bg-green-50 border-r border-green-200 text-slate-400">0.00</td>
+                      <td className="p-3 text-right font-bold bg-green-50 border-r border-green-200">0%</td>
+                      <td className="p-3 text-right font-mono text-red-600 bg-blue-50 border-r border-blue-200">{format(eerr.gastoOperacionTotal)}</td>
+                      <td className="p-3 text-right font-bold bg-blue-50">{formatPct((eerr.gastoOperacionTotal / eerr.ingresoTotal) * 100)}</td>
+                    </tr>
+                    <tr className="border-b border-purple-50 hover:bg-purple-50/30">
+                      <td className="p-3 font-bold text-slate-700">Ingreso de operación (o pérdida)</td>
+                      <td className="p-3 text-right font-mono text-purple-700 border-r border-purple-100">{format(eerrBase.ingresoOperacion)}</td>
+                      <td className="p-3 text-right font-bold border-r border-purple-100">{formatPct((eerrBase.ingresoOperacion / eerrBase.ingreso) * 100)}</td>
+                      <td className="p-3 text-right font-mono font-bold text-green-700 bg-green-50 border-r border-green-200">{format(eerr.ingresoOperacionTotal)}</td>
+                      <td className="p-3 text-right font-bold bg-green-50 border-r border-green-200">{formatPct((eerr.ingresoOperacionTotal / eerr.ingresoTotal) * 100)}</td>
+                      <td className="p-3 text-right font-mono font-bold text-blue-700 bg-blue-50 border-r border-blue-200">{format(eerr.ingresoOperacionTotal)}</td>
+                      <td className="p-3 text-right font-bold bg-blue-50">{formatPct((eerr.ingresoOperacionTotal / eerr.ingresoTotal) * 100)}</td>
+                    </tr>
+                    <tr className="border-b border-purple-50 hover:bg-purple-50/30">
+                      <td className="p-3 font-bold text-slate-700">Más otros ingresos</td>
+                      <td className="p-3 text-right font-mono text-purple-700 border-r border-purple-100">{format(eerrBase.otrosIngresos)}</td>
+                      <td className="p-3 text-right font-bold border-r border-purple-100">{formatPct((eerrBase.otrosIngresos / eerrBase.ingreso) * 100)}</td>
+                      <td className="p-3 text-right font-mono bg-green-50 border-r border-green-200 text-slate-400">0.00</td>
+                      <td className="p-3 text-right font-bold bg-green-50 border-r border-green-200">0%</td>
+                      <td className="p-3 text-right font-mono text-purple-700 bg-blue-50 border-r border-blue-200">{format(eerr.otrosIngresosTotal)}</td>
+                      <td className="p-3 text-right font-bold bg-blue-50">{formatPct((eerr.otrosIngresosTotal / eerr.ingresoTotal) * 100)}</td>
+                    </tr>
+                    <tr className="border-b border-purple-50 hover:bg-purple-50/30">
+                      <td className="p-3 font-bold text-slate-700">Menos gastos de otro tipo</td>
+                      <td className="p-3 text-right font-mono text-red-600 border-r border-purple-100">{format(eerrBase.otrosGastos)}</td>
+                      <td className="p-3 text-right font-bold border-r border-purple-100">{formatPct((eerrBase.otrosGastos / eerrBase.ingreso) * 100)}</td>
+                      <td className="p-3 text-right font-mono bg-green-50 border-r border-green-200 text-slate-400">0.00</td>
+                      <td className="p-3 text-right font-bold bg-green-50 border-r border-green-200">0%</td>
+                      <td className="p-3 text-right font-mono text-red-600 bg-blue-50 border-r border-blue-200">{format(eerr.otrosGastosTotal)}</td>
+                      <td className="p-3 text-right font-bold bg-blue-50">{formatPct((eerr.otrosGastosTotal / eerr.ingresoTotal) * 100)}</td>
+                    </tr>
+                    <tr className="bg-gradient-to-r from-purple-100 to-pink-100 border-t-4 border-purple-400">
+                      <td className="p-4 font-black text-slate-900 text-sm">Ganancia neta</td>
+                      <td className="p-4 text-right font-mono font-black text-purple-700 border-r border-purple-200 text-sm">{format(eerrBase.gananciaNeta)}</td>
+                      <td className="p-4 text-right font-black border-r border-purple-200">{formatPct((eerrBase.gananciaNeta / eerrBase.ingreso) * 100)}</td>
+                      <td className="p-4 text-right font-mono font-black text-green-700 bg-green-100 border-r border-green-300 text-sm">{format(propuesta.margenBruto)}</td>
+                      <td className="p-4 text-right font-black bg-green-100 border-r border-green-300">{formatPct(propuesta.margenBrutoPct)}</td>
+                      <td className="p-4 text-right font-mono font-black text-blue-700 bg-blue-100 border-r border-blue-300 text-sm">{format(eerr.gananciaNetaTotal)}</td>
+                      <td className="p-4 text-right font-black bg-blue-100">{formatPct(eerr.margenNetoPct)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              {/* DESVÍO VS BASE DIC-25 */}
+              <div className="bg-purple-100 rounded-xl shadow-lg border border-purple-400 p-6 mt-6">
+                <div className="flex justify-between items-center">
+                  <div className="text-purple-900 font-black uppercase text-sm">DESVÍO VS BASE DIC-25</div>
+                  <div className="text-right font-black text-lg text-purple-900">MARGEN NETO TOTAL <br /> <span className="text-3xl">{desvioVsBase.gananciaNeta > 0 ? '+' : ''}{((eerr.margenNetoPct) || 0).toFixed(1)}%</span></div>
+                </div>
+                <div className="mt-4 flex gap-6 text-sm font-bold">
+                  <div className="text-green-700">Ingreso: +{format(desvioVsBase.ingreso)}</div>
+                  <div className="text-red-600">Costo: +{format(desvioVsBase.costo)}</div>
+                  <div className="text-green-700">Ganancia Neta: +{format(desvioVsBase.gananciaNeta)}</div>
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
         {/* APORTE POR CLIENTE */}
@@ -383,20 +668,15 @@ function App() {
           </table>
         </div>
 
-        {/* TABLA SIMULACIÓN */}
-        <div className="bg-white rounded-xl shadow-sm border border-purple-100 overflow-hidden mb-6">
-          {/* ... tu tabla simulación ... */}
-          {/* (Aquí va el código de la tabla simulación que ya tienes) */}
-        </div>
-
-        {/* HISTORIAL DE ESCENARIOS */}
-        {/* ... */}
-
-        {/* EERR COMPARATIVO CON TOGGLE */}
-        {/* ... */}
-
         {/* VELOCÍMETROS */}
-        {/* ... */}
+        <div className="mb-6">
+          <h2 className="text-lg font-black text-slate-700 uppercase mb-4">🎯 Objetivos 2026 - Tracking de Ventas</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {renderVelocimetro("Objetivo Ventas Total 2026", objVentasTotal, lineasVentaTotal, setLineasVentaTotal, "total", "#7c3aed")}
+            {renderVelocimetro("Objetivo Renovación 2026", objRenovacion, lineasRenovacion, setLineasRenovacion, "renovacion", "#ec4899")}
+            {renderVelocimetro("Objetivo Ventas Incremental 2026", objIncremental, lineasIncremental, setLineasIncremental, "incremental", "#3b82f6")}
+          </div>
+        </div>
       </div>
     </div>
   );
