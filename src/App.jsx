@@ -62,8 +62,6 @@ const fetchSheet = async (sheetName) => {
 };
 
 function App() {
-
-function App() {
   const [dataSheets, setDataSheets] = useState({
     preciosNuevos: [],
     clientes: [],
