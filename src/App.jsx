@@ -398,7 +398,7 @@ function App() {
       });
 
       setHistorial(prev => [nuevoRegistro, ...prev]);
-      alert(`✅ Sincronizado en la pestaña "HistorialCompartido"`);
+      alert(`✅ Sincronizado en la base de datos "OK"`);
     } catch(e) {
       console.error("Error sincronización:", e);
       alert("Error al sincronizar.");
