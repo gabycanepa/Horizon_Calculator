@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 
 const SHEET_ID = '1fJVmm7i5g1IfOLHDTByRM-W01pWIF46k7aDOYsH4UKA';
@@ -223,7 +222,6 @@ function App() {
         updated.tipoIdx = Number(valor) || 0;
         const p = dataSheets.preciosNuevos[Number(valor)];
         if (p) {
-          // Forzar actualización siempre
           updated.sueldoBruto = p.sueldoSugerido ?? 0;
           updated.ventaUnit = p.valor ?? 0;
         }
@@ -261,6 +259,8 @@ function App() {
   const calcularPropuesta = () => {
     let ventasTotales = 0;
     let costosTotales = 0;
+    const porCliente = {}; // Agrupador para la visual de barras
+
     escenarios.forEach(e => {
       const p = dataSheets.preciosNuevos && dataSheets.preciosNuevos[e.tipoIdx];
       if (!p) return;
@@ -278,10 +278,16 @@ function App() {
       }
       ventasTotales += ventaFila;
       costosTotales += costoTotalFila;
+
+      // Lógica de agrupación por cliente
+      if (!porCliente[e.cliente]) porCliente[e.cliente] = { ventas: 0, costos: 0 };
+      porCliente[e.cliente].ventas += ventaFila;
+      porCliente[e.cliente].costos += costoTotalFila;
     });
+
     const margenBruto = ventasTotales - costosTotales;
     const margenBrutoPct = ventasTotales > 0 ? (margenBruto / ventasTotales) * 100 : 0;
-    return { ventasTotales, costosTotales, margenBruto, margenBrutoPct };
+    return { ventasTotales, costosTotales, margenBruto, margenBrutoPct, porCliente };
   };
 
   const calcularEERRTotal = () => {
@@ -341,34 +347,6 @@ function App() {
     const gananciaNeta = eerr.gananciaNetaTotal - (eerr.gananciaNetaBase || 0);
     return { ingreso, costo, gananciaNeta };
   }, [escenarios, pctCostoLaboral, pctIndirectos, gastosOperativos, dataSheets.eerrBase]);
-
-  const aportePorCliente = useMemo(() => {
-    const resumen = {};
-    escenarios.forEach(e => {
-      const p = dataSheets.preciosNuevos && dataSheets.preciosNuevos[e.tipoIdx];
-      if (!p) return;
-      const isStaff = (p.categoria || '').toLowerCase().includes('staff');
-      const venta = (Number(e.cantidad) || 0) * (Number(e.ventaUnit) || 0);
-      let costoTotal = 0;
-      if (isStaff) {
-        const sueldo = (Number(e.cantidad) || 0) * (Number(e.sueldoBruto) || 0);
-        costoTotal = sueldo + (sueldo * pctCostoLaboral / 100) + (sueldo * pctIndirectos / 100);
-      } else {
-        const base = (Number(e.cantidad) || 0) * (Number(p.costoFijo) || 0);
-        costoTotal = base + (base * pctIndirectos / 100);
-      }
-      const resultado = venta - costoTotal;
-      if (!resumen[e.cliente]) resumen[e.cliente] = { venta: 0, costo: 0, resultado: 0, margen: 0 };
-      resumen[e.cliente].venta += venta;
-      resumen[e.cliente].costo += costoTotal;
-      resumen[e.cliente].resultado += resultado;
-    });
-    Object.keys(resumen).forEach(cliente => {
-      const r = resumen[cliente];
-      r.margen = r.venta > 0 ? (r.resultado / r.venta) * 100 : 0;
-    });
-    return resumen;
-  }, [escenarios, pctCostoLaboral, pctIndirectos, dataSheets.preciosNuevos]);
 
   const guardarEscenario = () => {
     const nombre = window.prompt("Ingrese un nombre para este escenario:", `Escenario ${historial.length + 1}`);
@@ -746,6 +724,44 @@ function App() {
           </div>
         )}
 
+        {/* --- NUEVA SECCIÓN: APORTE POR CLIENTE (BARRAS) --- */}
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-blue-100 mb-6">
+          <h3 className="text-xs font-bold text-blue-400 uppercase mb-4">Aporte por Cliente (Propuesta)</h3>
+          <div className="space-y-4">
+            {Object.entries(propuesta.porCliente).map(([nombre, datos]) => {
+              const resultado = datos.ventas - datos.costos;
+              const margen = datos.ventas > 0 ? (resultado / datos.ventas) * 100 : 0;
+              return (
+                <div key={nombre} className="group">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-sm font-bold text-slate-700">{nombre}</span>
+                    <span className="text-xs font-black text-green-600">{format(resultado)}</span>
+                  </div>
+                  <div className="flex justify-between text-[10px] text-slate-400 mb-2">
+                    <span>Venta: {format(datos.ventas)}</span>
+                    <span>Margen: {margen.toFixed(1)}%</span>
+                  </div>
+                  <div className="w-full bg-slate-50 h-2 rounded-full overflow-hidden">
+                    <div 
+                      className={`h-full transition-all duration-500 ${
+                        margen >= margenObjetivo 
+                          ? 'bg-gradient-to-r from-green-400 to-emerald-500' 
+                          : margen >= 15 
+                            ? 'bg-gradient-to-r from-yellow-400 to-orange-400' 
+                            : 'bg-gradient-to-r from-red-400 to-pink-500'
+                      }`}
+                      style={{ width: `${Math.min(100, Math.max(0, margen * 2))}%` }}
+                    ></div>
+                  </div>
+                </div>
+              );
+            })}
+            {Object.keys(propuesta.porCliente).length === 0 && (
+              <p className="text-center text-slate-300 text-xs py-4 italic">Sin datos de simulación</p>
+            )}
+          </div>
+        </div>
+
         {/* EERR COMPARATIVO */}
         <div className="bg-white rounded-xl shadow-lg border border-purple-200 overflow-hidden mb-6">
           <div className="p-4 border-b border-purple-100 flex justify-between items-center bg-gradient-to-r from-purple-600 to-pink-600 text-white">
@@ -857,40 +873,6 @@ function App() {
                   <div className="text-red-600">Costo: +{format(desvioVsBase.costo)}</div>
                   <div className="text-green-700">Ganancia Neta: +{format(desvioVsBase.gananciaNeta)}</div>
                 </div>
-              </div>
-
-              {/* APORTE POR CLIENTE */}
-              <div className="bg-white rounded-xl shadow-sm border border-blue-200 overflow-hidden mb-6 p-4">
-                <h2 className="font-bold text-blue-700 text-sm mb-4 uppercase">Aporte por Cliente (Propuesta)</h2>
-                <table className="w-full text-left border-collapse text-xs">
-                  <thead>
-                    <tr className="bg-blue-50 text-blue-600 font-bold uppercase text-[10px]">
-                      <th className="p-3 border border-blue-200">Cliente</th>
-                      <th className="p-3 border border-blue-200 text-right">Venta Total</th>
-                      <th className="p-3 border border-blue-200 text-right">Costo Total</th>
-                      <th className="p-3 border border-blue-200 text-right">Resultado</th>
-                      <th className="p-3 border border-blue-200 text-right">Margen %</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {Object.entries(aportePorCliente).length === 0 ? (
-                      <tr><td className="p-4" colSpan={5}>Sin datos</td></tr>
-                    ) : Object.entries(aportePorCliente).map(([cliente, datos]) => (
-                      <tr key={cliente} className="border-b border-blue-100 hover:bg-blue-50/30">
-                        <td className="p-3 font-bold text-blue-700">{cliente}</td>
-                        <td className="p-3 text-right font-mono">{format(datos.venta)}</td>
-                        <td className="p-3 text-right font-mono text-red-600">{format(datos.costo)}</td>
-                        <td className="p-3 text-right font-bold text-green-600">{format(datos.resultado)}</td>
-                        <td className={`p-3 text-right font-black text-[10px] px-2 py-1 rounded ${
-                          datos.margen >= margenObjetivo ? 'bg-green-100 text-green-700' :
-                          datos.margen >= 15 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'
-                        }`}>
-                          {datos.margen.toFixed(1)}%
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
               </div>
             </>
           )}
