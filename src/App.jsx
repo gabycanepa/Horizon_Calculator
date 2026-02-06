@@ -1,3 +1,5 @@
+import React, { useState, useEffect, useMemo } from 'react';
+
 const SHEET_ID = '1fJVmm7i5g1IfOLHDTByRM-W01pWIF46k7aDOYsH4UKA';
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzCxPqker3JsD9YKVDeTY5zOqmguQM10hpRAvUbjlEe3PUOHI8uScpLvAMQ4QvrSu7x/exec';
 
@@ -78,7 +80,6 @@ function App() {
 
   const [isReady, setIsReady] = useState(false);
   const [isLoadingFromCloud, setIsLoadingFromCloud] = useState(false);
-  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
 
   const [objVentasTotal] = useState(2195176117);
   const [lineasVentaTotal, setLineasVentaTotal] = useState(() => {
@@ -173,6 +174,9 @@ function App() {
               } else if (typeof dEsc === 'string' && dEsc.trim() !== '') {
                 try {
                   escenariosParseados = JSON.parse(dEsc);
+                  if (!Array.isArray(escenariosParseados)) {
+                    escenariosParseados = [];
+                  }
                 } catch(e) {
                   console.error('Error parseando escenarios:', e);
                   escenariosParseados = [];
@@ -185,6 +189,9 @@ function App() {
               } else if (typeof conf === 'string' && conf.trim() !== '') {
                 try {
                   configParseada = JSON.parse(conf);
+                  if (typeof configParseada !== 'object' || Array.isArray(configParseada)) {
+                    configParseada = {};
+                  }
                 } catch(e) {
                   console.error('Error parseando config:', e);
                   configParseada = {};
@@ -197,6 +204,9 @@ function App() {
               } else if (typeof eerrData === 'string' && eerrData.trim() !== '') {
                 try {
                   eerrParseada = JSON.parse(eerrData);
+                  if (typeof eerrParseada !== 'object' || Array.isArray(eerrParseada)) {
+                    eerrParseada = {};
+                  }
                 } catch(e) {
                   console.error('Error parseando eerr:', e);
                   eerrParseada = {};
@@ -223,9 +233,9 @@ function App() {
                 setPctCostoLaboral(ultimo.config.pctCostoLaboral ?? 45);
                 setGastosOperativos(ultimo.config.gastosOperativos ?? 46539684.59);
                 setMargenObjetivo(ultimo.config.margenObjetivo ?? 25);
-                if(ultimo.config.lineasVentaTotal) setLineasVentaTotal(ultimo.config.lineasVentaTotal);
-                if(ultimo.config.lineasRenovacion) setLineasRenovacion(ultimo.config.lineasRenovacion);
-                if(ultimo.config.lineasIncremental) setLineasIncremental(ultimo.config.lineasIncremental);
+                if(Array.isArray(ultimo.config.lineasVentaTotal)) setLineasVentaTotal(ultimo.config.lineasVentaTotal);
+                if(Array.isArray(ultimo.config.lineasRenovacion)) setLineasRenovacion(ultimo.config.lineasRenovacion);
+                if(Array.isArray(ultimo.config.lineasIncremental)) setLineasIncremental(ultimo.config.lineasIncremental);
               }
             }
           }
@@ -233,6 +243,17 @@ function App() {
           console.error("Error cargando historial de la nube:", e); 
         }
 
+        if (preciosProcesados.length > 0 && escenarios.length === 0) {
+          setEscenarios([{
+            id: Date.now(),
+            cliente: clientesProcesados[0] || 'Nuevo Cliente',
+            tipoIdx: 0,
+            cantidad: 1,
+            sueldoBruto: preciosProcesados[0].sueldoSugerido || 0,
+            ventaUnit: preciosProcesados[0].valor || 0
+          }]);
+        }
+        
         setIsReady(true);
 
       } catch (error) {
@@ -247,10 +268,6 @@ function App() {
   useEffect(() => {
     if (!isReady || isLoadingFromCloud) return;
     if (!Array.isArray(escenarios)) return;
-    if (!hasLoadedOnce) {
-      setHasLoadedOnce(true);
-      return;
-    }
 
     localStorage.setItem('hzn_escenarios', JSON.stringify(escenarios));
     localStorage.setItem('hzn_pctInd', pctIndirectos);
@@ -260,7 +277,7 @@ function App() {
     localStorage.setItem('hzn_lineasVenta', JSON.stringify(lineasVentaTotal));
     localStorage.setItem('hzn_lineasReno', JSON.stringify(lineasRenovacion));
     localStorage.setItem('hzn_lineasIncr', JSON.stringify(lineasIncremental));
-  }, [escenarios, pctIndirectos, pctCostoLaboral, gastosOperativos, margenObjetivo, lineasVentaTotal, lineasRenovacion, lineasIncremental, isReady, isLoadingFromCloud, hasLoadedOnce]);
+  }, [escenarios, pctIndirectos, pctCostoLaboral, gastosOperativos, margenObjetivo, lineasVentaTotal, lineasRenovacion, lineasIncremental, isReady, isLoadingFromCloud]);
 
   const agregarFila = () => {
     if (dataSheets.loading) {
@@ -469,15 +486,15 @@ function App() {
     setGastosOperativos(configValida.gastosOperativos ?? 46539684.59);
     setMargenObjetivo(configValida.margenObjetivo ?? 25);
     
-    if(configValida.lineasVentaTotal) setLineasVentaTotal(configValida.lineasVentaTotal);
-    if(configValida.lineasRenovacion) setLineasRenovacion(configValida.lineasRenovacion);
-    if(configValida.lineasIncremental) setLineasIncremental(configValida.lineasIncremental);
+    if(Array.isArray(configValida.lineasVentaTotal)) setLineasVentaTotal(configValida.lineasVentaTotal);
+    if(Array.isArray(configValida.lineasRenovacion)) setLineasRenovacion(configValida.lineasRenovacion);
+    if(Array.isArray(configValida.lineasIncremental)) setLineasIncremental(configValida.lineasIncremental);
     
     setMostrarHistorial(false);
     
-    Promise.resolve().then(() => {
+    setTimeout(() => {
       setIsLoadingFromCloud(false);
-    });
+    }, 200);
   };
 
   const descargarPDF = () => {
