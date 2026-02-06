@@ -215,8 +215,9 @@ function App() {
   updated.tipoIdx = Number(valor) || 0;
   const p = dataSheets.preciosNuevos[Number(valor)];
   if (p) {
-    updated.sueldoBruto = p.sueldoSugerido || 0;
-    updated.ventaUnit = p.valor || 0;
+    // Forzar actualización siempre
+    updated.sueldoBruto = p.sueldoSugerido ?? 0;
+    updated.ventaUnit = p.valor ?? 0;
   }
       } else if (campo === 'cantidad') {
         updated.cantidad = Number(valor) || 0;
