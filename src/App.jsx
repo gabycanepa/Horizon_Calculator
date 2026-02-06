@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 
 const SHEET_ID = '1fJVmm7i5g1IfOLHDTByRM-W01pWIF46k7aDOYsH4UKA';
 // URL de tu Apps Script para sincronización compartida
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzCxPqker3JsD9YKVDeTY5zOqmguQM10hpRAvUbjlEe3PUOHI8uScpLvAMQ4QvrSu7x/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw3lDBiLeHWKO9dMLZa1Az6cCrV77y8Kd5BrHb66KEomkdHhIM57BdWSXfXwkVuNUK8/exec';
 
 // Limpia y convierte strings numéricos a Number de forma robusta
 const cleanNum = (val) => {
