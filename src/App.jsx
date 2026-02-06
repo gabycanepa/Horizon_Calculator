@@ -1,3 +1,5 @@
+ULIMO 5-2  22.50
+
 import React, { useState, useEffect, useMemo } from 'react';
 
 const SHEET_ID = '1vTJQrYIRPWBawtIIUdL4NvJcbDDwNCQf8YiXKl7t6BFi1mfVwQT4nuFAqX2YTKA5Q05Y6nBGhALckdf';
@@ -124,13 +126,12 @@ function App() {
         });
 
         const preciosProcesados = precios.map(p => ({
-  categoria: p['Categoria'] ?? p['Categoría'] ?? Object.values(p)[0] ?? 'Otros',
-  tipo: p['Tipo'] ?? Object.values(p)[1] ?? 'Default',
-  // Usamos los nombres exactos de tu imagen:
-  valor: cleanNum(p['Valor (ARS)'] ?? Object.values(p)[2]),
-  sueldoSugerido: cleanNum(p['Sueldo Sugerido (ARS)'] ?? Object.values(p)[3]),
-  costoFijo: cleanNum(p['Costo Fijo (ARS)'] ?? Object.values(p)[4])
-}));
+          categoria: p['Categoria'] ?? p['Categoría'] ?? p['categoria'] ?? p['category'] ?? Object.values(p)[0] ?? 'Otros',
+          tipo: p['Tipo'] ?? p['tipo'] ?? p['Type'] ?? Object.values(p)[1] ?? 'Default',
+          valor: cleanNum(p['Valor'] ?? p['Precio'] ?? Object.values(p)[2]),
+          sueldoSugerido: cleanNum(p['Sueldo'] ?? p['Sueldo bruto'] ?? Object.values(p)[3]),
+          costoFijo: cleanNum(p['Costo'] ?? p['Costo Fijo'] ?? Object.values(p)[4])
+        }));
 
         const clientesProcesados = clientes.map(c => {
           return c['Cliente'] ?? c['cliente'] ?? c['Name'] ?? Object.values(c)[0] ?? '';
@@ -213,14 +214,12 @@ function App() {
         const num = typeof valor === 'string' ? parseInt(valor.replace(/\D/g, '')) || 0 : Number(valor || 0);
         updated[campo] = num;
       } else if (campo === 'tipoIdx') {
-  const idx = Number(valor);
-  updated.tipoIdx = idx;
-  const p = dataSheets.preciosNuevos[idx];
-  if (p) {
-    // Pisamos siempre con el valor del nuevo servicio seleccionado
-    updated.sueldoBruto = p.sueldoSugerido || 0;
-    updated.ventaUnit = p.valor || 0;
-  }
+        updated.tipoIdx = Number(valor) || 0;
+        const p = dataSheets.preciosNuevos[Number(valor)];
+        if (p) {
+          updated.sueldoBruto = p.sueldoSugerido || updated.sueldoBruto;
+          updated.ventaUnit = p.valor || updated.ventaUnit;
+        }
       } else if (campo === 'cantidad') {
         updated.cantidad = Number(valor) || 0;
       } else if (campo === 'cliente') {
@@ -502,35 +501,66 @@ function App() {
                 </tr>
               </thead>
               <tbody className="text-sm">
-              {escenarios.map(e => {
-  const p = dataSheets.preciosNuevos && dataSheets.preciosNuevos[e.tipoIdx];
-  const isStaff = p && (p.categoria || '').toLowerCase().includes('staff');
-  
-  // --- CALCULAMOS TODO AQUÍ AFUERA DEL JSX ---
-  let costoTotal = 0;
-  if (p) {
-    if (isStaff) {
-      const sueldoTotal = (Number(e.cantidad) || 0) * (Number(e.sueldoBruto) || 0);
-      costoTotal = sueldoTotal + (sueldoTotal * pctCostoLaboral / 100) + (sueldoTotal * pctIndirectos / 100);
-    } else {
-      const base = (Number(e.cantidad) || 0) * (Number(p.costoFijo) || 0);
-      costoTotal = base + (base * pctIndirectos / 100);
-    }
-  }
-  const venta = (Number(e.cantidad) || 0) * (Number(e.ventaUnit) || 0);
-  const res = venta - costoTotal;
-  const mgn = venta > 0 ? (res / venta) * 100 : 0;
-  // --------------------------------------------
+                {escenarios.map(e => {
+                  const p = dataSheets.preciosNuevos && dataSheets.preciosNuevos[e.tipoIdx];
+                  const isStaff = p && (p.categoria || '').toLowerCase().includes('staff');
+                  let costoTotal = 0;
+                  if (p) {
+                    if (isStaff) {
+                      const sueldo = (Number(e.cantidad) || 0) * (Number(e.sueldoBruto) || 0);
+                      costoTotal = sueldo + (sueldo * pctCostoLaboral/100) + (sueldo * pctIndirectos/100);
+                    } else {
+                      const base = (Number(e.cantidad) || 0) * (Number(p.costoFijo) || 0);
+                      costoTotal = base + (base * pctIndirectos/100);
+                    }
+                  }
+                  const venta = (Number(e.cantidad) || 0) * (Number(e.ventaUnit) || 0);
+                  const res = venta - costoTotal;
+                  const mgn = venta > 0 ? (res / venta) * 100 : 0;
 
-  return (
-    <tr key={e.id} className="border-t border-purple-50 hover:bg-purple-50/30 transition">
-      {/* ... el resto de tus <td> ... */}
-      <td className="p-4 text-right font-mono text-red-500 text-xs">-{format(costoTotal)}</td>
-      <td className="p-4 text-right font-bold text-green-600">{format(res)}</td>
-      {/* ... etc ... */}
-    </tr>
-  );
-})}
+                  const ventaUnitStr = (Number(e.ventaUnit) || 0).toLocaleString('es-AR');
+                  const sueldoBrutoStr = (Number(e.sueldoBruto) || 0).toLocaleString('es-AR');
+
+                  return (
+                    <tr key={e.id} className="border-t border-purple-50 hover:bg-purple-50/30 transition">
+                      <td className="p-4">
+                        <select value={e.cliente} onChange={(ev) => actualizarFila(e.id, 'cliente', ev.target.value)} className="bg-transparent focus:outline-none font-medium">
+                          {dataSheets.clientes && dataSheets.clientes.length > 0 ? dataSheets.clientes.map(c => <option key={c} value={c}>{c}</option>) : <option value="">Sin clientes</option>}
+                        </select>
+                      </td>
+                      <td className="p-4">
+                        <select value={e.tipoIdx} onChange={(ev) => actualizarFila(e.id, 'tipoIdx', ev.target.value)} className="bg-transparent focus:outline-none text-purple-600 font-bold text-xs">
+                          {dataSheets.preciosNuevos && dataSheets.preciosNuevos.length > 0 ? dataSheets.preciosNuevos.map((p, i) => <option key={i} value={i}>{p.categoria} - {p.tipo}</option>) : <option value={0}>Sin servicios</option>}
+                        </select>
+                      </td>
+                      <td className="p-4 text-center">
+                        <input type="number" value={e.cantidad} onChange={(ev) => actualizarFila(e.id, 'cantidad', ev.target.value)} className="w-10 text-center bg-purple-50 rounded font-bold" min="0" />
+                      </td>
+                      <td className="p-4 text-right">
+                        <input
+                          type="text"
+                          value={ventaUnitStr}
+                          onChange={(ev) => {
+                            const val = ev.target.value.replace(/\D/g, '');
+                            actualizarFila(e.id, 'ventaUnit', val === '' ? 0 : Number(val));
+                          }}
+                          className="w-28 text-right bg-blue-50 text-blue-700 font-bold rounded px-2 border border-blue-200"
+                        />
+                      </td>
+                      <td className="p-4 text-right">
+                        {isStaff ? (
+                          <input
+                            type="text"
+                            value={sueldoBrutoStr}
+                            onChange={(ev) => {
+                              const val = ev.target.value.replace(/\D/g, '');
+                              actualizarFila(e.id, 'sueldoBruto', val === '' ? 0 : Number(val));
+                            }}
+                            className="w-24 text-right bg-pink-50 text-pink-700 font-bold rounded px-2 border border-pink-200"
+                          />
+                        ) : (
+                          <span className="text-slate-300">-</span>
+                        )}
                       </td>
                       <td className="p-4 text-right font-mono text-red-500 text-xs">-{format(costoTotal)}</td>
                       <td className="p-4 text-right font-bold text-green-600">{format(res)}</td>
