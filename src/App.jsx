@@ -549,7 +549,7 @@ function App() {
         <div className="text-center mb-4">
           <p className="text-4xl font-black" style={{ color: getColor() }}>{pctCumplimiento.toFixed(1)}%</p>
           {pctCumplimiento < 100 && (
-            <p className="text-[10px] font-bold text-red-500 uppercase mt-1">Faltan: {format(objetivo - totalReal)}</p>
+            <p className="text-[10px] font-bold text-red-500 uppercase mt-1">Restan: {format(objetivo - totalReal)}</p>
           )}
         </div>
         <div className="space-y-3 bg-gradient-to-br from-purple-50 to-pink-50 p-4 rounded-lg">
@@ -584,6 +584,7 @@ function App() {
           </div>
           <div className="pt-2 border-t-2 border-purple-300">
             <div className="flex justify-between text-xs mb-1"><span className="text-slate-500 font-bold uppercase">Total Real:</span><span className="font-black text-blue-700">{format(calcularTotalLineas(lineas))}</span></div>
+            <p className="text-[10px] font-bold text-red-500 uppercase mt-1">Restan: {format(objetivo - totalReal)}</p>
           </div>
         </div>
       </div>
