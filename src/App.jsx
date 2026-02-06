@@ -502,72 +502,35 @@ function App() {
                 </tr>
               </thead>
               <tbody className="text-sm">
-                // Dentro del map de escenarios:
-const p = dataSheets.preciosNuevos[e.tipoIdx];
-const isStaff = p && (p.categoria || '').toLowerCase().includes('staff');
-let costoTotal = 0;
-
-if (p) {
-  if (isStaff) {
-    // Lógica para Staff: Sueldo + Cargas + Indirectos
-    const sueldoTotal = (Number(e.cantidad) || 0) * (Number(e.sueldoBruto) || 0);
-    const cargasSociales = sueldoTotal * (pctCostoLaboral / 100);
-    const indirectos = sueldoTotal * (pctIndirectos / 100);
-    costoTotal = sueldoTotal + cargasSociales + indirectos;
-  } else {
-    // Lógica para otros (Workshop/Coaching): Costo Fijo + Indirectos
-    const costoBase = (Number(e.cantidad) || 0) * (Number(p.costoFijo) || 0);
-    const indirectos = costoBase * (pctIndirectos / 100);
-    costoTotal = costoBase + indirectos;
+              {escenarios.map(e => {
+  const p = dataSheets.preciosNuevos && dataSheets.preciosNuevos[e.tipoIdx];
+  const isStaff = p && (p.categoria || '').toLowerCase().includes('staff');
+  
+  // --- CALCULAMOS TODO AQUÍ AFUERA DEL JSX ---
+  let costoTotal = 0;
+  if (p) {
+    if (isStaff) {
+      const sueldoTotal = (Number(e.cantidad) || 0) * (Number(e.sueldoBruto) || 0);
+      costoTotal = sueldoTotal + (sueldoTotal * pctCostoLaboral / 100) + (sueldoTotal * pctIndirectos / 100);
+    } else {
+      const base = (Number(e.cantidad) || 0) * (Number(p.costoFijo) || 0);
+      costoTotal = base + (base * pctIndirectos / 100);
+    }
   }
-}
-                  const venta = (Number(e.cantidad) || 0) * (Number(e.ventaUnit) || 0);
-                  const res = venta - costoTotal;
-                  const mgn = venta > 0 ? (res / venta) * 100 : 0;
+  const venta = (Number(e.cantidad) || 0) * (Number(e.ventaUnit) || 0);
+  const res = venta - costoTotal;
+  const mgn = venta > 0 ? (res / venta) * 100 : 0;
+  // --------------------------------------------
 
-                  const ventaUnitStr = (Number(e.ventaUnit) || 0).toLocaleString('es-AR');
-                  const sueldoBrutoStr = (Number(e.sueldoBruto) || 0).toLocaleString('es-AR');
-
-                  return (
-                    <tr key={e.id} className="border-t border-purple-50 hover:bg-purple-50/30 transition">
-                      <td className="p-4">
-                        <select value={e.cliente} onChange={(ev) => actualizarFila(e.id, 'cliente', ev.target.value)} className="bg-transparent focus:outline-none font-medium">
-                          {dataSheets.clientes && dataSheets.clientes.length > 0 ? dataSheets.clientes.map(c => <option key={c} value={c}>{c}</option>) : <option value="">Sin clientes</option>}
-                        </select>
-                      </td>
-                      <td className="p-4">
-                        <select value={e.tipoIdx} onChange={(ev) => actualizarFila(e.id, 'tipoIdx', ev.target.value)} className="bg-transparent focus:outline-none text-purple-600 font-bold text-xs">
-                          {dataSheets.preciosNuevos && dataSheets.preciosNuevos.length > 0 ? dataSheets.preciosNuevos.map((p, i) => <option key={i} value={i}>{p.categoria} - {p.tipo}</option>) : <option value={0}>Sin servicios</option>}
-                        </select>
-                      </td>
-                      <td className="p-4 text-center">
-                        <input type="number" value={e.cantidad} onChange={(ev) => actualizarFila(e.id, 'cantidad', ev.target.value)} className="w-10 text-center bg-purple-50 rounded font-bold" min="0" />
-                      </td>
-                      <td className="p-4 text-right">
-                        <input
-                          type="text"
-                          value={ventaUnitStr}
-                          onChange={(ev) => {
-                            const val = ev.target.value.replace(/\D/g, '');
-                            actualizarFila(e.id, 'ventaUnit', val === '' ? 0 : Number(val));
-                          }}
-                          className="w-28 text-right bg-blue-50 text-blue-700 font-bold rounded px-2 border border-blue-200"
-                        />
-                      </td>
-                      <td className="p-4 text-right">
-                        {isStaff ? (
-                          <input
-                            type="text"
-                            value={sueldoBrutoStr}
-                            onChange={(ev) => {
-                              const val = ev.target.value.replace(/\D/g, '');
-                              actualizarFila(e.id, 'sueldoBruto', val === '' ? 0 : Number(val));
-                            }}
-                            className="w-24 text-right bg-pink-50 text-pink-700 font-bold rounded px-2 border border-pink-200"
-                          />
-                        ) : (
-                          <span className="text-slate-300">-</span>
-                        )}
+  return (
+    <tr key={e.id} className="border-t border-purple-50 hover:bg-purple-50/30 transition">
+      {/* ... el resto de tus <td> ... */}
+      <td className="p-4 text-right font-mono text-red-500 text-xs">-{format(costoTotal)}</td>
+      <td className="p-4 text-right font-bold text-green-600">{format(res)}</td>
+      {/* ... etc ... */}
+    </tr>
+  );
+})}
                       </td>
                       <td className="p-4 text-right font-mono text-red-500 text-xs">-{format(costoTotal)}</td>
                       <td className="p-4 text-right font-bold text-green-600">{format(res)}</td>
