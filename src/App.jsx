@@ -520,7 +520,7 @@ function App() {
               <path 
                 d="M 20 100 A 80 80 0 0 1 180 100" 
                 fill="none" 
-                stroke="#ef4444" 
+                stroke="#6b6a6a" 
                 strokeWidth="20" 
                 strokeLinecap="round" 
                 strokeDasharray={`${gapLength} ${totalArcLength}`}
