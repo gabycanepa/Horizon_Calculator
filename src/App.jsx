@@ -109,6 +109,7 @@ function App() {
           fetchSheet('EERRBase')
         ]);
 
+        // ... (Tu lógica de procesamiento de configObj, eerrObj y preciosProcesados queda igual)
         const configObj = {};
         cfg.forEach(row => {
           const key = row['Parámetro'] ?? row['Parametro'] ?? row['Key'] ?? Object.values(row)[0];
@@ -120,15 +121,11 @@ function App() {
         eerr.forEach(row => {
           const concepto = row['Concepto'] ?? Object.values(row)[0];
           const montoCell = row['Monto (ARS)'] ?? row['Monto'] ?? Object.values(row)[1];
-          if (concepto !== undefined) {
-            eerrObj[String(concepto).trim()] = cleanNum(montoCell);
-          }
+          if (concepto !== undefined) { eerrObj[String(concepto).trim()] = cleanNum(montoCell); }
         });
 
         const eerrNorm = {};
-        Object.keys(eerrObj).forEach(k => {
-          eerrNorm[normalizeKey(k)] = eerrObj[k];
-        });
+        Object.keys(eerrObj).forEach(k => { eerrNorm[normalizeKey(k)] = eerrObj[k]; });
 
         const preciosProcesados = precios.map(p => ({
           categoria: p['Categoria'] ?? p['Categoría'] ?? Object.values(p)[0] ?? 'Otros',
@@ -138,9 +135,7 @@ function App() {
           costoFijo: cleanNum(p['Costo Fijo (ARS)'] ?? p['Costo Fijo'] ?? Object.values(p)[4])
         }));
 
-        const clientesProcesados = clientes.map(c => {
-          return c['Cliente'] ?? c['cliente'] ?? c['Name'] ?? Object.values(c)[0] ?? '';
-        }).filter(Boolean);
+        const clientesProcesados = clientes.map(c => c['Cliente'] ?? c['cliente'] ?? c['Name'] ?? Object.values(c)[0] ?? '').filter(Boolean);
 
         setDataSheets({
           preciosNuevos: preciosProcesados,
@@ -152,48 +147,62 @@ function App() {
           error: null
         });
 
+        // Seteo de estados base
         setPctIndirectos(configObj['% Indirectos'] ?? configObj['Indirectos'] ?? 37);
         setPctCostoLaboral(configObj['% Costo Laboral'] ?? configObj['Costo Laboral'] ?? 45);
         setGastosOperativos(configObj['Gastos Operativos'] ?? 46539684.59);
         setMargenObjetivo(configObj['Margen Objetivo (%)'] ?? 25);
 
-        // --- CARGA DESDE LA NUBE (MODIFICADO PARA CARGAR BIEN) ---
+        // --- LÓGICA DE CARGA DESDE LA NUBE MEJORADA ---
         try {
           const resNube = await fetch(`${SCRIPT_URL}?sheet=HistorialCompartido`);
           const dataNube = await resNube.json();
           
-          if (dataNube && Array.isArray(dataNube)) {
+          if (dataNube && Array.isArray(dataNube) && dataNube.length > 0) {
             const historialSincronizado = dataNube.map(item => ({
-              // Limpiamos el ID por si tiene la comilla de seguridad de Sheets
-              id: item.ID ? item.ID.toString().replace("'", "") : Date.now(),
+              id: item.ID ? String(item.ID).replace(/'/g, "") : Date.now(),
               nombre: item.Nombre,
               fecha: item.Fecha,
-              // Verificamos si los datos vienen como String (desde Sheets) o ya como Objeto
               escenarios: typeof item.DatosEscenario === 'string' ? JSON.parse(item.DatosEscenario) : (item.DatosEscenario || []),
               config: typeof item.Configuracion === 'string' ? JSON.parse(item.Configuracion) : (item.Configuracion || {}),
               eerr: typeof item.EERR === 'string' ? JSON.parse(item.EERR) : (item.EERR || {})
             }));
+            
             setHistorial(historialSincronizado);
+
+            // AUTO-CARGA: Si hay historial, cargamos el más reciente (el último guardado)
+            // Esto es lo que faltaba para que al refrescar se vea la tabla llena
+            const ultimoEscenario = historialSincronizado[historialSincronizado.length - 1];
+            if (ultimoEscenario && ultimoEscenario.escenarios.length > 0) {
+              setEscenarios(ultimoEscenario.escenarios);
+              // También restauramos la configuración de ese escenario guardado
+              if (ultimoEscenario.config.pctIndirectos !== undefined) {
+                setPctIndirectos(ultimoEscenario.config.pctIndirectos);
+                setPctCostoLaboral(ultimoEscenario.config.pctCostoLaboral);
+                setGastosOperativos(ultimoEscenario.config.gastosOperativos);
+                setMargenObjetivo(ultimoEscenario.config.margenObjetivo);
+              }
+            }
+          } else {
+            // Si no hay nada en la nube, inicializar fila vacía
+            if (preciosProcesados.length > 0) {
+              setEscenarios([{
+                id: Date.now(),
+                cliente: clientesProcesados[0] || 'Nuevo Cliente',
+                tipoIdx: 0,
+                cantidad: 1,
+                sueldoBruto: preciosProcesados[0].sueldoSugerido || 0,
+                ventaUnit: preciosProcesados[0].valor || 0
+              }]);
+            }
           }
         } catch(e) { 
           console.error("Error cargando historial de la nube:", e); 
         }
 
-        if (preciosProcesados.length > 0) {
-          setEscenarios([{
-            id: Date.now(),
-            cliente: clientesProcesados[0] || 'Nuevo Cliente',
-            tipoIdx: 0,
-            cantidad: 1,
-            sueldoBruto: preciosProcesados[0].sueldoSugerido || 0,
-            ventaUnit: preciosProcesados[0].valor || 0
-          }]);
-        } else {
-          setEscenarios([]);
-        }
       } catch (error) {
         console.error('Error cargando sheets', error);
-        setDataSheets(prev => ({ ...prev, loading: false, error: 'Error cargando datos desde Google Sheets.' }));
+        setDataSheets(prev => ({ ...prev, loading: false, error: 'Error cargando datos.' }));
       }
     };
     cargarDatos();
