@@ -1,5 +1,3 @@
-import React, { useState, useEffect, useMemo } from 'react';
-
 const SHEET_ID = '1fJVmm7i5g1IfOLHDTByRM-W01pWIF46k7aDOYsH4UKA';
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzCxPqker3JsD9YKVDeTY5zOqmguQM10hpRAvUbjlEe3PUOHI8uScpLvAMQ4QvrSu7x/exec';
 
@@ -26,13 +24,14 @@ const normalizeKey = (k) => {
   return out;
 };
 
+// SOLUCIÓN 5: Mejorar tolerantGet para retornar el VALOR correcto
 const tolerantGet = (mapObj, key) => {
   if (!mapObj) return 0;
   const nk = normalizeKey(key);
-  for (const k of Object.keys(mapObj)) {
-    if (normalizeKey(k) === nk) return mapObj[k];
+  for (const [k, v] of Object.entries(mapObj)) {
+    if (normalizeKey(k) === nk) return v; // ← Retornar el VALOR encontrado
   }
-  return mapObj[key] !== undefined ? mapObj[key] : 0;
+  return 0;
 };
 
 const fetchSheet = async (sheetName) => {
@@ -59,6 +58,17 @@ const fetchSheet = async (sheetName) => {
   });
 };
 
+// SOLUCIÓN 2: Validación robusta de escenarios
+const validarEscenario = (e) => {
+  return e && 
+    typeof e.id !== 'undefined' &&
+    typeof e.cliente === 'string' &&
+    typeof e.tipoIdx === 'number' &&
+    typeof e.cantidad === 'number' &&
+    typeof e.sueldoBruto === 'number' &&
+    typeof e.ventaUnit === 'number';
+};
+
 function App() {
   const [dataSheets, setDataSheets] = useState({
     preciosNuevos: [],
@@ -79,7 +89,12 @@ function App() {
   const [margenObjetivo, setMargenObjetivo] = useState(0);
 
   const [isReady, setIsReady] = useState(false);
-  const [isLoadingFromCloud, setIsLoadingFromCloud] = useState(false);
+  // SOLUCIÓN 3: Separar flags de carga
+  const [isHydrating, setIsHydrating] = useState(false);
+  const [historialCargado, setHistorialCargado] = useState(false);
+
+  // SOLUCIÓN 7: Timestamp para evitar guardados en cascada
+  const [lastModified, setLastModified] = useState(Date.now());
 
   const [objVentasTotal] = useState(2195176117);
   const [lineasVentaTotal, setLineasVentaTotal] = useState(() => {
@@ -156,93 +171,6 @@ function App() {
         setGastosOperativos(configObj['Gastos Operativos'] ?? 46539684.59);
         setMargenObjetivo(configObj['Margen Objetivo (%)'] ?? 25);
 
-        try {
-          const resNube = await fetch(`${SCRIPT_URL}?sheet=HistorialCompartido`);
-          const dataNube = await resNube.json();
-          
-          if (dataNube && Array.isArray(dataNube)) {
-            const findKey = (obj, k) => Object.keys(obj).find(key => key.toLowerCase() === k.toLowerCase());
-
-            const historialSincronizado = dataNube.map(item => {
-              const dEsc = item[findKey(item, 'DatosEscenario')];
-              const conf = item[findKey(item, 'Configuracion')];
-              const eerrData = item[findKey(item, 'EERR')];
-
-              let escenariosParseados = [];
-              if (Array.isArray(dEsc)) {
-                escenariosParseados = dEsc;
-              } else if (typeof dEsc === 'string' && dEsc.trim() !== '') {
-                try {
-                  escenariosParseados = JSON.parse(dEsc);
-                  if (!Array.isArray(escenariosParseados)) {
-                    escenariosParseados = [];
-                  }
-                } catch(e) {
-                  console.error('Error parseando escenarios:', e);
-                  escenariosParseados = [];
-                }
-              }
-
-              let configParseada = {};
-              if (typeof conf === 'object' && conf !== null && !Array.isArray(conf)) {
-                configParseada = conf;
-              } else if (typeof conf === 'string' && conf.trim() !== '') {
-                try {
-                  configParseada = JSON.parse(conf);
-                  if (typeof configParseada !== 'object' || Array.isArray(configParseada)) {
-                    configParseada = {};
-                  }
-                } catch(e) {
-                  console.error('Error parseando config:', e);
-                  configParseada = {};
-                }
-              }
-
-              let eerrParseada = {};
-              if (typeof eerrData === 'object' && eerrData !== null && !Array.isArray(eerrData)) {
-                eerrParseada = eerrData;
-              } else if (typeof eerrData === 'string' && eerrData.trim() !== '') {
-                try {
-                  eerrParseada = JSON.parse(eerrData);
-                  if (typeof eerrParseada !== 'object' || Array.isArray(eerrParseada)) {
-                    eerrParseada = {};
-                  }
-                } catch(e) {
-                  console.error('Error parseando eerr:', e);
-                  eerrParseada = {};
-                }
-              }
-
-              return {
-                id: item[findKey(item, 'ID')] ? String(item[findKey(item, 'ID')]).replace(/'/g, "") : Date.now(),
-                nombre: item[findKey(item, 'Nombre')] || "Sin nombre",
-                fecha: item[findKey(item, 'Fecha')] || "",
-                escenarios: escenariosParseados,
-                config: configParseada,
-                eerr: eerrParseada
-              };
-            });
-            
-            setHistorial(historialSincronizado);
-
-            const ultimo = historialSincronizado[historialSincronizado.length - 1];
-            if (ultimo && Array.isArray(ultimo.escenarios) && ultimo.escenarios.length > 0) {
-              setEscenarios(ultimo.escenarios);
-              if (ultimo.config && typeof ultimo.config === 'object') {
-                setPctIndirectos(ultimo.config.pctIndirectos ?? 37);
-                setPctCostoLaboral(ultimo.config.pctCostoLaboral ?? 45);
-                setGastosOperativos(ultimo.config.gastosOperativos ?? 46539684.59);
-                setMargenObjetivo(ultimo.config.margenObjetivo ?? 25);
-                if(Array.isArray(ultimo.config.lineasVentaTotal)) setLineasVentaTotal(ultimo.config.lineasVentaTotal);
-                if(Array.isArray(ultimo.config.lineasRenovacion)) setLineasRenovacion(ultimo.config.lineasRenovacion);
-                if(Array.isArray(ultimo.config.lineasIncremental)) setLineasIncremental(ultimo.config.lineasIncremental);
-              }
-            }
-          }
-        } catch(e) { 
-          console.error("Error cargando historial de la nube:", e); 
-        }
-
         if (preciosProcesados.length > 0 && escenarios.length === 0) {
           setEscenarios([{
             id: Date.now(),
@@ -265,10 +193,130 @@ function App() {
     cargarDatos();
   }, []);
 
+  // SOLUCIÓN 4: Cargar historial DESPUÉS de que isReady sea true
   useEffect(() => {
-    if (!isReady || isLoadingFromCloud) return;
+    if (!isReady || historialCargado) return;
+
+    const cargarHistorial = async () => {
+      try {
+        console.log('🔄 Cargando historial desde la nube...');
+        const resNube = await fetch(`${SCRIPT_URL}?sheet=HistorialCompartido`);
+        const dataNube = await resNube.json();
+        
+        if (dataNube && Array.isArray(dataNube)) {
+          const findKey = (obj, k) => Object.keys(obj).find(key => key.toLowerCase() === k.toLowerCase());
+
+          const historialSincronizado = dataNube.map(item => {
+            const dEsc = item[findKey(item, 'DatosEscenario')];
+            const conf = item[findKey(item, 'Configuracion')];
+            const eerrData = item[findKey(item, 'EERR')];
+
+            // SOLUCIÓN 4: Simplificar parsing - solo parsear si es string
+            let escenariosParseados = [];
+            if (Array.isArray(dEsc)) {
+              escenariosParseados = dEsc.filter(validarEscenario); // SOLUCIÓN 2: Validar
+            } else if (typeof dEsc === 'string' && dEsc.trim() !== '') {
+              try {
+                const parsed = JSON.parse(dEsc);
+                if (Array.isArray(parsed)) {
+                  escenariosParseados = parsed.filter(validarEscenario); // SOLUCIÓN 2: Validar
+                }
+              } catch(e) {
+                console.error('❌ Error parseando escenarios:', e);
+              }
+            }
+
+            let configParseada = {};
+            if (typeof conf === 'object' && conf !== null && !Array.isArray(conf)) {
+              configParseada = conf;
+            } else if (typeof conf === 'string' && conf.trim() !== '') {
+              try {
+                const parsed = JSON.parse(conf);
+                if (typeof parsed === 'object' && !Array.isArray(parsed)) {
+                  configParseada = parsed;
+                }
+              } catch(e) {
+                console.error('❌ Error parseando config:', e);
+              }
+            }
+
+            let eerrParseada = {};
+            if (typeof eerrData === 'object' && eerrData !== null && !Array.isArray(eerrData)) {
+              eerrParseada = eerrData;
+            } else if (typeof eerrData === 'string' && eerrData.trim() !== '') {
+              try {
+                const parsed = JSON.parse(eerrData);
+                if (typeof parsed === 'object' && !Array.isArray(parsed)) {
+                  eerrParseada = parsed;
+                }
+              } catch(e) {
+                console.error('❌ Error parseando eerr:', e);
+              }
+            }
+
+            return {
+              id: item[findKey(item, 'ID')] ? String(item[findKey(item, 'ID')]).replace(/'/g, "") : Date.now(),
+              nombre: item[findKey(item, 'Nombre')] || "Sin nombre",
+              fecha: item[findKey(item, 'Fecha')] || "",
+              escenarios: escenariosParseados,
+              config: configParseada,
+              eerr: eerrParseada
+            };
+          });
+          
+          console.log('✅ Historial cargado:', historialSincronizado.length, 'escenarios');
+          setHistorial(historialSincronizado);
+
+          const ultimo = historialSincronizado[historialSincronizado.length - 1];
+          if (ultimo && Array.isArray(ultimo.escenarios) && ultimo.escenarios.length > 0) {
+            console.log('📥 Cargando último escenario automáticamente');
+            setIsHydrating(true); // SOLUCIÓN 3: Activar flag de hidratación
+            
+            setEscenarios(ultimo.escenarios);
+            if (ultimo.config && typeof ultimo.config === 'object') {
+              setPctIndirectos(ultimo.config.pctIndirectos ?? 37);
+              setPctCostoLaboral(ultimo.config.pctCostoLaboral ?? 45);
+              setGastosOperativos(ultimo.config.gastosOperativos ?? 46539684.59);
+              setMargenObjetivo(ultimo.config.margenObjetivo ?? 25);
+              if(Array.isArray(ultimo.config.lineasVentaTotal)) setLineasVentaTotal(ultimo.config.lineasVentaTotal);
+              if(Array.isArray(ultimo.config.lineasRenovacion)) setLineasRenovacion(ultimo.config.lineasRenovacion);
+              if(Array.isArray(ultimo.config.lineasIncremental)) setLineasIncremental(ultimo.config.lineasIncremental);
+            }
+
+            // SOLUCIÓN 3: Timeout más largo para asegurar que React termine
+            setTimeout(() => {
+              setIsHydrating(false);
+              setLastModified(Date.now()); // SOLUCIÓN 7: Actualizar timestamp
+              console.log('✅ Hidratación completada');
+            }, 500);
+          }
+        }
+        setHistorialCargado(true);
+      } catch(e) { 
+        console.error("❌ Error cargando historial de la nube:", e);
+        setHistorialCargado(true);
+      }
+    };
+
+    cargarHistorial();
+  }, [isReady, historialCargado]);
+
+  // SOLUCIÓN 1 y 7: Bloquear guardado durante hidratación y usar debouncing
+  useEffect(() => {
+    if (!isReady || isHydrating || !historialCargado) {
+      console.log('⏸️ Guardado bloqueado:', { isReady, isHydrating, historialCargado });
+      return;
+    }
     if (!Array.isArray(escenarios)) return;
 
+    // SOLUCIÓN 7: Solo guardar si pasó más de 1 segundo desde la última modificación
+    const timeSinceLastMod = Date.now() - lastModified;
+    if (timeSinceLastMod < 1000) {
+      console.log('⏸️ Guardado bloqueado por debouncing:', timeSinceLastMod, 'ms');
+      return;
+    }
+
+    console.log('💾 Guardando en localStorage...');
     localStorage.setItem('hzn_escenarios', JSON.stringify(escenarios));
     localStorage.setItem('hzn_pctInd', pctIndirectos);
     localStorage.setItem('hzn_pctLab', pctCostoLaboral);
@@ -277,7 +325,7 @@ function App() {
     localStorage.setItem('hzn_lineasVenta', JSON.stringify(lineasVentaTotal));
     localStorage.setItem('hzn_lineasReno', JSON.stringify(lineasRenovacion));
     localStorage.setItem('hzn_lineasIncr', JSON.stringify(lineasIncremental));
-  }, [escenarios, pctIndirectos, pctCostoLaboral, gastosOperativos, margenObjetivo, lineasVentaTotal, lineasRenovacion, lineasIncremental, isReady, isLoadingFromCloud]);
+  }, [escenarios, pctIndirectos, pctCostoLaboral, gastosOperativos, margenObjetivo, lineasVentaTotal, lineasRenovacion, lineasIncremental, isReady, isHydrating, historialCargado, lastModified]);
 
   const agregarFila = () => {
     if (dataSheets.loading) {
@@ -299,6 +347,7 @@ function App() {
         ventaUnit: precioDefault.valor || 0
       }
     ]));
+    setLastModified(Date.now()); // SOLUCIÓN 7: Actualizar timestamp
   };
 
   const actualizarFila = (id, campo, valor) => {
@@ -322,6 +371,7 @@ function App() {
       }
       return updated;
     }));
+    setLastModified(Date.now()); // SOLUCIÓN 7: Actualizar timestamp
   };
 
   const agregarLineaVenta = (tipo) => {
@@ -329,6 +379,7 @@ function App() {
     if (tipo === 'total') setLineasVentaTotal(prev => [...prev, nuevaLinea]);
     if (tipo === 'renovacion') setLineasRenovacion(prev => [...prev, nuevaLinea]);
     if (tipo === 'incremental') setLineasIncremental(prev => [...prev, nuevaLinea]);
+    setLastModified(Date.now()); // SOLUCIÓN 7: Actualizar timestamp
   };
 
   const actualizarLineaVenta = (tipo, id, campo, valor) => {
@@ -336,12 +387,14 @@ function App() {
     if (tipo === 'total') setLineasVentaTotal(prev => actualizar(prev));
     if (tipo === 'renovacion') setLineasRenovacion(prev => actualizar(prev));
     if (tipo === 'incremental') setLineasIncremental(prev => actualizar(prev));
+    setLastModified(Date.now()); // SOLUCIÓN 7: Actualizar timestamp
   };
 
   const eliminarLineaVenta = (tipo, id) => {
     if (tipo === 'total') setLineasVentaTotal(prev => prev.filter(l => l.id !== id));
     if (tipo === 'renovacion') setLineasRenovacion(prev => prev.filter(l => l.id !== id));
     if (tipo === 'incremental') setLineasIncremental(prev => prev.filter(l => l.id !== id));
+    setLastModified(Date.now()); // SOLUCIÓN 7: Actualizar timestamp
   };
 
   const calcularTotalLineas = (lineas) => lineas.reduce((sum, l) => sum + (Number(l.monto) || 0), 0);
@@ -475,10 +528,13 @@ function App() {
   const cargarEscenarioDesdeHistorial = (item) => {
     if(!window.confirm(`¿Cargar el escenario "${item.nombre}"? Se perderán los cambios actuales.`)) return;
     
-    setIsLoadingFromCloud(true);
+    console.log('📥 Cargando escenario desde historial:', item.nombre);
+    setIsHydrating(true); // SOLUCIÓN 3: Activar flag de hidratación
     
-    const escenariosValidos = Array.isArray(item.escenarios) ? item.escenarios : [];
+    const escenariosValidos = Array.isArray(item.escenarios) ? item.escenarios.filter(validarEscenario) : []; // SOLUCIÓN 2: Validar
     const configValida = (typeof item.config === 'object' && item.config !== null) ? item.config : {};
+    
+    console.log('✅ Escenarios válidos:', escenariosValidos.length);
     
     setEscenarios(escenariosValidos);
     setPctIndirectos(configValida.pctIndirectos ?? 37);
@@ -492,9 +548,12 @@ function App() {
     
     setMostrarHistorial(false);
     
+    // SOLUCIÓN 3: Timeout más largo para asegurar que React termine
     setTimeout(() => {
-      setIsLoadingFromCloud(false);
-    }, 200);
+      setIsHydrating(false);
+      setLastModified(Date.now()); // SOLUCIÓN 7: Actualizar timestamp
+      console.log('✅ Carga desde historial completada');
+    }, 500);
   };
 
   const descargarPDF = () => {
@@ -740,21 +799,22 @@ function App() {
       const rawValue = e.target.value.replace(/\./g, '').replace(/\s/g, '');
       const num = rawValue === '' ? 0 : parseFloat(rawValue) || 0;
       setGastosOperativos(num);
+      setLastModified(Date.now());
     }} 
     className="w-32 font-bold text-red-600 focus:outline-none text-xs bg-transparent" 
   />
 </div>
              <div className="bg-white px-4 py-2 rounded-lg shadow-sm border border-blue-100">
                 <span className="text-[10px] font-bold text-blue-400 block uppercase">Indirectos</span>
-                <input type="number" value={pctIndirectos} onChange={e => setPctIndirectos(cleanNum(e.target.value))} className="w-16 font-bold text-blue-600 focus:outline-none" />%
+                <input type="number" value={pctIndirectos} onChange={e => { setPctIndirectos(cleanNum(e.target.value)); setLastModified(Date.now()); }} className="w-16 font-bold text-blue-600 focus:outline-none" />%
              </div>
              <div className="bg-white px-4 py-2 rounded-lg shadow-sm border border-pink-100">
                 <span className="text-[10px] font-bold text-pink-400 block uppercase">Costo Lab.</span>
-                <input type="number" value={pctCostoLaboral} onChange={e => setPctCostoLaboral(cleanNum(e.target.value))} className="w-16 font-bold text-pink-600 focus:outline-none" />%
+                <input type="number" value={pctCostoLaboral} onChange={e => { setPctCostoLaboral(cleanNum(e.target.value)); setLastModified(Date.now()); }} className="w-16 font-bold text-pink-600 focus:outline-none" />%
              </div>
              <div className="bg-white px-4 py-2 rounded-lg shadow-sm border border-purple-100">
                 <span className="text-[10px] font-bold text-purple-400 block uppercase">Margen Obj.</span>
-                <input type="number" value={margenObjetivo} onChange={e => setMargenObjetivo(cleanNum(e.target.value))} className="w-16 font-bold text-purple-600 focus:outline-none" />%
+                <input type="number" value={margenObjetivo} onChange={e => { setMargenObjetivo(cleanNum(e.target.value)); setLastModified(Date.now()); }} className="w-16 font-bold text-purple-600 focus:outline-none" />%
              </div>
           </div>
         </div>
@@ -770,7 +830,7 @@ function App() {
                  📄 Descargar PDF
                </button>
 
-               <button onClick={() => { if(window.confirm('¿Limpiar todos los campos?')) setEscenarios([]); }} className="text-slate-400 hover:text-slate-600 text-xs font-bold px-3 py-1">Limpiar</button>
+               <button onClick={() => { if(window.confirm('¿Limpiar todos los campos?')) { setEscenarios([]); setLastModified(Date.now()); } }} className="text-slate-400 hover:text-slate-600 text-xs font-bold px-3 py-1">Limpiar</button>
                <button onClick={agregarFila} disabled={dataSheets.loading} className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold hover:shadow-lg transition disabled:opacity-60">+ Agregar</button>
             </div>
           </div>
@@ -851,7 +911,7 @@ function App() {
                         </span>
                       </td>
                       <td className="p-4 text-right">
-                        <button onClick={() => setEscenarios(prev => prev.filter(x => x.id !== e.id))} className="text-slate-300 hover:text-red-500">✕</button>
+                        <button onClick={() => { setEscenarios(prev => prev.filter(x => x.id !== e.id)); setLastModified(Date.now()); }} className="text-slate-300 hover:text-red-500">✕</button>
                       </td>
                     </tr>
                   );
@@ -1075,4 +1135,4 @@ function App() {
   );
 }
 
-export default App;
+App;
