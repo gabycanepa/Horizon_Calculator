@@ -1,5 +1,3 @@
-import React, { useState, useEffect, useMemo } from 'react';
-
 const SHEET_ID = '1fJVmm7i5g1IfOLHDTByRM-W01pWIF46k7aDOYsH4UKA';
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzCxPqker3JsD9YKVDeTY5zOqmguQM10hpRAvUbjlEe3PUOHI8uScpLvAMQ4QvrSu7x/exec';
 
@@ -78,9 +76,9 @@ function App() {
   const [gastosOperativos, setGastosOperativos] = useState(0);
   const [margenObjetivo, setMargenObjetivo] = useState(0);
 
-  // FIX 1: Flag para bloquear guardado en localStorage durante carga desde nube
   const [isReady, setIsReady] = useState(false);
   const [isLoadingFromCloud, setIsLoadingFromCloud] = useState(false);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
 
   const [objVentasTotal] = useState(2195176117);
   const [lineasVentaTotal, setLineasVentaTotal] = useState(() => {
@@ -157,7 +155,6 @@ function App() {
         setGastosOperativos(configObj['Gastos Operativos'] ?? 46539684.59);
         setMargenObjetivo(configObj['Margen Objetivo (%)'] ?? 25);
 
-        // --- CARGA DESDE LA NUBE (FIX 2: Parseo robusto) ---
         try {
           const resNube = await fetch(`${SCRIPT_URL}?sheet=HistorialCompartido`);
           const dataNube = await resNube.json();
@@ -170,7 +167,6 @@ function App() {
               const conf = item[findKey(item, 'Configuracion')];
               const eerrData = item[findKey(item, 'EERR')];
 
-              // FIX 2: Parseo robusto - siempre devolvemos arrays/objetos válidos
               let escenariosParseados = [];
               if (Array.isArray(dEsc)) {
                 escenariosParseados = dEsc;
@@ -219,7 +215,6 @@ function App() {
             
             setHistorial(historialSincronizado);
 
-            // CARGA AUTOMÁTICA DEL ÚLTIMO ESCENARIO AL ENTRAR
             const ultimo = historialSincronizado[historialSincronizado.length - 1];
             if (ultimo && Array.isArray(ultimo.escenarios) && ultimo.escenarios.length > 0) {
               setEscenarios(ultimo.escenarios);
@@ -238,34 +233,24 @@ function App() {
           console.error("Error cargando historial de la nube:", e); 
         }
 
-        // Si después de la nube no hay escenarios cargados, creamos uno inicial
-        if (preciosProcesados.length > 0 && escenarios.length === 0) {
-          setEscenarios([{
-            id: Date.now(),
-            cliente: clientesProcesados[0] || 'Nuevo Cliente',
-            tipoIdx: 0,
-            cantidad: 1,
-            sueldoBruto: preciosProcesados[0].sueldoSugerido || 0,
-            ventaUnit: preciosProcesados[0].valor || 0
-          }]);
-        }
-        
-        // Desbloqueamos el guardado en LocalStorage
         setIsReady(true);
 
       } catch (error) {
         console.error('Error cargando sheets', error);
         setDataSheets(prev => ({ ...prev, loading: false, error: 'Error cargando datos desde Google Sheets.' }));
-        setIsReady(true); // Desbloqueamos incluso si hay error
+        setIsReady(true);
       }
     };
     cargarDatos();
   }, []);
 
-  // FIX 3: Guardar en localStorage solo cuando isReady=true, isLoadingFromCloud=false y hay datos válidos
   useEffect(() => {
     if (!isReady || isLoadingFromCloud) return;
-    if (!Array.isArray(escenarios)) return; // Validación extra
+    if (!Array.isArray(escenarios)) return;
+    if (!hasLoadedOnce) {
+      setHasLoadedOnce(true);
+      return;
+    }
 
     localStorage.setItem('hzn_escenarios', JSON.stringify(escenarios));
     localStorage.setItem('hzn_pctInd', pctIndirectos);
@@ -275,7 +260,7 @@ function App() {
     localStorage.setItem('hzn_lineasVenta', JSON.stringify(lineasVentaTotal));
     localStorage.setItem('hzn_lineasReno', JSON.stringify(lineasRenovacion));
     localStorage.setItem('hzn_lineasIncr', JSON.stringify(lineasIncremental));
-  }, [escenarios, pctIndirectos, pctCostoLaboral, gastosOperativos, margenObjetivo, lineasVentaTotal, lineasRenovacion, lineasIncremental, isReady, isLoadingFromCloud]);
+  }, [escenarios, pctIndirectos, pctCostoLaboral, gastosOperativos, margenObjetivo, lineasVentaTotal, lineasRenovacion, lineasIncremental, isReady, isLoadingFromCloud, hasLoadedOnce]);
 
   const agregarFila = () => {
     if (dataSheets.loading) {
@@ -470,14 +455,11 @@ function App() {
     }
   };
 
-  // FIX 4: Función para cargar escenario con bloqueo temporal de localStorage
   const cargarEscenarioDesdeHistorial = (item) => {
     if(!window.confirm(`¿Cargar el escenario "${item.nombre}"? Se perderán los cambios actuales.`)) return;
     
-    // Activamos el flag de bloqueo
     setIsLoadingFromCloud(true);
     
-    // Validamos que los datos sean arrays/objetos válidos antes de cargar
     const escenariosValidos = Array.isArray(item.escenarios) ? item.escenarios : [];
     const configValida = (typeof item.config === 'object' && item.config !== null) ? item.config : {};
     
@@ -493,10 +475,9 @@ function App() {
     
     setMostrarHistorial(false);
     
-    // Desbloqueamos después de 200ms para que React termine de renderizar
-    setTimeout(() => {
+    Promise.resolve().then(() => {
       setIsLoadingFromCloud(false);
-    }, 200);
+    });
   };
 
   const descargarPDF = () => {
