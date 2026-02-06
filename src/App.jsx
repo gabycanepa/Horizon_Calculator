@@ -1,10 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 
 const SHEET_ID = '1fJVmm7i5g1IfOLHDTByRM-W01pWIF46k7aDOYsH4UKA';
-// URL de tu Apps Script para sincronización compartida
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzCxPqker3JsD9YKVDeTY5zOqmguQM10hpRAvUbjlEe3PUOHI8uScpLvAMQ4QvrSu7x/exec';
 
-// Limpia y convierte strings numéricos a Number de forma robusta
 const cleanNum = (val) => {
   if (val === undefined || val === null || val === '') return 0;
   let s = String(val);
@@ -19,7 +17,6 @@ const cleanNum = (val) => {
   return isNaN(n) ? 0 : n;
 };
 
-// Normaliza keys para búsqueda tolerante (quita acentos, espacios, minúsculas)
 const normalizeKey = (k) => {
   if (!k && k !== 0) return '';
   const s = String(k).toLowerCase().trim();
@@ -29,7 +26,6 @@ const normalizeKey = (k) => {
   return out;
 };
 
-// Busca en un objeto map original por clave tolerante
 const tolerantGet = (mapObj, key) => {
   if (!mapObj) return 0;
   const nk = normalizeKey(key);
@@ -82,8 +78,9 @@ function App() {
   const [gastosOperativos, setGastosOperativos] = useState(0);
   const [margenObjetivo, setMargenObjetivo] = useState(0);
 
-  // CORRECCIÓN 1: Estado para controlar cuándo la app terminó de cargar la nube
+  // FIX 1: Flag para bloquear guardado en localStorage durante carga desde nube
   const [isReady, setIsReady] = useState(false);
+  const [isLoadingFromCloud, setIsLoadingFromCloud] = useState(false);
 
   const [objVentasTotal] = useState(2195176117);
   const [lineasVentaTotal, setLineasVentaTotal] = useState(() => {
@@ -160,36 +157,73 @@ function App() {
         setGastosOperativos(configObj['Gastos Operativos'] ?? 46539684.59);
         setMargenObjetivo(configObj['Margen Objetivo (%)'] ?? 25);
 
-        // --- CARGA DESDE LA NUBE ---
+        // --- CARGA DESDE LA NUBE (FIX 2: Parseo robusto) ---
         try {
           const resNube = await fetch(`${SCRIPT_URL}?sheet=HistorialCompartido`);
           const dataNube = await resNube.json();
           
           if (dataNube && Array.isArray(dataNube)) {
-            // CORRECCIÓN 2: Función interna para buscar propiedades sin importar mayúsculas
             const findKey = (obj, k) => Object.keys(obj).find(key => key.toLowerCase() === k.toLowerCase());
 
             const historialSincronizado = dataNube.map(item => {
               const dEsc = item[findKey(item, 'DatosEscenario')];
               const conf = item[findKey(item, 'Configuracion')];
-              const eerr = item[findKey(item, 'EERR')];
+              const eerrData = item[findKey(item, 'EERR')];
+
+              // FIX 2: Parseo robusto - siempre devolvemos arrays/objetos válidos
+              let escenariosParseados = [];
+              if (Array.isArray(dEsc)) {
+                escenariosParseados = dEsc;
+              } else if (typeof dEsc === 'string' && dEsc.trim() !== '') {
+                try {
+                  escenariosParseados = JSON.parse(dEsc);
+                } catch(e) {
+                  console.error('Error parseando escenarios:', e);
+                  escenariosParseados = [];
+                }
+              }
+
+              let configParseada = {};
+              if (typeof conf === 'object' && conf !== null && !Array.isArray(conf)) {
+                configParseada = conf;
+              } else if (typeof conf === 'string' && conf.trim() !== '') {
+                try {
+                  configParseada = JSON.parse(conf);
+                } catch(e) {
+                  console.error('Error parseando config:', e);
+                  configParseada = {};
+                }
+              }
+
+              let eerrParseada = {};
+              if (typeof eerrData === 'object' && eerrData !== null && !Array.isArray(eerrData)) {
+                eerrParseada = eerrData;
+              } else if (typeof eerrData === 'string' && eerrData.trim() !== '') {
+                try {
+                  eerrParseada = JSON.parse(eerrData);
+                } catch(e) {
+                  console.error('Error parseando eerr:', e);
+                  eerrParseada = {};
+                }
+              }
 
               return {
                 id: item[findKey(item, 'ID')] ? String(item[findKey(item, 'ID')]).replace(/'/g, "") : Date.now(),
                 nombre: item[findKey(item, 'Nombre')] || "Sin nombre",
                 fecha: item[findKey(item, 'Fecha')] || "",
-                escenarios: typeof dEsc === 'string' ? JSON.parse(dEsc) : (dEsc || []),
-                config: typeof conf === 'string' ? JSON.parse(conf) : (conf || {}),
-                eerr: typeof eerr === 'string' ? JSON.parse(eerr) : (eerr || {})
+                escenarios: escenariosParseados,
+                config: configParseada,
+                eerr: eerrParseada
               };
             });
+            
             setHistorial(historialSincronizado);
 
             // CARGA AUTOMÁTICA DEL ÚLTIMO ESCENARIO AL ENTRAR
             const ultimo = historialSincronizado[historialSincronizado.length - 1];
-            if (ultimo && ultimo.escenarios.length > 0) {
+            if (ultimo && Array.isArray(ultimo.escenarios) && ultimo.escenarios.length > 0) {
               setEscenarios(ultimo.escenarios);
-              if (ultimo.config) {
+              if (ultimo.config && typeof ultimo.config === 'object') {
                 setPctIndirectos(ultimo.config.pctIndirectos ?? 37);
                 setPctCostoLaboral(ultimo.config.pctCostoLaboral ?? 45);
                 setGastosOperativos(ultimo.config.gastosOperativos ?? 46539684.59);
@@ -222,14 +256,16 @@ function App() {
       } catch (error) {
         console.error('Error cargando sheets', error);
         setDataSheets(prev => ({ ...prev, loading: false, error: 'Error cargando datos desde Google Sheets.' }));
+        setIsReady(true); // Desbloqueamos incluso si hay error
       }
     };
     cargarDatos();
   }, []);
 
-  // CORRECCIÓN 3: Guardar en localStorage solo cuando la carga inicial de la nube terminó (usando isReady)
+  // FIX 3: Guardar en localStorage solo cuando isReady=true, isLoadingFromCloud=false y hay datos válidos
   useEffect(() => {
-    if (!isReady) return; 
+    if (!isReady || isLoadingFromCloud) return;
+    if (!Array.isArray(escenarios)) return; // Validación extra
 
     localStorage.setItem('hzn_escenarios', JSON.stringify(escenarios));
     localStorage.setItem('hzn_pctInd', pctIndirectos);
@@ -239,7 +275,7 @@ function App() {
     localStorage.setItem('hzn_lineasVenta', JSON.stringify(lineasVentaTotal));
     localStorage.setItem('hzn_lineasReno', JSON.stringify(lineasRenovacion));
     localStorage.setItem('hzn_lineasIncr', JSON.stringify(lineasIncremental));
-  }, [escenarios, pctIndirectos, pctCostoLaboral, gastosOperativos, margenObjetivo, lineasVentaTotal, lineasRenovacion, lineasIncremental, isReady]);
+  }, [escenarios, pctIndirectos, pctCostoLaboral, gastosOperativos, margenObjetivo, lineasVentaTotal, lineasRenovacion, lineasIncremental, isReady, isLoadingFromCloud]);
 
   const agregarFila = () => {
     if (dataSheets.loading) {
@@ -311,7 +347,7 @@ function App() {
   const calcularPropuesta = () => {
     let ventasTotales = 0;
     let costosTotales = 0;
-    const porCliente = {}; // Agrupador para la visual de barras
+    const porCliente = {};
 
     escenarios.forEach(e => {
       const p = dataSheets.preciosNuevos && dataSheets.preciosNuevos[e.tipoIdx];
@@ -331,7 +367,6 @@ function App() {
       ventasTotales += ventaFila;
       costosTotales += costoTotalFila;
 
-      // Lógica de agrupación por cliente
       if (!porCliente[e.cliente]) porCliente[e.cliente] = { ventas: 0, costos: 0 };
       porCliente[e.cliente].ventas += ventaFila;
       porCliente[e.cliente].costos += costoTotalFila;
@@ -400,7 +435,6 @@ function App() {
     return { ingreso, costo, gananciaNeta };
   }, [escenarios, pctCostoLaboral, pctIndirectos, gastosOperativos, dataSheets.eerrBase]);
 
-  // --- FUNCIÓN GUARDAR SINCRONIZADA ---
   const guardarEscenario = async () => {
     const nombre = window.prompt("Ingrese un nombre para este escenario:", `Escenario ${historial.length + 1}`);
     if (!nombre) return;
@@ -417,10 +451,9 @@ function App() {
     };
 
     try {
-      // Usamos URLSearchParams para que Apps Script lo reciba en e.parameter
       const params = new URLSearchParams();
       params.append('payload', JSON.stringify(nuevoRegistro));
-      params.append('sheet', 'HistorialCompartido'); // INDICAMOS LA HOJA AQUÍ
+      params.append('sheet', 'HistorialCompartido');
 
       await fetch(SCRIPT_URL, {
         method: 'POST',
@@ -437,7 +470,35 @@ function App() {
     }
   };
 
-  // 9. DESCARGAR PDF (HTML)
+  // FIX 4: Función para cargar escenario con bloqueo temporal de localStorage
+  const cargarEscenarioDesdeHistorial = (item) => {
+    if(!window.confirm(`¿Cargar el escenario "${item.nombre}"? Se perderán los cambios actuales.`)) return;
+    
+    // Activamos el flag de bloqueo
+    setIsLoadingFromCloud(true);
+    
+    // Validamos que los datos sean arrays/objetos válidos antes de cargar
+    const escenariosValidos = Array.isArray(item.escenarios) ? item.escenarios : [];
+    const configValida = (typeof item.config === 'object' && item.config !== null) ? item.config : {};
+    
+    setEscenarios(escenariosValidos);
+    setPctIndirectos(configValida.pctIndirectos ?? 37);
+    setPctCostoLaboral(configValida.pctCostoLaboral ?? 45);
+    setGastosOperativos(configValida.gastosOperativos ?? 46539684.59);
+    setMargenObjetivo(configValida.margenObjetivo ?? 25);
+    
+    if(configValida.lineasVentaTotal) setLineasVentaTotal(configValida.lineasVentaTotal);
+    if(configValida.lineasRenovacion) setLineasRenovacion(configValida.lineasRenovacion);
+    if(configValida.lineasIncremental) setLineasIncremental(configValida.lineasIncremental);
+    
+    setMostrarHistorial(false);
+    
+    // Desbloqueamos después de 200ms para que React termine de renderizar
+    setTimeout(() => {
+      setIsLoadingFromCloud(false);
+    }, 200);
+  };
+
   const descargarPDF = () => {
     const eerr = calcularEERRTotal();
     const propuesta = eerr.propuesta;
@@ -558,7 +619,6 @@ function App() {
     const pctCumplimiento = objetivo > 0 ? Math.min((totalReal / objetivo) * 100, 100) : 0;
     const angle = -90 + (pctCumplimiento * 1.8);
     
-    // El largo total del arco en coordenadas de strokeDasharray es 251.2
     const totalArcLength = 251.2;
     const filledLength = (pctCumplimiento / 100) * totalArcLength;
     const gapLength = totalArcLength - filledLength;
@@ -575,10 +635,8 @@ function App() {
         <h3 className="text-sm font-black text-center mb-2 uppercase" style={{ color: color }}>{titulo}</h3>
         <div className="relative w-full flex justify-center mb-4">
           <svg viewBox="0 0 200 120" className="w-full max-w-xs">
-            {/* 1. Fondo base (Gris muy claro) */}
             <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#f1f5f9" strokeWidth="20" strokeLinecap="round" />
             
-            {/* 2. PARTE DE DIFERENCIA (Rojo) - Se dibuja en el fondo de todo el arco restante */}
             {pctCumplimiento < 100 && (
               <path 
                 d="M 20 100 A 80 80 0 0 1 180 100" 
@@ -601,7 +659,6 @@ function App() {
               />
             )}
 
-            {/* 3. PARTE COMPLETADA (Verde/Amarillo/Naranja) */}
             <path 
               d="M 20 100 A 80 80 0 0 1 180 100" 
               fill="none" 
@@ -612,7 +669,6 @@ function App() {
               style={{ transition: 'all 0.8s ease-out' }} 
             />
             
-            {/* Aguja */}
             <line x1="100" y1="100" x2="100" y2="30" stroke={getColor()} strokeWidth="3" strokeLinecap="round" transform={`rotate(${angle} 100 100)`} style={{ transition: 'all 0.8s ease-out' }} />
             <circle cx="100" cy="100" r="8" fill={getColor()} />
           </svg>
@@ -671,7 +727,6 @@ function App() {
   return (
     <div className="p-8 bg-gradient-to-br from-slate-50 to-purple-50 min-h-screen font-sans text-slate-900">
       <div className="max-w-7xl mx-auto">
-        {/* HEADER */}
         <div className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-3xl font-black tracking-tight bg-gradient-to-r from-purple-600 via-pink-500 to-blue-500 bg-clip-text text-transparent uppercase">Horizon Finance Engine 2026</h1>
@@ -682,10 +737,8 @@ function App() {
   <span className="text-[10px] font-bold text-purple-400 block uppercase">Gastos Op.</span>
   <input 
     type="text" 
-    /* Aquí aplicamos el formato visual al valor */
     value={gastosOperativos === 0 ? '' : formatNum(gastosOperativos)} 
     onChange={e => {
-      /* Aquí limpiamos el string para que el estado sea un número puro */
       const rawValue = e.target.value.replace(/\./g, '').replace(/\s/g, '');
       const num = rawValue === '' ? 0 : parseFloat(rawValue) || 0;
       setGastosOperativos(num);
@@ -708,7 +761,6 @@ function App() {
           </div>
         </div>
 
-        {/* TABLA SIMULACIÓN */}
         <div className="bg-white rounded-xl shadow-sm border border-purple-100 overflow-hidden mb-6">
           <div className="p-4 border-b border-purple-50 flex justify-between items-center bg-gradient-to-r from-purple-50 to-pink-50">
             <h2 className="font-bold text-slate-700 text-sm">💼 Simulación de Servicios (Propuesta)</h2>
@@ -811,7 +863,6 @@ function App() {
           </div>
         </div>
 
-        {/* HISTORIAL */}
         {mostrarHistorial && (
           <div className="bg-white rounded-xl shadow-sm border border-purple-100 overflow-hidden mb-6">
             <div className="p-4 border-b border-purple-50 bg-gradient-to-r from-purple-50 to-pink-50 flex justify-between items-center">
@@ -833,19 +884,7 @@ function App() {
                       <div className="flex justify-between text-xs"><span className="text-slate-500">Venta Propuesta:</span><span className="font-bold text-green-600">{format(item.eerr?.propuesta?.ventasTotales || 0)}</span></div>
                       <div className="flex justify-between text-xs"><span className="text-slate-500">Ganancia Neta:</span><span className="font-bold text-blue-600">{format(item.eerr?.gananciaNetaTotal || 0)}</span></div>
                     </div>
-                    <button onClick={() => {
-                      if(window.confirm(`¿Cargar el escenario "${item.nombre}"? Se perderán los cambios actuales.`)) {
-                        setEscenarios(JSON.parse(JSON.stringify(item.escenarios)));
-                        setPctIndirectos(item.config.pctIndirectos);
-                        setPctCostoLaboral(item.config.pctCostoLaboral);
-                        setGastosOperativos(item.config.gastosOperativos);
-                        setMargenObjetivo(item.config.margenObjetivo);
-                        setLineasVentaTotal(item.config.lineasVentaTotal);
-                        setLineasRenovacion(item.config.lineasRenovacion);
-                        setLineasIncremental(item.config.lineasIncremental);
-                        setMostrarHistorial(false);
-                      }
-                    }} className="w-full bg-purple-50 text-purple-700 py-2 rounded font-black text-[10px] uppercase hover:bg-purple-600 hover:text-white transition">Cargar Escenario</button>
+                    <button onClick={() => cargarEscenarioDesdeHistorial(item)} className="w-full bg-purple-50 text-purple-700 py-2 rounded font-black text-[10px] uppercase hover:bg-purple-600 hover:text-white transition">Cargar Escenario</button>
                   </div>
                 ))
               )}
@@ -853,8 +892,6 @@ function App() {
           </div>
         )}
 
-        {/* --- NUEVA SECCIÓN: APORTE POR CLIENTE (BARRAS) --- */}
-       {/* --- SECCIÓN: APORTE POR CLIENTE (CON BOTÓN OCULTAR) --- */}
         <div className="bg-white rounded-xl shadow-sm border border-blue-100 mb-6 overflow-hidden">
           <div className="p-4 border-b border-blue-50 flex justify-between items-center bg-gradient-to-r from-blue-50 to-indigo-50">
             <h2 className="font-bold text-blue-700 text-sm uppercase">Aporte por Cliente (Propuesta)</h2>
@@ -882,7 +919,6 @@ function App() {
                       <span>Margen: {margen.toFixed(1)}%</span>
                     </div>
                     <div className="w-full bg-slate-100 h-3 rounded-full overflow-hidden relative flex">
-                      {/* Barra de Progreso Real */}
                       <div 
                         className={`h-full transition-all duration-500 z-10 ${
                           margen >= margenObjetivo 
@@ -892,7 +928,6 @@ function App() {
                         style={{ width: `${Math.min(100, Math.max(0, margen * 2))}%` }}
                       ></div>
 
-                      {/* Diferencia en Rojo (Gap) */}
                       {margen < margenObjetivo && (
                         <div 
                           className="h-full bg-red-500/80 transition-all duration-500 animate-pulse"
@@ -900,7 +935,6 @@ function App() {
                         ></div>
                       )}
                       
-                      {/* Marcador de Objetivo */}
                       <div 
                         className="absolute top-0 h-full border-l-2 border-white/50 z-20"
                         style={{ left: `${margenObjetivo * 2}%` }}
@@ -915,7 +949,7 @@ function App() {
             </div>
           )}
         </div>
-        {/* EERR COMPARATIVO */}
+
         <div className="bg-white rounded-xl shadow-lg border border-purple-200 overflow-hidden mb-6">
           <div className="p-4 border-b border-purple-100 flex justify-between items-center bg-gradient-to-r from-purple-600 to-pink-600 text-white">
             <h2 className="font-bold text-sm">📊 Estado de Resultados Comparativo</h2>
@@ -1015,7 +1049,6 @@ function App() {
                 </table>
               </div>
 
-              {/* DESVÍO VS BASE DIC-25 */}
               <div className="bg-purple-100 rounded-xl shadow-lg border border-purple-400 p-6 mt-6">
                 <div className="flex justify-between items-center">
                   <div className="text-purple-900 font-black uppercase text-sm">DESVÍO VS BASE DIC-25</div>
@@ -1031,7 +1064,6 @@ function App() {
           )}
         </div>
 
-        {/* VELOCÍMETROS */}
         <div className="mb-6">
           <h2 className="text-lg font-black text-slate-700 uppercase mb-4">🎯 Objetivos 2026 - Tracking de Ventas</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
