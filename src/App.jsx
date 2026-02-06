@@ -1134,5 +1134,4 @@ function App() {
     </div>
   );
 }
-
-App;
+export default App;
