@@ -549,7 +549,7 @@ function App() {
         <div className="text-center mb-4">
           <p className="text-4xl font-black" style={{ color: getColor() }}>{pctCumplimiento.toFixed(1)}%</p>
           {pctCumplimiento < 100 && (
-            <p className="text-[10px] font-bold text-red-500 uppercase mt-1">Restan: {format(objetivo - totalReal)}</p>
+            <p className="text-[10px] font-bold text-slate-500 uppercase mt-1">Cumplimiento</p>
           )}
         </div>
         <div className="space-y-3 bg-gradient-to-br from-purple-50 to-pink-50 p-4 rounded-lg">
