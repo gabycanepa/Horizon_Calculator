@@ -99,115 +99,133 @@ function App() {
   const [mostrarEERR, setMostrarEERR] = useState(true);
   const [mostrarAporte, setMostrarAporte] = useState(true);
 
-  useEffect(() => {
-    const cargarDatos = async () => {
+  // 1. Agrega este estado nuevo al principio de tu componente App junto a los otros
+const [isReady, setIsReady] = useState(false);
+
+// 2. Reemplaza el useEffect de cargarDatos por este:
+useEffect(() => {
+  const cargarDatos = async () => {
+    try {
+      const [precios, clientes, cfg, eerr] = await Promise.all([
+        fetchSheet('PreciosNuevos'),
+        fetchSheet('Clientes'),
+        fetchSheet('Configuracion'),
+        fetchSheet('EERRBase')
+      ]);
+
+      // ... (Procesamiento de configObj, eerrObj y preciosProcesados igual que antes)
+      const configObj = {};
+      cfg.forEach(row => {
+        const key = row['Parámetro'] ?? row['Parametro'] ?? row['Key'] ?? Object.values(row)[0];
+        const valCell = row['Valor'] ?? row['Value'] ?? Object.values(row)[1];
+        if (key) configObj[String(key).trim()] = cleanNum(valCell);
+      });
+
+      const eerrObj = {};
+      eerr.forEach(row => {
+        const concepto = row['Concepto'] ?? Object.values(row)[0];
+        const montoCell = row['Monto (ARS)'] ?? row['Monto'] ?? Object.values(row)[1];
+        if (concepto !== undefined) { eerrObj[String(concepto).trim()] = cleanNum(montoCell); }
+      });
+
+      const eerrNorm = {};
+      Object.keys(eerrObj).forEach(k => { eerrNorm[normalizeKey(k)] = eerrObj[k]; });
+
+      const preciosProcesados = precios.map(p => ({
+        categoria: p['Categoria'] ?? p['Categoría'] ?? Object.values(p)[0] ?? 'Otros',
+        tipo: p['Tipo'] ?? Object.values(p)[1] ?? 'Default',
+        valor: cleanNum(p['Valor (ARS)'] ?? p['Valor'] ?? Object.values(p)[2]),
+        sueldoSugerido: cleanNum(p['Sueldo Sugerido (ARS)'] ?? p['Sueldo Sugerido'] ?? Object.values(p)[3]),
+        costoFijo: cleanNum(p['Costo Fijo (ARS)'] ?? p['Costo Fijo'] ?? Object.values(p)[4])
+      }));
+
+      const clientesProcesados = clientes.map(c => c['Cliente'] ?? c['cliente'] ?? c['Name'] ?? Object.values(c)[0] ?? '').filter(Boolean);
+
+      setDataSheets({
+        preciosNuevos: preciosProcesados,
+        clientes: clientesProcesados,
+        config: configObj,
+        eerrBase: eerrObj,
+        eerrBaseNorm: eerrNorm,
+        loading: false,
+        error: null
+      });
+
+      // --- CARGA DE LA NUBE ---
       try {
-        const [precios, clientes, cfg, eerr] = await Promise.all([
-          fetchSheet('PreciosNuevos'),
-          fetchSheet('Clientes'),
-          fetchSheet('Configuracion'),
-          fetchSheet('EERRBase')
-        ]);
-
-        // ... (Tu lógica de procesamiento de configObj, eerrObj y preciosProcesados queda igual)
-        const configObj = {};
-        cfg.forEach(row => {
-          const key = row['Parámetro'] ?? row['Parametro'] ?? row['Key'] ?? Object.values(row)[0];
-          const valCell = row['Valor'] ?? row['Value'] ?? Object.values(row)[1];
-          if (key) configObj[String(key).trim()] = cleanNum(valCell);
-        });
-
-        const eerrObj = {};
-        eerr.forEach(row => {
-          const concepto = row['Concepto'] ?? Object.values(row)[0];
-          const montoCell = row['Monto (ARS)'] ?? row['Monto'] ?? Object.values(row)[1];
-          if (concepto !== undefined) { eerrObj[String(concepto).trim()] = cleanNum(montoCell); }
-        });
-
-        const eerrNorm = {};
-        Object.keys(eerrObj).forEach(k => { eerrNorm[normalizeKey(k)] = eerrObj[k]; });
-
-        const preciosProcesados = precios.map(p => ({
-          categoria: p['Categoria'] ?? p['Categoría'] ?? Object.values(p)[0] ?? 'Otros',
-          tipo: p['Tipo'] ?? Object.values(p)[1] ?? 'Default',
-          valor: cleanNum(p['Valor (ARS)'] ?? p['Valor'] ?? Object.values(p)[2]),
-          sueldoSugerido: cleanNum(p['Sueldo Sugerido (ARS)'] ?? p['Sueldo Sugerido'] ?? Object.values(p)[3]),
-          costoFijo: cleanNum(p['Costo Fijo (ARS)'] ?? p['Costo Fijo'] ?? Object.values(p)[4])
-        }));
-
-        const clientesProcesados = clientes.map(c => c['Cliente'] ?? c['cliente'] ?? c['Name'] ?? Object.values(c)[0] ?? '').filter(Boolean);
-
-        setDataSheets({
-          preciosNuevos: preciosProcesados,
-          clientes: clientesProcesados,
-          config: configObj,
-          eerrBase: eerrObj,
-          eerrBaseNorm: eerrNorm,
-          loading: false,
-          error: null
-        });
-
-        // Seteo de estados base
-        setPctIndirectos(configObj['% Indirectos'] ?? configObj['Indirectos'] ?? 37);
-        setPctCostoLaboral(configObj['% Costo Laboral'] ?? configObj['Costo Laboral'] ?? 45);
-        setGastosOperativos(configObj['Gastos Operativos'] ?? 46539684.59);
-        setMargenObjetivo(configObj['Margen Objetivo (%)'] ?? 25);
-
-        // --- LÓGICA DE CARGA DESDE LA NUBE MEJORADA ---
-        try {
-          const resNube = await fetch(`${SCRIPT_URL}?sheet=HistorialCompartido`);
-          const dataNube = await resNube.json();
+        const resNube = await fetch(`${SCRIPT_URL}?sheet=HistorialCompartido`);
+        const dataNube = await resNube.json();
+        
+        if (dataNube && Array.isArray(dataNube) && dataNube.length > 0) {
+          const historialSincronizado = dataNube.map(item => ({
+            id: item.ID ? String(item.ID).replace(/'/g, "") : Date.now(),
+            nombre: item.Nombre,
+            fecha: item.Fecha,
+            escenarios: typeof item.DatosEscenario === 'string' ? JSON.parse(item.DatosEscenario) : (item.DatosEscenario || []),
+            config: typeof item.Configuracion === 'string' ? JSON.parse(item.Configuracion) : (item.Configuracion || {}),
+            eerr: typeof item.EERR === 'string' ? JSON.parse(item.EERR) : (item.EERR || {})
+          }));
           
-          if (dataNube && Array.isArray(dataNube) && dataNube.length > 0) {
-            const historialSincronizado = dataNube.map(item => ({
-              id: item.ID ? String(item.ID).replace(/'/g, "") : Date.now(),
-              nombre: item.Nombre,
-              fecha: item.Fecha,
-              escenarios: typeof item.DatosEscenario === 'string' ? JSON.parse(item.DatosEscenario) : (item.DatosEscenario || []),
-              config: typeof item.Configuracion === 'string' ? JSON.parse(item.Configuracion) : (item.Configuracion || {}),
-              eerr: typeof item.EERR === 'string' ? JSON.parse(item.EERR) : (item.EERR || {})
-            }));
-            
-            setHistorial(historialSincronizado);
+          setHistorial(historialSincronizado);
 
-            // AUTO-CARGA: Si hay historial, cargamos el más reciente (el último guardado)
-            // Esto es lo que faltaba para que al refrescar se vea la tabla llena
-            const ultimoEscenario = historialSincronizado[historialSincronizado.length - 1];
-            if (ultimoEscenario && ultimoEscenario.escenarios.length > 0) {
-              setEscenarios(ultimoEscenario.escenarios);
-              // También restauramos la configuración de ese escenario guardado
-              if (ultimoEscenario.config.pctIndirectos !== undefined) {
-                setPctIndirectos(ultimoEscenario.config.pctIndirectos);
-                setPctCostoLaboral(ultimoEscenario.config.pctCostoLaboral);
-                setGastosOperativos(ultimoEscenario.config.gastosOperativos);
-                setMargenObjetivo(ultimoEscenario.config.margenObjetivo);
-              }
-            }
-          } else {
-            // Si no hay nada en la nube, inicializar fila vacía
-            if (preciosProcesados.length > 0) {
-              setEscenarios([{
-                id: Date.now(),
-                cliente: clientesProcesados[0] || 'Nuevo Cliente',
-                tipoIdx: 0,
-                cantidad: 1,
-                sueldoBruto: preciosProcesados[0].sueldoSugerido || 0,
-                ventaUnit: preciosProcesados[0].valor || 0
-              }]);
-            }
+          // PRIORIDAD: Cargamos el último de la lista
+          const ultimo = historialSincronizado[historialSincronizado.length - 1];
+          if (ultimo && ultimo.escenarios.length > 0) {
+            setEscenarios(ultimo.escenarios);
+            setPctIndirectos(ultimo.config.pctIndirectos ?? 37);
+            setPctCostoLaboral(ultimo.config.pctCostoLaboral ?? 45);
+            setGastosOperativos(ultimo.config.gastosOperativos ?? 46539684.59);
+            setMargenObjetivo(ultimo.config.margenObjetivo ?? 25);
+            // Si el escenario guardado tiene velocímetros, los cargamos
+            if(ultimo.config.lineasVentaTotal) setLineasVentaTotal(ultimo.config.lineasVentaTotal);
+            if(ultimo.config.lineasRenovacion) setLineasRenovacion(ultimo.config.lineasRenovacion);
+            if(ultimo.config.lineasIncremental) setLineasIncremental(ultimo.config.lineasIncremental);
           }
-        } catch(e) { 
-          console.error("Error cargando historial de la nube:", e); 
+        } else {
+          // Fallback a configuración de Configuración si no hay nada en la nube
+          setPctIndirectos(configObj['% Indirectos'] ?? 37);
+          setPctCostoLaboral(configObj['% Costo Laboral'] ?? 45);
+          setGastosOperativos(configObj['Gastos Operativos'] ?? 46539684.59);
+          setMargenObjetivo(configObj['Margen Objetivo (%)'] ?? 25);
+          if (preciosProcesados.length > 0) {
+            setEscenarios([{
+              id: Date.now(),
+              cliente: clientesProcesados[0] || 'Nuevo Cliente',
+              tipoIdx: 0,
+              cantidad: 1,
+              sueldoBruto: preciosProcesados[0].sueldoSugerido || 0,
+              ventaUnit: preciosProcesados[0].valor || 0
+            }]);
+          }
         }
-
-      } catch (error) {
-        console.error('Error cargando sheets', error);
-        setDataSheets(prev => ({ ...prev, loading: false, error: 'Error cargando datos.' }));
+      } catch(e) { 
+        console.error("Error nube:", e); 
       }
-    };
-    cargarDatos();
-  }, []);
+      
+      // Indicamos que la carga terminó y es seguro activar otros efectos
+      setIsReady(true);
 
+    } catch (error) {
+      console.error('Error general:', error);
+      setDataSheets(prev => ({ ...prev, loading: false, error: 'Error cargando datos.' }));
+    }
+  };
+  cargarDatos();
+}, []);
+
+// 3. Modifica tu useEffect de localStorage para que solo actúe si isReady es true
+useEffect(() => {
+  if (!isReady) return; // BLOQUEO: No guarda nada localmente hasta que la nube diga qué hay
+  
+  localStorage.setItem('hzn_escenarios', JSON.stringify(escenarios));
+  localStorage.setItem('hzn_pctInd', pctIndirectos);
+  localStorage.setItem('hzn_pctLab', pctCostoLaboral);
+  localStorage.setItem('hzn_gastosOp', gastosOperativos);
+  localStorage.setItem('hzn_margenObj', margenObjetivo);
+  localStorage.setItem('hzn_lineasVenta', JSON.stringify(lineasVentaTotal));
+  localStorage.setItem('hzn_lineasReno', JSON.stringify(lineasRenovacion));
+  localStorage.setItem('hzn_lineasIncr', JSON.stringify(lineasIncremental));
+}, [escenarios, pctIndirectos, pctCostoLaboral, gastosOperativos, margenObjetivo, lineasVentaTotal, lineasRenovacion, lineasIncremental, isReady]);
   // ... (El resto de tu código sigue exactamente igual que el que pasaste)
   
   useEffect(() => {
