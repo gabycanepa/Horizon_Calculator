@@ -1,5 +1,3 @@
-ULIMO 5-2  22.50
-
 import React, { useState, useEffect, useMemo } from 'react';
 
 const SHEET_ID = '1vTJQrYIRPWBawtIIUdL4NvJcbDDwNCQf8YiXKl7t6BFi1mfVwQT4nuFAqX2YTKA5Q05Y6nBGhALckdf';
