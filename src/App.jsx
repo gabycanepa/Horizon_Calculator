@@ -43,10 +43,14 @@ const fetchSheet = async (sheetName) => {
   const text = await response.text();
   const lines = text.split('\n').filter(l => l.trim() !== '');
   if (lines.length === 0) return [];
+  
+  // Detecta si el separador es coma o punto y coma
   const separator = lines[0].includes(';') ? ';' : ',';
-const headers = lines[0].replace(/(^"|"$)/g, '').split(separator);
+  
+  const headers = lines[0].replace(/(^"|"$)/g, '').split(separator).map(h => h.trim());
+  
   return lines.slice(1).map(line => {
-    onst cells = line.replace(/(^"|"$)/g, '').split(separator);
+    const cells = line.replace(/(^"|"$)/g, '').split(separator).map(c => c.trim());
     const obj = {};
     for (let i = 0; i < headers.length; i++) {
       obj[headers[i]] = cells[i] !== undefined ? cells[i] : '';
