@@ -1,5 +1,3 @@
-ULRIMO ONLINE
-
 import React, { useState, useEffect, useMemo } from 'react';
 
 const SHEET_ID = '1fJVmm7i5g1IfOLHDTByRM-W01pWIF46k7aDOYsH4UKA';
