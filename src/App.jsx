@@ -131,12 +131,12 @@ function App() {
         });
 
         const preciosProcesados = precios.map(p => ({
-  categoria: p['Categoria'] ?? p['Categoría'] ?? Object.values(p)[0] ?? 'Otros',
-  tipo: p['Tipo'] ?? Object.values(p)[1] ?? 'Default',
-  valor: cleanNum(p['Valor (ARS)'] ?? p['Valor'] ?? Object.values(p)[2]),
-  sueldoSugerido: cleanNum(p['Sueldo Sugerido (ARS)'] ?? p['Sueldo Sugerido'] ?? Object.values(p)[3]),
-  costoFijo: cleanNum(p['Costo Fijo (ARS)'] ?? p['Costo Fijo'] ?? Object.values(p)[4])
-}));
+          categoria: p['Categoria'] ?? p['Categoría'] ?? Object.values(p)[0] ?? 'Otros',
+          tipo: p['Tipo'] ?? Object.values(p)[1] ?? 'Default',
+          valor: cleanNum(p['Valor (ARS)'] ?? p['Valor'] ?? Object.values(p)[2]),
+          sueldoSugerido: cleanNum(p['Sueldo Sugerido (ARS)'] ?? p['Sueldo Sugerido'] ?? Object.values(p)[3]),
+          costoFijo: cleanNum(p['Costo Fijo (ARS)'] ?? p['Costo Fijo'] ?? Object.values(p)[4])
+        }));
 
         const clientesProcesados = clientes.map(c => {
           return c['Cliente'] ?? c['cliente'] ?? c['Name'] ?? Object.values(c)[0] ?? '';
@@ -219,13 +219,13 @@ function App() {
         const num = typeof valor === 'string' ? parseInt(valor.replace(/\D/g, '')) || 0 : Number(valor || 0);
         updated[campo] = num;
       } else if (campo === 'tipoIdx') {
-  updated.tipoIdx = Number(valor) || 0;
-  const p = dataSheets.preciosNuevos[Number(valor)];
-  if (p) {
-    // Forzar actualización siempre
-    updated.sueldoBruto = p.sueldoSugerido ?? 0;
-    updated.ventaUnit = p.valor ?? 0;
-  }
+        updated.tipoIdx = Number(valor) || 0;
+        const p = dataSheets.preciosNuevos[Number(valor)];
+        if (p) {
+          // Forzar actualización siempre
+          updated.sueldoBruto = p.sueldoSugerido ?? 0;
+          updated.ventaUnit = p.valor ?? 0;
+        }
       } else if (campo === 'cantidad') {
         updated.cantidad = Number(valor) || 0;
       } else if (campo === 'cliente') {
@@ -386,6 +386,118 @@ function App() {
     alert(`✅ Escenario "${nombre}" guardado.`);
   };
 
+  // 9. DESCARGAR PDF (HTML)
+  const descargarPDF = () => {
+    const eerr = calcularEERRTotal();
+    const propuesta = eerr.propuesta;
+    const timestamp = new Date().toLocaleString('es-AR');
+    let html = `<!DOCTYPE html>  
+<html lang="es">  
+<head>  
+  <meta charset="UTF-8">  
+  <title>Horizon - Proyección ${timestamp}</title>  
+  <style>  
+    body { font-family: Arial, sans-serif; padding: 40px; max-width: 900px; margin: auto; }  
+    h1 { color: #7c3aed; border-bottom: 3px solid #a78bfa; padding-bottom: 10px; }  
+    .header { color: #64748b; font-size: 14px; margin-bottom: 30px; }  
+    .section { background: #f5f3ff; padding: 20px; border-radius: 8px; margin: 20px 0; }  
+    table { width: 100%; border-collapse: collapse; margin: 15px 0; }  
+    th { background: #e9d5ff; padding: 10px; text-align: left; border: 1px solid #cbd5e1; font-size: 12px; }  
+    td { padding: 10px; border: 1px solid #e2e8f0; font-size: 12px; }  
+    .right { text-align: right; }  
+    .bold { font-weight: bold; }  
+    .green { color: #16a34a; }  
+    .red { color: #dc2626; }  
+    .footer { margin-top: 30px; padding: 20px; background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%); color: white; border-radius: 8px; text-align: center; }  
+  </style>  
+</head>  
+<body>  
+  <h1>HORIZON - Estado de Resultados Proyectado 2026</h1>  
+  <p class="header">Generado: ${timestamp}</p>  
+  
+  <div class="section">  
+    <h3>Resumen Financiero</h3>  
+    <table>  
+      <tr><td class="bold">Ingreso Base (Dic-25):</td><td class="right">${format(dataSheets.eerrBase['Ingreso'] || 0)}</td></tr>  
+      <tr><td class="bold">Ingreso Propuesta:</td><td class="right green">${format(propuesta.ventasTotales)}</td></tr>  
+      <tr><td class="bold">Ingreso Total:</td><td class="right bold">${format(eerr.ingresoTotal)}</td></tr>  
+      <tr><td class="bold">Costo Total:</td><td class="right red">-${format(eerr.costoIngresosTotal)}</td></tr>  
+      <tr><td class="bold">Ganancia Bruta:</td><td class="right green bold">${format(eerr.gananciaBrutaTotal)} (${eerr.margenBrutoPct.toFixed(1)}%)</td></tr>  
+      <tr><td class="bold">Gastos Operativos:</td><td class="right red">-${format(gastosOperativos)}</td></tr>  
+      <tr><td class="bold">Ganancia Neta:</td><td class="right bold ${eerr.gananciaNetaTotal >= 0 ? 'green' : 'red'}">${format(eerr.gananciaNetaTotal)} (${eerr.margenNetoPct.toFixed(1)}%)</td></tr>  
+    </table>  
+  </div>  
+  
+  <h3>Detalle de Servicios Propuestos</h3>  
+  <table>  
+    <thead>  
+      <tr>  
+        <th>Cliente</th>  
+        <th>Servicio</th>  
+        <th>Cant</th>  
+        <th>Venta Unit</th>  
+        <th>Sueldo Bruto</th>  
+        <th>Costo Total</th>  
+        <th>Resultado</th>  
+        <th>Margen %</th>  
+      </tr>  
+    </thead>  
+    <tbody>`;
+
+    escenarios.forEach(e => {
+      const p = dataSheets.preciosNuevos[e.tipoIdx];
+      if (!p) return;
+      const isStaff = p.categoria === 'Staff Augmentation';
+      let costoTotal = 0;
+      if (isStaff) {
+        const sueldo = e.cantidad * e.sueldoBruto;
+        costoTotal = sueldo + (sueldo * pctCostoLaboral/100) + (sueldo * pctIndirectos/100);
+      } else {
+        const base = e.cantidad * p.costoFijo;
+        costoTotal = base + (base * pctIndirectos/100);
+      }
+      const venta = e.cantidad * e.ventaUnit;
+      const res = venta - costoTotal;
+      const mgn = venta > 0 ? (res / venta) * 100 : 0;
+
+      html += `  
+      <tr>  
+        <td>${e.cliente}</td>  
+        <td>${p.categoria} - ${p.tipo}</td>  
+        <td class="right">${e.cantidad}</td>  
+        <td class="right">${format(e.ventaUnit)}</td>  
+        <td class="right">${isStaff ? format(e.sueldoBruto) : '-'}</td>  
+        <td class="right red">-${format(costoTotal)}</td>  
+        <td class="right green bold">${format(res)}</td>  
+        <td class="right bold">${mgn.toFixed(1)}%</td>  
+      </tr>`;
+    });
+
+    html += `  
+    </tbody>  
+  </table>  
+  
+  <div class="section">  
+    <h3>Configuración Utilizada</h3>  
+    <p><strong>Indirectos:</strong> ${pctIndirectos}% | <strong>Costo Laboral:</strong> ${pctCostoLaboral}% | <strong>Margen Objetivo:</strong> ${margenObjetivo}%</p>  
+  </div>  
+  
+  <div class="footer">  
+    <h2>Ganancia Neta Proyectada: ${format(eerr.gananciaNetaTotal)}</h2>  
+    <p>Margen Neto: ${eerr.margenNetoPct.toFixed(1)}% | Desvío vs Dic-25: ${eerr.desvioGananciaNeta >= 0 ? '+' : ''}${format(eerr.desvioGananciaNeta)}</p>  
+  </div>  
+</body>  
+</html>`;
+
+    const blob = new Blob([html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Horizon_Proyeccion_${Date.now()}.html`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const format = (n) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n);
   const formatNum = (n) => new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 }).format(n);
   const formatPct = (n) => `${n.toFixed(0)}%`;
@@ -495,6 +607,11 @@ function App() {
             <div className="flex gap-2">
                <button onClick={() => setMostrarHistorial(!mostrarHistorial)} className={`text-xs font-bold px-3 py-1 border rounded-lg transition ${mostrarHistorial ? 'bg-purple-600 text-white border-purple-600' : 'text-slate-600 border-purple-200 hover:text-purple-600'}`}>📋 Historial ({historial.length})</button>
                <button onClick={guardarEscenario} className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold hover:shadow-lg transition">💾 Guardar Escenario</button>
+               
+               <button onClick={descargarPDF} className="bg-gradient-to-r from-purple-500 to-pink-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold hover:shadow-lg transition">
+                 📄 Descargar PDF
+               </button>
+
                <button onClick={() => { if(window.confirm('¿Limpiar todos los campos?')) setEscenarios([]); }} className="text-slate-400 hover:text-slate-600 text-xs font-bold px-3 py-1">Limpiar</button>
                <button onClick={agregarFila} disabled={dataSheets.loading} className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold hover:shadow-lg transition disabled:opacity-60">+ Agregar</button>
             </div>
