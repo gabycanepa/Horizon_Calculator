@@ -98,6 +98,7 @@ function App() {
 
   const [mostrarHistorial, setMostrarHistorial] = useState(false);
   const [mostrarEERR, setMostrarEERR] = useState(true);
+  const [mostrarAporte, setMostrarAporte] = useState(true);
 
   useEffect(() => {
     const cargarDatos = async () => {
@@ -770,43 +771,67 @@ function App() {
         )}
 
         {/* --- NUEVA SECCIÓN: APORTE POR CLIENTE (BARRAS) --- */}
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-blue-100 mb-6">
-          <h3 className="text-xs font-bold text-blue-400 uppercase mb-4">Aporte por Cliente (Propuesta)</h3>
-          <div className="space-y-4">
-            {Object.entries(propuesta.porCliente).map(([nombre, datos]) => {
-              const resultado = datos.ventas - datos.costos;
-              const margen = datos.ventas > 0 ? (resultado / datos.ventas) * 100 : 0;
-              return (
-                <div key={nombre} className="group">
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="text-sm font-bold text-slate-700">{nombre}</span>
-                    <span className="text-xs font-black text-green-600">{format(resultado)}</span>
-                  </div>
-                  <div className="flex justify-between text-[10px] text-slate-400 mb-2">
-                    <span>Venta: {format(datos.ventas)}</span>
-                    <span>Margen: {margen.toFixed(1)}%</span>
-                  </div>
-                  <div className="w-full bg-slate-50 h-2 rounded-full overflow-hidden">
-                    <div 
-                      className={`h-full transition-all duration-500 ${
-                        margen >= margenObjetivo 
-                          ? 'bg-gradient-to-r from-green-400 to-emerald-500' 
-                          : margen >= 15 
-                            ? 'bg-gradient-to-r from-yellow-400 to-orange-400' 
-                            : 'bg-gradient-to-r from-red-400 to-pink-500'
-                      }`}
-                      style={{ width: `${Math.min(100, Math.max(0, margen * 2))}%` }}
-                    ></div>
-                  </div>
-                </div>
-              );
-            })}
-            {Object.keys(propuesta.porCliente).length === 0 && (
-              <p className="text-center text-slate-300 text-xs py-4 italic">Sin datos de simulación</p>
-            )}
+       {/* --- SECCIÓN: APORTE POR CLIENTE (CON BOTÓN OCULTAR) --- */}
+        <div className="bg-white rounded-xl shadow-sm border border-blue-100 mb-6 overflow-hidden">
+          <div className="p-4 border-b border-blue-50 flex justify-between items-center bg-gradient-to-r from-blue-50 to-indigo-50">
+            <h2 className="font-bold text-blue-700 text-sm uppercase">Aporte por Cliente (Propuesta)</h2>
+            <button 
+              onClick={() => setMostrarAporte(!mostrarAporte)} 
+              className="bg-blue-600/10 hover:bg-blue-600/20 text-blue-700 px-3 py-1 rounded text-[10px] font-black uppercase transition"
+            >
+              {mostrarAporte ? '✕ Ocultar' : '👁️ Mostrar'}
+            </button>
           </div>
-        </div>
 
+          {mostrarAporte && (
+            <div className="p-6 space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+              {Object.entries(propuesta.porCliente).map(([nombre, datos]) => {
+                const resultado = datos.ventas - datos.costos;
+                const margen = datos.ventas > 0 ? (resultado / datos.ventas) * 100 : 0;
+                return (
+                  <div key={nombre} className="group">
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="text-sm font-bold text-slate-700">{nombre}</span>
+                      <span className="text-xs font-black text-green-600">{format(resultado)}</span>
+                    </div>
+                    <div className="flex justify-between text-[10px] text-slate-400 mb-2">
+                      <span>Venta: {format(datos.ventas)}</span>
+                      <span>Margen: {margen.toFixed(1)}%</span>
+                    </div>
+                    <div className="w-full bg-slate-100 h-3 rounded-full overflow-hidden relative flex">
+                      {/* Barra de Progreso Real */}
+                      <div 
+                        className={`h-full transition-all duration-500 z-10 ${
+                          margen >= margenObjetivo 
+                            ? 'bg-gradient-to-r from-green-400 to-emerald-500' 
+                            : 'bg-gradient-to-r from-orange-400 to-orange-500'
+                        }`}
+                        style={{ width: `${Math.min(100, Math.max(0, margen * 2))}%` }}
+                      ></div>
+
+                      {/* Diferencia en Rojo (Gap) */}
+                      {margen < margenObjetivo && (
+                        <div 
+                          className="h-full bg-red-500/80 transition-all duration-500 animate-pulse"
+                          style={{ width: `${(margenObjetivo - margen) * 2}%` }}
+                        ></div>
+                      )}
+                      
+                      {/* Marcador de Objetivo */}
+                      <div 
+                        className="absolute top-0 h-full border-l-2 border-white/50 z-20"
+                        style={{ left: `${margenObjetivo * 2}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                );
+              })}
+              {Object.keys(propuesta.porCliente).length === 0 && (
+                <p className="text-center text-slate-300 text-xs py-4 italic">Sin datos de simulación</p>
+              )}
+            </div>
+          )}
+        </div>
         {/* EERR COMPARATIVO */}
         <div className="bg-white rounded-xl shadow-lg border border-purple-200 overflow-hidden mb-6">
           <div className="p-4 border-b border-purple-100 flex justify-between items-center bg-gradient-to-r from-purple-600 to-pink-600 text-white">
