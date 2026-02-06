@@ -44,7 +44,6 @@ const fetchSheet = async (sheetName) => {
   const lines = text.split('\n').filter(l => l.trim() !== '');
   if (lines.length === 0) return [];
 
-  // Esta función separa por coma o punto y coma, pero IGNORA las que están dentro de comillas
   const parseCSVLine = (line) => {
     const re = /,(?=(?:(?:[^"]*"){2})*[^"]*$)|;(?=(?:(?:[^"]*"){2})*[^"]*$)/g;
     return line.split(re).map(cell => cell.replace(/^"|"$/g, '').trim());
@@ -61,21 +60,8 @@ const fetchSheet = async (sheetName) => {
     return obj;
   });
 };
-  
-  // Detecta si el separador es coma o punto y coma
-  const separator = lines[0].includes(';') ? ';' : ',';
-  
-  const headers = lines[0].replace(/(^"|"$)/g, '').split(separator).map(h => h.trim());
-  
-  return lines.slice(1).map(line => {
-    const cells = line.replace(/(^"|"$)/g, '').split(separator).map(c => c.trim());
-    const obj = {};
-    for (let i = 0; i < headers.length; i++) {
-      obj[headers[i]] = cells[i] !== undefined ? cells[i] : '';
-    }
-    return obj;
-  });
-};
+
+function App() {
 
 function App() {
   const [dataSheets, setDataSheets] = useState({
