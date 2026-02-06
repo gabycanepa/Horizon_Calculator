@@ -124,12 +124,13 @@ function App() {
         });
 
         const preciosProcesados = precios.map(p => ({
-          categoria: p['Categoria'] ?? p['Categoría'] ?? p['categoria'] ?? p['category'] ?? Object.values(p)[0] ?? 'Otros',
-          tipo: p['Tipo'] ?? p['tipo'] ?? p['Type'] ?? Object.values(p)[1] ?? 'Default',
-          valor: cleanNum(p['Valor'] ?? p['Precio'] ?? Object.values(p)[2]),
-          sueldoSugerido: cleanNum(p['Sueldo'] ?? p['Sueldo bruto'] ?? Object.values(p)[3]),
-          costoFijo: cleanNum(p['Costo'] ?? p['Costo Fijo'] ?? Object.values(p)[4])
-        }));
+  categoria: p['Categoria'] ?? p['Categoría'] ?? Object.values(p)[0] ?? 'Otros',
+  tipo: p['Tipo'] ?? Object.values(p)[1] ?? 'Default',
+  // Usamos los nombres exactos de tu imagen:
+  valor: cleanNum(p['Valor (ARS)'] ?? Object.values(p)[2]),
+  sueldoSugerido: cleanNum(p['Sueldo Sugerido (ARS)'] ?? Object.values(p)[3]),
+  costoFijo: cleanNum(p['Costo Fijo (ARS)'] ?? Object.values(p)[4])
+}));
 
         const clientesProcesados = clientes.map(c => {
           return c['Cliente'] ?? c['cliente'] ?? c['Name'] ?? Object.values(c)[0] ?? '';
@@ -212,12 +213,14 @@ function App() {
         const num = typeof valor === 'string' ? parseInt(valor.replace(/\D/g, '')) || 0 : Number(valor || 0);
         updated[campo] = num;
       } else if (campo === 'tipoIdx') {
-        updated.tipoIdx = Number(valor) || 0;
-        const p = dataSheets.preciosNuevos[Number(valor)];
-        if (p) {
-          updated.sueldoBruto = p.sueldoSugerido || updated.sueldoBruto;
-          updated.ventaUnit = p.valor || updated.ventaUnit;
-        }
+  const idx = Number(valor);
+  updated.tipoIdx = idx;
+  const p = dataSheets.preciosNuevos[idx];
+  if (p) {
+    // Pisamos siempre con el valor del nuevo servicio seleccionado
+    updated.sueldoBruto = p.sueldoSugerido || 0;
+    updated.ventaUnit = p.valor || 0;
+  }
       } else if (campo === 'cantidad') {
         updated.cantidad = Number(valor) || 0;
       } else if (campo === 'cliente') {
@@ -499,19 +502,25 @@ function App() {
                 </tr>
               </thead>
               <tbody className="text-sm">
-                {escenarios.map(e => {
-                  const p = dataSheets.preciosNuevos && dataSheets.preciosNuevos[e.tipoIdx];
-                  const isStaff = p && (p.categoria || '').toLowerCase().includes('staff');
-                  let costoTotal = 0;
-                  if (p) {
-                    if (isStaff) {
-                      const sueldo = (Number(e.cantidad) || 0) * (Number(e.sueldoBruto) || 0);
-                      costoTotal = sueldo + (sueldo * pctCostoLaboral/100) + (sueldo * pctIndirectos/100);
-                    } else {
-                      const base = (Number(e.cantidad) || 0) * (Number(p.costoFijo) || 0);
-                      costoTotal = base + (base * pctIndirectos/100);
-                    }
-                  }
+                // Dentro del map de escenarios:
+const p = dataSheets.preciosNuevos[e.tipoIdx];
+const isStaff = p && (p.categoria || '').toLowerCase().includes('staff');
+let costoTotal = 0;
+
+if (p) {
+  if (isStaff) {
+    // Lógica para Staff: Sueldo + Cargas + Indirectos
+    const sueldoTotal = (Number(e.cantidad) || 0) * (Number(e.sueldoBruto) || 0);
+    const cargasSociales = sueldoTotal * (pctCostoLaboral / 100);
+    const indirectos = sueldoTotal * (pctIndirectos / 100);
+    costoTotal = sueldoTotal + cargasSociales + indirectos;
+  } else {
+    // Lógica para otros (Workshop/Coaching): Costo Fijo + Indirectos
+    const costoBase = (Number(e.cantidad) || 0) * (Number(p.costoFijo) || 0);
+    const indirectos = costoBase * (pctIndirectos / 100);
+    costoTotal = costoBase + indirectos;
+  }
+}
                   const venta = (Number(e.cantidad) || 0) * (Number(e.ventaUnit) || 0);
                   const res = venta - costoTotal;
                   const mgn = venta > 0 ? (res / venta) * 100 : 0;
