@@ -1,8 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
-
 const SHEET_ID = '1fJVmm7i5g1IfOLHDTByRM-W01pWIF46k7aDOYsH4UKA';
 
-// Limpia y convierte strings numéricos a Number de forma robusta
 const cleanNum = (val) => {
   if (val === undefined || val === null || val === '') return 0;
   let s = String(val);
@@ -17,7 +14,6 @@ const cleanNum = (val) => {
   return isNaN(n) ? 0 : n;
 };
 
-// Normaliza keys para búsqueda tolerante (quita acentos, espacios, minúsculas)
 const normalizeKey = (k) => {
   if (!k && k !== 0) return '';
   const s = String(k).toLowerCase().trim();
@@ -27,7 +23,6 @@ const normalizeKey = (k) => {
   return out;
 };
 
-// Busca en un objeto map original por clave tolerante
 const tolerantGet = (mapObj, key) => {
   if (!mapObj) return 0;
   const nk = normalizeKey(key);
@@ -35,6 +30,176 @@ const tolerantGet = (mapObj, key) => {
     if (normalizeKey(k) === nk) return mapObj[k];
   }
   return mapObj[key] !== undefined ? mapObj[key] : 0;
+};
+
+const descargarHTML = (eerr, propuesta, escenarios, aportePorCliente, config) => {
+  const html = `
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reporte Horizon Finance Engine 2026</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px; }
+    .container { max-width: 1200px; margin: 0 auto; background: white; border-radius: 20px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); overflow: hidden; }
+    .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 40px; text-align: center; }
+    .header h1 { font-size: 36px; font-weight: 900; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 10px; }
+    .header p { font-size: 14px; opacity: 0.9; }
+    .section { padding: 30px 40px; border-bottom: 2px solid #f3f4f6; }
+    .section:last-child { border-bottom: none; }
+    .section-title { font-size: 20px; font-weight: 900; color: #1f2937; margin-bottom: 20px; text-transform: uppercase; display: flex; align-items: center; gap: 10px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+    th { background: #f9fafb; color: #6b7280; font-size: 11px; font-weight: 700; text-transform: uppercase; padding: 12px; text-align: left; border-bottom: 2px solid #e5e7eb; }
+    td { padding: 12px; border-bottom: 1px solid #f3f4f6; font-size: 13px; }
+    tr:hover { background: #f9fafb; }
+    .text-right { text-align: right; }
+    .text-center { text-align: center; }
+    .font-bold { font-weight: 700; }
+    .text-green { color: #059669; }
+    .text-red { color: #dc2626; }
+    .text-blue { color: #2563eb; }
+    .text-purple { color: #7c3aed; }
+    .badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 900; }
+    .badge-green { background: #d1fae5; color: #065f46; }
+    .badge-yellow { background: #fef3c7; color: #92400e; }
+    .badge-red { background: #fee2e2; color: #991b1b; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-top: 20px; }
+    .kpi-card { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+    .kpi-label { font-size: 11px; font-weight: 700; text-transform: uppercase; opacity: 0.9; margin-bottom: 8px; }
+    .kpi-value { font-size: 28px; font-weight: 900; }
+    .footer { background: #f9fafb; padding: 20px 40px; text-align: center; font-size: 12px; color: #6b7280; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🚀 Horizon Finance Engine 2026</h1>
+      <p>Estado de Resultados Proyectado (Base Dic-25 + Propuesta)</p>
+      <p style="margin-top: 10px; font-size: 12px;">Generado el ${new Date().toLocaleString('es-AR')}</p>
+    </div>
+
+    <div class="section">
+      <div class="section-title">📊 KPIs Principales</div>
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-label">Ingreso Total</div>
+          <div class="kpi-value">${new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(eerr.ingresoTotal)}</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Ganancia Neta</div>
+          <div class="kpi-value">${new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(eerr.gananciaNetaTotal)}</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Margen Neto</div>
+          <div class="kpi-value">${eerr.margenNetoPct.toFixed(1)}%</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Venta Propuesta</div>
+          <div class="kpi-value">${new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(propuesta.ventasTotales)}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">💼 Servicios Simulados</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Cliente</th>
+            <th>Servicio</th>
+            <th class="text-center">Cant</th>
+            <th class="text-right">Venta Unit</th>
+            <th class="text-right">Sueldo Bruto</th>
+            <th class="text-right">Costo Total</th>
+            <th class="text-right">Resultado</th>
+            <th class="text-center">Margen</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${escenarios.map(e => {
+            const p = config.preciosNuevos[e.tipoIdx];
+            const isStaff = p && (p.categoria || '').toLowerCase().includes('staff');
+            let costoTotal = 0;
+            if (p) {
+              if (isStaff) {
+                const sueldo = (Number(e.cantidad) || 0) * (Number(e.sueldoBruto) || 0);
+                costoTotal = sueldo + (sueldo * config.pctCostoLaboral/100) + (sueldo * config.pctIndirectos/100);
+              } else {
+                const base = (Number(e.cantidad) || 0) * (Number(p.costoFijo) || 0);
+                costoTotal = base + (base * config.pctIndirectos/100);
+              }
+            }
+            const venta = (Number(e.cantidad) || 0) * (Number(e.ventaUnit) || 0);
+            const res = venta - costoTotal;
+            const mgn = venta > 0 ? (res / venta) * 100 : 0;
+            const badgeClass = mgn >= config.margenObjetivo ? 'badge-green' : mgn >= 15 ? 'badge-yellow' : 'badge-red';
+            
+            return `
+              <tr>
+                <td class="font-bold">${e.cliente}</td>
+                <td class="text-purple">${p ? p.categoria + ' - ' + p.tipo : 'N/A'}</td>
+                <td class="text-center font-bold">${e.cantidad}</td>
+                <td class="text-right">${new Intl.NumberFormat('es-AR').format(e.ventaUnit)}</td>
+                <td class="text-right">${isStaff ? new Intl.NumberFormat('es-AR').format(e.sueldoBruto) : '-'}</td>
+                <td class="text-right text-red">-${new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(costoTotal)}</td>
+                <td class="text-right text-green font-bold">${new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(res)}</td>
+                <td class="text-center"><span class="badge ${badgeClass}">${mgn.toFixed(1)}%</span></td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="section">
+      <div class="section-title">📈 Aporte por Cliente</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Cliente</th>
+            <th class="text-right">Venta Total</th>
+            <th class="text-right">Costo Total</th>
+            <th class="text-right">Resultado</th>
+            <th class="text-right">Margen %</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${Object.entries(aportePorCliente).map(([cliente, datos]) => {
+            const badgeClass = datos.margen >= config.margenObjetivo ? 'badge-green' : datos.margen >= 15 ? 'badge-yellow' : 'badge-red';
+            return `
+              <tr>
+                <td class="font-bold text-blue">${cliente}</td>
+                <td class="text-right">${new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(datos.venta)}</td>
+                <td class="text-right text-red">${new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(datos.costo)}</td>
+                <td class="text-right text-green font-bold">${new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(datos.resultado)}</td>
+                <td class="text-right"><span class="badge ${badgeClass}">${datos.margen.toFixed(1)}%</span></td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="footer">
+      <p><strong>Horizon Finance Engine 2026</strong> | Reporte generado automáticamente</p>
+      <p style="margin-top: 5px;">Configuración: Indirectos ${config.pctIndirectos}% | Costo Laboral ${config.pctCostoLaboral}% | Margen Objetivo ${config.margenObjetivo}%</p>
+    </div>
+  </div>
+</body>
+</html>
+  `;
+
+  const blob = new Blob([html], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `Reporte_Horizon_${new Date().toISOString().split('T')[0]}.html`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 };
 
 const fetchSheet = async (sheetName) => {
@@ -131,12 +296,12 @@ function App() {
         });
 
         const preciosProcesados = precios.map(p => ({
-  categoria: p['Categoria'] ?? p['Categoría'] ?? Object.values(p)[0] ?? 'Otros',
-  tipo: p['Tipo'] ?? Object.values(p)[1] ?? 'Default',
-  valor: cleanNum(p['Valor (ARS)'] ?? p['Valor'] ?? Object.values(p)[2]),
-  sueldoSugerido: cleanNum(p['Sueldo Sugerido (ARS)'] ?? p['Sueldo Sugerido'] ?? Object.values(p)[3]),
-  costoFijo: cleanNum(p['Costo Fijo (ARS)'] ?? p['Costo Fijo'] ?? Object.values(p)[4])
-}));
+          categoria: p['Categoria'] ?? p['Categoría'] ?? Object.values(p)[0] ?? 'Otros',
+          tipo: p['Tipo'] ?? Object.values(p)[1] ?? 'Default',
+          valor: cleanNum(p['Valor (ARS)'] ?? p['Valor'] ?? Object.values(p)[2]),
+          sueldoSugerido: cleanNum(p['Sueldo Sugerido (ARS)'] ?? p['Sueldo Sugerido'] ?? Object.values(p)[3]),
+          costoFijo: cleanNum(p['Costo Fijo (ARS)'] ?? p['Costo Fijo'] ?? Object.values(p)[4])
+        }));
 
         const clientesProcesados = clientes.map(c => {
           return c['Cliente'] ?? c['cliente'] ?? c['Name'] ?? Object.values(c)[0] ?? '';
@@ -219,13 +384,12 @@ function App() {
         const num = typeof valor === 'string' ? parseInt(valor.replace(/\D/g, '')) || 0 : Number(valor || 0);
         updated[campo] = num;
       } else if (campo === 'tipoIdx') {
-  updated.tipoIdx = Number(valor) || 0;
-  const p = dataSheets.preciosNuevos[Number(valor)];
-  if (p) {
-    // Forzar actualización siempre
-    updated.sueldoBruto = p.sueldoSugerido ?? 0;
-    updated.ventaUnit = p.valor ?? 0;
-  }
+        updated.tipoIdx = Number(valor) || 0;
+        const p = dataSheets.preciosNuevos[Number(valor)];
+        if (p) {
+          updated.sueldoBruto = p.sueldoSugerido ?? 0;
+          updated.ventaUnit = p.valor ?? 0;
+        }
       } else if (campo === 'cantidad') {
         updated.cantidad = Number(valor) || 0;
       } else if (campo === 'cliente') {
@@ -497,6 +661,7 @@ function App() {
                <button onClick={guardarEscenario} className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold hover:shadow-lg transition">💾 Guardar Escenario</button>
                <button onClick={() => { if(window.confirm('¿Limpiar todos los campos?')) setEscenarios([]); }} className="text-slate-400 hover:text-slate-600 text-xs font-bold px-3 py-1">Limpiar</button>
                <button onClick={agregarFila} disabled={dataSheets.loading} className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold hover:shadow-lg transition disabled:opacity-60">+ Agregar</button>
+               <button onClick={() => descargarHTML(eerr, propuesta, escenarios, aportePorCliente, { preciosNuevos: dataSheets.preciosNuevos, pctIndirectos, pctCostoLaboral, margenObjetivo })} className="bg-gradient-to-r from-orange-500 to-red-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold hover:shadow-lg transition">📄 Descargar HTML</button>
             </div>
           </div>
           <div className="overflow-x-auto">
@@ -792,4 +957,4 @@ function App() {
   );
 }
 
-export default App;
+App;
