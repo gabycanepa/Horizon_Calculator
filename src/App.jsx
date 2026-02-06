@@ -43,9 +43,10 @@ const fetchSheet = async (sheetName) => {
   const text = await response.text();
   const lines = text.split('\n').filter(l => l.trim() !== '');
   if (lines.length === 0) return [];
-  const headers = lines[0].replace(/(^"|"$)/g, '').split(',').map(h => h.trim());
+  const separator = lines[0].includes(';') ? ';' : ',';
+const headers = lines[0].replace(/(^"|"$)/g, '').split(separator);
   return lines.slice(1).map(line => {
-    const cells = line.replace(/(^"|"$)/g, '').split(',').map(c => c.trim());
+    onst cells = line.replace(/(^"|"$)/g, '').split(separator);
     const obj = {};
     for (let i = 0; i < headers.length; i++) {
       obj[headers[i]] = cells[i] !== undefined ? cells[i] : '';
