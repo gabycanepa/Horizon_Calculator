@@ -1,21 +1,8 @@
-const SHEET_ID = '1vTJQrYIRPWBawtIIUdL4NvJcbDDwNCQf8YiXKl7t6BFi1mfVwQT4nuFAqX2YTKA5Q05Y6nBGhALckdf';
+ULTIMO CODIGO QUE FUNCIONÓ CON CONEXION A SHEETS
 
-// LISTAS POR DEFECTO (FALLBACK)
-const CLIENTES_DEFAULT = ['Arcos Dorados', 'Unilever', 'Macro', 'Nuevo Cliente'];
+import React, { useState, useEffect, useMemo } from 'react';
 
-const SERVICIOS_DEFAULT = [
-  { categoria: 'Staff Augmentation', tipo: 'Analista Jr', valor: 6000000, sueldoSugerido: 2500000, costoFijo: 0 },
-  { categoria: 'Staff Augmentation', tipo: 'Analista SSR', valor: 7500000, sueldoSugerido: 3200000, costoFijo: 0 },
-  { categoria: 'Staff Augmentation', tipo: 'Analista SR', valor: 9000000, sueldoSugerido: 4000000, costoFijo: 0 },
-  { categoria: 'Staff Augmentation', tipo: 'Team Leader', valor: 11000000, sueldoSugerido: 5000000, costoFijo: 0 },
-  { categoria: 'Staff Augmentation', tipo: 'Jefe', valor: 13000000, sueldoSugerido: 6000000, costoFijo: 0 },
-  { categoria: 'Staff Augmentation', tipo: 'Gerente', valor: 16000000, sueldoSugerido: 7500000, costoFijo: 0 },
-  { categoria: 'Staff Augmentation', tipo: 'Project Manager', valor: 12000000, sueldoSugerido: 5500000, costoFijo: 0 },
-  { categoria: 'Staff Augmentation', tipo: 'Scrum Master', valor: 10000000, sueldoSugerido: 4500000, costoFijo: 0 },
-  { categoria: 'Workshop', tipo: 'Workshop', valor: 5500000, sueldoSugerido: 0, costoFijo: 2200000 },
-  { categoria: 'Coaching', tipo: 'Coaching', valor: 4000000, sueldoSugerido: 0, costoFijo: 1600000 },
-  { categoria: 'Programas', tipo: 'Programa de Liderazgo', valor: 8000000, sueldoSugerido: 0, costoFijo: 3200000 }
-];
+const SHEET_ID = '1fJVmm7i5g1IfOLHDTByRM-W01pWIF46k7aDOYsH4UKA';
 
 // Limpia y convierte strings numéricos a Number de forma robusta
 const cleanNum = (val) => {
@@ -146,24 +133,12 @@ function App() {
           costoFijo: cleanNum(p['Costo'] ?? p['Costo Fijo'] ?? Object.values(p)[4])
         }));
 
-        let clientesProcesados = clientes.map(c => {
+        const clientesProcesados = clientes.map(c => {
           return c['Cliente'] ?? c['cliente'] ?? c['Name'] ?? Object.values(c)[0] ?? '';
         }).filter(Boolean);
 
-        // FALLBACK: Si no hay clientes desde Sheets, usar lista por defecto
-        if (clientesProcesados.length === 0) {
-          console.warn('⚠️ No se encontraron clientes en Sheets. Usando lista por defecto.');
-          clientesProcesados = [...CLIENTES_DEFAULT];
-        }
-
-        // FALLBACK: Si no hay servicios desde Sheets, usar lista por defecto
-        let serviciosFinales = preciosProcesados.length > 0 ? preciosProcesados : [...SERVICIOS_DEFAULT];
-        if (preciosProcesados.length === 0) {
-          console.warn('⚠️ No se encontraron servicios en Sheets. Usando lista por defecto.');
-        }
-
         setDataSheets({
-          preciosNuevos: serviciosFinales,
+          preciosNuevos: preciosProcesados,
           clientes: clientesProcesados,
           config: configObj,
           eerrBase: eerrObj,
@@ -177,43 +152,21 @@ function App() {
         setGastosOperativos(configObj['Gastos Operativos'] ?? 46539684.59);
         setMargenObjetivo(configObj['Margen Objetivo (%)'] ?? 25);
 
-        if (serviciosFinales.length > 0) {
+        if (preciosProcesados.length > 0) {
           setEscenarios([{
             id: Date.now(),
             cliente: clientesProcesados[0] || 'Nuevo Cliente',
             tipoIdx: 0,
             cantidad: 1,
-            sueldoBruto: serviciosFinales[0].sueldoSugerido || 0,
-            ventaUnit: serviciosFinales[0].valor || 0
+            sueldoBruto: preciosProcesados[0].sueldoSugerido || 0,
+            ventaUnit: preciosProcesados[0].valor || 0
           }]);
         } else {
           setEscenarios([]);
         }
       } catch (error) {
         console.error('Error cargando sheets', error);
-        // FALLBACK TOTAL: Si falla la carga, usar listas por defecto
-        console.warn('⚠️ Error al cargar Sheets. Usando datos por defecto.');
-        setDataSheets({
-          preciosNuevos: [...SERVICIOS_DEFAULT],
-          clientes: [...CLIENTES_DEFAULT],
-          config: {},
-          eerrBase: {},
-          eerrBaseNorm: {},
-          loading: false,
-          error: null
-        });
-        setPctIndirectos(37);
-        setPctCostoLaboral(45);
-        setGastosOperativos(46539684.59);
-        setMargenObjetivo(25);
-        setEscenarios([{
-          id: Date.now(),
-          cliente: CLIENTES_DEFAULT[0],
-          tipoIdx: 0,
-          cantidad: 1,
-          sueldoBruto: SERVICIOS_DEFAULT[0].sueldoSugerido,
-          ventaUnit: SERVICIOS_DEFAULT[0].valor
-        }]);
+        setDataSheets(prev => ({ ...prev, loading: false, error: 'Error cargando datos desde Google Sheets.' }));
       }
     };
     cargarDatos();
@@ -470,11 +423,10 @@ function App() {
               {lineas.map((linea) => (
                 <div key={linea.id} className="flex gap-2 items-center">
                   <select value={linea.cliente} onChange={(e) => actualizarLineaVenta(tipo, linea.id, 'cliente', e.target.value)} className="flex-1 bg-white border border-blue-200 rounded px-2 py-1 text-xs font-medium text-slate-700 focus:outline-none">
-                    <option value="">Seleccionar cliente...</option>
                     {dataSheets.clientes && dataSheets.clientes.length > 0 ? (
                       dataSheets.clientes.map(c => <option key={c} value={c}>{c}</option>)
                     ) : (
-                      <option value="" disabled>Cargando clientes...</option>
+                      <option value="">Cargando clientes...</option>
                     )}
                   </select>
                   <input type="text" value={linea.monto === '' ? '' : formatNum(linea.monto)} onChange={(e) => {
@@ -756,92 +708,82 @@ function App() {
                       <td className="p-3 text-right font-bold bg-green-50 border-r border-green-200">0%</td>
                       <td className="p-3 text-right font-mono text-red-600 bg-blue-50 border-r border-blue-200">{format(eerr.otrosGastosTotal)}</td>
                       <td className="p-3 text-right font-bold bg-blue-50">{formatPct((eerr.otrosGastosTotal / eerr.ingresoTotal) * 100)}</td>
-</tr>
-                    <tr className="bg-gradient-to-r from-purple-100 to-pink-100 font-black">
-                      <td className="p-3 text-purple-700 uppercase">Ganancia neta</td>
-                      <td className="p-3 text-right font-mono text-purple-700 border-r border-purple-200">{format(tolerantGet(dataSheets.eerrBase, 'Ganancia neta'))}</td>
-                      <td className="p-3 text-right font-bold border-r border-purple-200">{((tolerantGet(dataSheets.eerrBase, 'Ganancia neta') / (tolerantGet(dataSheets.eerrBase, 'Ingreso') || 1)) * 100).toFixed(0)}%</td>
-                      <td className="p-3 text-right font-mono text-green-700 bg-green-100 border-r border-green-300">{format(propuesta.margenBruto)}</td>
-                      <td className="p-3 text-right font-bold bg-green-100 border-r border-green-300">{formatPct(propuesta.margenBrutoPct)}</td>
-                      <td className="p-3 text-right font-mono text-blue-700 bg-blue-100 border-r border-blue-300">{format(eerr.gananciaNetaTotal)}</td>
-                      <td className="p-3 text-right font-bold bg-blue-100">{formatPct(eerr.margenNetoPct)}</td>
+                    </tr>
+                    <tr className="bg-gradient-to-r from-purple-100 to-pink-100 border-t-4 border-purple-400">
+                      <td className="p-4 font-black text-slate-900 text-sm">Ganancia neta</td>
+                      <td className="p-4 text-right font-mono font-black text-purple-700 border-r border-purple-200 text-sm">{format(tolerantGet(dataSheets.eerrBase, 'Ganancia neta'))}</td>
+                      <td className="p-4 text-right font-black border-r border-purple-200">{formatPct((tolerantGet(dataSheets.eerrBase, 'Ganancia neta') / tolerantGet(dataSheets.eerrBase, 'Ingreso')) * 100)}</td>
+                      <td className="p-4 text-right font-mono font-black text-green-700 bg-green-100 border-r border-green-300 text-sm">{format(propuesta.margenBruto)}</td>
+                      <td className="p-4 text-right font-black bg-green-100 border-r border-green-300">{formatPct(propuesta.margenBrutoPct)}</td>
+                      <td className="p-4 text-right font-mono font-black text-blue-700 bg-blue-100 border-r border-blue-300 text-sm">{format(eerr.gananciaNetaTotal)}</td>
+                      <td className="p-4 text-right font-black bg-blue-100">{formatPct(eerr.margenNetoPct)}</td>
                     </tr>
                   </tbody>
                 </table>
               </div>
 
-              {/* DESVÍO VS BASE */}
-              <div className="p-6 bg-gradient-to-br from-purple-50 to-pink-50 border-t border-purple-100">
-                <h3 className="text-xs font-black text-purple-600 uppercase mb-4">📈 Desvío vs Base (Dic-25)</h3>
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="bg-white rounded-lg p-4 border-2 border-green-200 shadow-sm">
-                    <p className="text-[10px] font-bold text-green-600 uppercase mb-1">Δ Ingreso</p>
-                    <p className="text-2xl font-black text-green-700">{format(desvioVsBase.ingreso)}</p>
-                  </div>
-                  <div className="bg-white rounded-lg p-4 border-2 border-red-200 shadow-sm">
-                    <p className="text-[10px] font-bold text-red-600 uppercase mb-1">Δ Costo</p>
-                    <p className="text-2xl font-black text-red-700">-{format(desvioVsBase.costo)}</p>
-                  </div>
-                  <div className="bg-white rounded-lg p-4 border-2 border-blue-200 shadow-sm">
-                    <p className="text-[10px] font-bold text-blue-600 uppercase mb-1">Δ Ganancia Neta</p>
-                    <p className="text-2xl font-black text-blue-700">{format(desvioVsBase.gananciaNeta)}</p>
-                  </div>
+              {/* DESVÍO VS BASE DIC-25 */}
+              <div className="bg-purple-100 rounded-xl shadow-lg border border-purple-400 p-6 mt-6">
+                <div className="flex justify-between items-center">
+                  <div className="text-purple-900 font-black uppercase text-sm">DESVÍO VS BASE DIC-25</div>
+                  <div className="text-right font-black text-lg text-purple-900">MARGEN NETO TOTAL <br /> <span className="text-3xl">{eerr.margenNetoPct ? eerr.margenNetoPct.toFixed(1) : '0.0'}%</span></div>
                 </div>
+                <div className="mt-4 flex gap-6 text-sm font-bold">
+                  <div className="text-green-700">Ingreso: +{format(desvioVsBase.ingreso)}</div>
+                  <div className="text-red-600">Costo: +{format(desvioVsBase.costo)}</div>
+                  <div className="text-green-700">Ganancia Neta: +{format(desvioVsBase.gananciaNeta)}</div>
+                </div>
+              </div>
+
+              {/* APORTE POR CLIENTE */}
+              <div className="bg-white rounded-xl shadow-sm border border-blue-200 overflow-hidden mb-6 p-4">
+                <h2 className="font-bold text-blue-700 text-sm mb-4 uppercase">Aporte por Cliente (Propuesta)</h2>
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-blue-50 text-blue-600 font-bold uppercase text-[10px]">
+                      <th className="p-3 border border-blue-200">Cliente</th>
+                      <th className="p-3 border border-blue-200 text-right">Venta Total</th>
+                      <th className="p-3 border border-blue-200 text-right">Costo Total</th>
+                      <th className="p-3 border border-blue-200 text-right">Resultado</th>
+                      <th className="p-3 border border-blue-200 text-right">Margen %</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.entries(aportePorCliente).length === 0 ? (
+                      <tr><td className="p-4" colSpan={5}>Sin datos</td></tr>
+                    ) : Object.entries(aportePorCliente).map(([cliente, datos]) => (
+                      <tr key={cliente} className="border-b border-blue-100 hover:bg-blue-50/30">
+                        <td className="p-3 font-bold text-blue-700">{cliente}</td>
+                        <td className="p-3 text-right font-mono">{format(datos.venta)}</td>
+                        <td className="p-3 text-right font-mono text-red-600">{format(datos.costo)}</td>
+                        <td className="p-3 text-right font-bold text-green-600">{format(datos.resultado)}</td>
+                        <td className={`p-3 text-right font-black text-[10px] px-2 py-1 rounded ${
+                          datos.margen >= margenObjetivo ? 'bg-green-100 text-green-700' :
+                          datos.margen >= 15 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'
+                        }`}>
+                          {datos.margen.toFixed(1)}%
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </>
           )}
         </div>
 
         {/* VELOCÍMETROS */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-          {renderVelocimetro('Ventas Totales 2026', objVentasTotal, lineasVentaTotal, setLineasVentaTotal, 'total', '#8b5cf6')}
-          {renderVelocimetro('Renovación 2026', objRenovacion, lineasRenovacion, setLineasRenovacion, 'renovacion', '#ec4899')}
-          {renderVelocimetro('Incremental 2026', objIncremental, lineasIncremental, setLineasIncremental, 'incremental', '#3b82f6')}
-        </div>
-
-        {/* APORTE POR CLIENTE */}
-        <div className="bg-white rounded-xl shadow-lg border border-purple-200 overflow-hidden">
-          <div className="p-4 border-b border-purple-100 bg-gradient-to-r from-purple-600 to-pink-600 text-white">
-            <h2 className="font-bold text-sm">💰 Aporte por Cliente (Propuesta)</h2>
-          </div>
-          <div className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {Object.keys(aportePorCliente).length === 0 ? (
-                <div className="col-span-full text-center py-8 text-slate-400 text-sm italic">No hay datos de clientes en la propuesta.</div>
-              ) : (
-                Object.keys(aportePorCliente).map(cliente => {
-                  const r = aportePorCliente[cliente];
-                  return (
-                    <div key={cliente} className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg p-4 border border-purple-200 shadow-sm hover:shadow-md transition">
-                      <h3 className="font-black text-purple-700 text-sm uppercase mb-3 truncate">{cliente}</h3>
-                      <div className="space-y-2">
-                        <div className="flex justify-between text-xs">
-                          <span className="text-slate-500 font-bold">Venta:</span>
-                          <span className="font-bold text-green-600">{format(r.venta)}</span>
-                        </div>
-                        <div className="flex justify-between text-xs">
-                          <span className="text-slate-500 font-bold">Costo:</span>
-                          <span className="font-bold text-red-600">-{format(r.costo)}</span>
-                        </div>
-                        <div className="flex justify-between text-xs pt-2 border-t border-purple-200">
-                          <span className="text-slate-700 font-black">Resultado:</span>
-                          <span className="font-black text-blue-700">{format(r.resultado)}</span>
-                        </div>
-                        <div className="flex justify-between items-center pt-1">
-                          <span className="text-[10px] text-slate-500 font-bold uppercase">Margen:</span>
-                          <span className={`text-xs font-black px-2 py-1 rounded ${r.margen >= margenObjetivo ? 'bg-green-100 text-green-700' : r.margen >= 15 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>
-                            {r.margen.toFixed(1)}%
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
+        <div className="mb-6">
+          <h2 className="text-lg font-black text-slate-700 uppercase mb-4">🎯 Objetivos 2026 - Tracking de Ventas</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {renderVelocimetro("Objetivo Ventas Total 2026", objVentasTotal, lineasVentaTotal, setLineasVentaTotal, "total", "#7c3aed")}
+            {renderVelocimetro("Objetivo Renovación 2026", objRenovacion, lineasRenovacion, setLineasRenovacion, "renovacion", "#ec4899")}
+            {renderVelocimetro("Objetivo Ventas Incremental 2026", objIncremental, lineasIncremental, setLineasIncremental, "incremental", "#3b82f6")}
           </div>
         </div>
       </div>
     </div>
   );
 }
+
+export default App;
