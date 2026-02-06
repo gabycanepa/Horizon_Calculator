@@ -608,9 +608,20 @@ function App() {
           </div>
           <div className="flex gap-3">
              <div className="bg-white px-4 py-2 rounded-lg shadow-sm border border-purple-100">
-                <span className="text-[10px] font-bold text-purple-400 block uppercase">Gastos Op.</span>
-                <input type="number" value={gastosOperativos} onChange={e => setGastosOperativos(cleanNum(e.target.value))} className="w-32 font-bold text-red-600 focus:outline-none text-xs" />
-             </div>
+  <span className="text-[10px] font-bold text-purple-400 block uppercase">Gastos Op.</span>
+  <input 
+    type="text" 
+    /* Aquí aplicamos el formato visual al valor */
+    value={gastosOperativos === 0 ? '' : formatNum(gastosOperativos)} 
+    onChange={e => {
+      /* Aquí limpiamos el string para que el estado sea un número puro */
+      const rawValue = e.target.value.replace(/\./g, '').replace(/\s/g, '');
+      const num = rawValue === '' ? 0 : parseFloat(rawValue) || 0;
+      setGastosOperativos(num);
+    }} 
+    className="w-32 font-bold text-red-600 focus:outline-none text-xs bg-transparent" 
+  />
+</div>
              <div className="bg-white px-4 py-2 rounded-lg shadow-sm border border-blue-100">
                 <span className="text-[10px] font-bold text-blue-400 block uppercase">Indirectos</span>
                 <input type="number" value={pctIndirectos} onChange={e => setPctIndirectos(cleanNum(e.target.value))} className="w-16 font-bold text-blue-600 focus:outline-none" />%
