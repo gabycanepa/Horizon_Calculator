@@ -158,20 +158,26 @@ function App() {
         setMargenObjetivo(configObj['Margen Objetivo (%)'] ?? 25);
 
         // --- CARGA DESDE LA NUBE ---
+      
         try {
-          const resNube = await fetch(SCRIPT_URL);
+          // Añadimos ?sheet=HistorialCompartido a la URL
+          const resNube = await fetch(`${SCRIPT_URL}?sheet=HistorialCompartido`);
           const dataNube = await resNube.json();
-          const historialSincronizado = dataNube.map(item => ({
-            id: item.ID,
-            nombre: item.Nombre,
-            fecha: item.Fecha,
-            escenarios: JSON.parse(item.DatosEscenario),
-            config: JSON.parse(item.Configuracion),
-            eerr: JSON.parse(item.EERR || "{}")
-          }));
-          setHistorial(historialSincronizado);
-        } catch(e) { console.error("Error nube:", e); }
-
+          
+          if (dataNube && Array.isArray(dataNube)) {
+            const historialSincronizado = dataNube.map(item => ({
+              id: item.ID,
+              nombre: item.Nombre,
+              fecha: item.Fecha,
+              escenarios: item.DatosEscenario ? JSON.parse(item.DatosEscenario) : [],
+              config: item.Configuracion ? JSON.parse(item.Configuracion) : {},
+              eerr: item.EERR ? JSON.parse(item.EERR) : {}
+            }));
+            setHistorial(historialSincronizado);
+          }
+        } catch(e) { 
+          console.error("Error cargando historial de la nube:", e); 
+        }
         if (preciosProcesados.length > 0) {
           setEscenarios([{
             id: Date.now(),
@@ -379,20 +385,22 @@ function App() {
     };
 
     try {
-      // Usar FormData para asegurar que Apps Script reciba los datos correctamente
-      const formData = new URLSearchParams();
-      formData.append('payload', JSON.stringify(nuevoRegistro));
+      // Usamos URLSearchParams para que Apps Script lo reciba en e.parameter
+      const params = new URLSearchParams();
+      params.append('payload', JSON.stringify(nuevoRegistro));
+      params.append('sheet', 'HistorialCompartido'); // INDICAMOS LA HOJA AQUÍ
 
       await fetch(SCRIPT_URL, {
         method: 'POST',
-        mode: 'no-cors', // Necesario para Apps Script
+        mode: 'no-cors', 
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: formData.toString()
+        body: params.toString()
       });
 
       setHistorial(prev => [nuevoRegistro, ...prev]);
-      alert(`✅ Sincronizado en Google Sheets.`);
+      alert(`✅ Sincronizado en la pestaña "HistorialCompartido"`);
     } catch(e) {
+      console.error("Error sincronización:", e);
       alert("Error al sincronizar.");
     }
   };
