@@ -82,6 +82,9 @@ function App() {
   const [gastosOperativos, setGastosOperativos] = useState(0);
   const [margenObjetivo, setMargenObjetivo] = useState(0);
 
+  // CORRECCIÓN 1: Estado para controlar cuándo la app terminó de cargar la nube
+  const [isReady, setIsReady] = useState(false);
+
   const [objVentasTotal] = useState(2195176117);
   const [lineasVentaTotal, setLineasVentaTotal] = useState(() => {
     try { return JSON.parse(localStorage.getItem('hzn_lineasVenta')) || [{ id: 1, cliente: '', monto: '' }]; } catch(e){ return [{ id:1, cliente:'', monto:'' }]; }
@@ -158,27 +161,51 @@ function App() {
         setMargenObjetivo(configObj['Margen Objetivo (%)'] ?? 25);
 
         // --- CARGA DESDE LA NUBE ---
-      
         try {
-          // Añadimos ?sheet=HistorialCompartido a la URL
           const resNube = await fetch(`${SCRIPT_URL}?sheet=HistorialCompartido`);
           const dataNube = await resNube.json();
           
           if (dataNube && Array.isArray(dataNube)) {
-            const historialSincronizado = dataNube.map(item => ({
-              id: item.ID,
-              nombre: item.Nombre,
-              fecha: item.Fecha,
-              escenarios: item.DatosEscenario ? JSON.parse(item.DatosEscenario) : [],
-              config: item.Configuracion ? JSON.parse(item.Configuracion) : {},
-              eerr: item.EERR ? JSON.parse(item.EERR) : {}
-            }));
+            // CORRECCIÓN 2: Función interna para buscar propiedades sin importar mayúsculas
+            const findKey = (obj, k) => Object.keys(obj).find(key => key.toLowerCase() === k.toLowerCase());
+
+            const historialSincronizado = dataNube.map(item => {
+              const dEsc = item[findKey(item, 'DatosEscenario')];
+              const conf = item[findKey(item, 'Configuracion')];
+              const eerr = item[findKey(item, 'EERR')];
+
+              return {
+                id: item[findKey(item, 'ID')] ? String(item[findKey(item, 'ID')]).replace(/'/g, "") : Date.now(),
+                nombre: item[findKey(item, 'Nombre')] || "Sin nombre",
+                fecha: item[findKey(item, 'Fecha')] || "",
+                escenarios: typeof dEsc === 'string' ? JSON.parse(dEsc) : (dEsc || []),
+                config: typeof conf === 'string' ? JSON.parse(conf) : (conf || {}),
+                eerr: typeof eerr === 'string' ? JSON.parse(eerr) : (eerr || {})
+              };
+            });
             setHistorial(historialSincronizado);
+
+            // CARGA AUTOMÁTICA DEL ÚLTIMO ESCENARIO AL ENTRAR
+            const ultimo = historialSincronizado[historialSincronizado.length - 1];
+            if (ultimo && ultimo.escenarios.length > 0) {
+              setEscenarios(ultimo.escenarios);
+              if (ultimo.config) {
+                setPctIndirectos(ultimo.config.pctIndirectos ?? 37);
+                setPctCostoLaboral(ultimo.config.pctCostoLaboral ?? 45);
+                setGastosOperativos(ultimo.config.gastosOperativos ?? 46539684.59);
+                setMargenObjetivo(ultimo.config.margenObjetivo ?? 25);
+                if(ultimo.config.lineasVentaTotal) setLineasVentaTotal(ultimo.config.lineasVentaTotal);
+                if(ultimo.config.lineasRenovacion) setLineasRenovacion(ultimo.config.lineasRenovacion);
+                if(ultimo.config.lineasIncremental) setLineasIncremental(ultimo.config.lineasIncremental);
+              }
+            }
           }
         } catch(e) { 
           console.error("Error cargando historial de la nube:", e); 
         }
-        if (preciosProcesados.length > 0) {
+
+        // Si después de la nube no hay escenarios cargados, creamos uno inicial
+        if (preciosProcesados.length > 0 && escenarios.length === 0) {
           setEscenarios([{
             id: Date.now(),
             cliente: clientesProcesados[0] || 'Nuevo Cliente',
@@ -187,9 +214,11 @@ function App() {
             sueldoBruto: preciosProcesados[0].sueldoSugerido || 0,
             ventaUnit: preciosProcesados[0].valor || 0
           }]);
-        } else {
-          setEscenarios([]);
         }
+        
+        // Desbloqueamos el guardado en LocalStorage
+        setIsReady(true);
+
       } catch (error) {
         console.error('Error cargando sheets', error);
         setDataSheets(prev => ({ ...prev, loading: false, error: 'Error cargando datos desde Google Sheets.' }));
@@ -198,7 +227,10 @@ function App() {
     cargarDatos();
   }, []);
 
+  // CORRECCIÓN 3: Guardar en localStorage solo cuando la carga inicial de la nube terminó (usando isReady)
   useEffect(() => {
+    if (!isReady) return; 
+
     localStorage.setItem('hzn_escenarios', JSON.stringify(escenarios));
     localStorage.setItem('hzn_pctInd', pctIndirectos);
     localStorage.setItem('hzn_pctLab', pctCostoLaboral);
@@ -207,7 +239,7 @@ function App() {
     localStorage.setItem('hzn_lineasVenta', JSON.stringify(lineasVentaTotal));
     localStorage.setItem('hzn_lineasReno', JSON.stringify(lineasRenovacion));
     localStorage.setItem('hzn_lineasIncr', JSON.stringify(lineasIncremental));
-  }, [escenarios, pctIndirectos, pctCostoLaboral, gastosOperativos, margenObjetivo, lineasVentaTotal, lineasRenovacion, lineasIncremental]);
+  }, [escenarios, pctIndirectos, pctCostoLaboral, gastosOperativos, margenObjetivo, lineasVentaTotal, lineasRenovacion, lineasIncremental, isReady]);
 
   const agregarFila = () => {
     if (dataSheets.loading) {
