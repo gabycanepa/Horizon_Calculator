@@ -43,6 +43,24 @@ const fetchSheet = async (sheetName) => {
   const text = await response.text();
   const lines = text.split('\n').filter(l => l.trim() !== '');
   if (lines.length === 0) return [];
+
+  // Esta función separa por coma o punto y coma, pero IGNORA las que están dentro de comillas
+  const parseCSVLine = (line) => {
+    const re = /,(?=(?:(?:[^"]*"){2})*[^"]*$)|;(?=(?:(?:[^"]*"){2})*[^"]*$)/g;
+    return line.split(re).map(cell => cell.replace(/^"|"$/g, '').trim());
+  };
+
+  const headers = parseCSVLine(lines[0]);
+  
+  return lines.slice(1).map(line => {
+    const cells = parseCSVLine(line);
+    const obj = {};
+    headers.forEach((header, i) => {
+      obj[header] = cells[i] !== undefined ? cells[i] : '';
+    });
+    return obj;
+  });
+};
   
   // Detecta si el separador es coma o punto y coma
   const separator = lines[0].includes(';') ? ';' : ',';
@@ -131,9 +149,9 @@ function App() {
         const preciosProcesados = precios.map(p => ({
   categoria: p['Categoria'] ?? p['Categoría'] ?? Object.values(p)[0] ?? 'Otros',
   tipo: p['Tipo'] ?? Object.values(p)[1] ?? 'Default',
-  valor: cleanNum(p['Valor (ARS)'] ?? Object.values(p)[2]),
-  sueldoSugerido: cleanNum(p['Sueldo Sugerido (ARS)'] ?? Object.values(p)[3]),
-  costoFijo: cleanNum(p['Costo Fijo (ARS)'] ?? Object.values(p)[4])
+  valor: cleanNum(p['Valor (ARS)'] ?? p['Valor'] ?? Object.values(p)[2]),
+  sueldoSugerido: cleanNum(p['Sueldo Sugerido (ARS)'] ?? p['Sueldo Sugerido'] ?? Object.values(p)[3]),
+  costoFijo: cleanNum(p['Costo Fijo (ARS)'] ?? p['Costo Fijo'] ?? Object.values(p)[4])
 }));
 
         const clientesProcesados = clientes.map(c => {
