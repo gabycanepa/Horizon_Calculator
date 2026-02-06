@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 
 const SHEET_ID = '1fJVmm7i5g1IfOLHDTByRM-W01pWIF46k7aDOYsH4UKA';
-// URL de tu Apps Script para sincronización compartida de Horizon
+// URL de tu Apps Script para sincronización compartida
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzCxPqker3JsD9YKVDeTY5zOqmguQM10hpRAvUbjlEe3PUOHI8uScpLvAMQ4QvrSu7x/exec';
 
 // Limpia y convierte strings numéricos a Number de forma robusta
@@ -157,7 +157,7 @@ function App() {
         setGastosOperativos(configObj['Gastos Operativos'] ?? 46539684.59);
         setMargenObjetivo(configObj['Margen Objetivo (%)'] ?? 25);
 
-        // --- CARGA DESDE LA NUBE (Apps Script) ---
+        // --- CARGA DESDE LA NUBE ---
         try {
           const resNube = await fetch(SCRIPT_URL);
           const dataNube = await resNube.json();
@@ -167,10 +167,10 @@ function App() {
             fecha: item.Fecha,
             escenarios: JSON.parse(item.DatosEscenario),
             config: JSON.parse(item.Configuracion),
-            eerr: { propuesta: { ventasTotales: 0 } }
+            eerr: JSON.parse(item.EERR || "{}")
           }));
           setHistorial(historialSincronizado);
-        } catch(e) { console.error("Error cargando historial de la nube", e); }
+        } catch(e) { console.error("Error nube:", e); }
 
         if (preciosProcesados.length > 0) {
           setEscenarios([{
@@ -366,30 +366,34 @@ function App() {
   const guardarEscenario = async () => {
     const nombre = window.prompt("Ingrese un nombre para este escenario:", `Escenario ${historial.length + 1}`);
     if (!nombre) return;
-    const eerr = calcularEERRTotal();
+    const eerrActual = calcularEERRTotal();
     const timestamp = new Date().toLocaleString('es-AR');
     
-    const nuevoEscenario = {
+    const nuevoRegistro = {
       id: Date.now(),
       nombre: nombre,
       fecha: timestamp,
-      escenarios: JSON.parse(JSON.stringify(escenarios)),
-      eerr: eerr,
-      config: { pctIndirectos, pctCostoLaboral, gastosOperativos, margenObjetivo, lineasVentaTotal, lineasRenovacion, lineasIncremental }
+      escenarios: escenarios,
+      config: { pctIndirectos, pctCostoLaboral, gastosOperativos, margenObjetivo, lineasVentaTotal, lineasRenovacion, lineasIncremental },
+      eerr: eerrActual
     };
 
     try {
-      // POST a la nube
+      // Usar FormData para asegurar que Apps Script reciba los datos correctamente
+      const formData = new URLSearchParams();
+      formData.append('payload', JSON.stringify(nuevoRegistro));
+
       await fetch(SCRIPT_URL, {
         method: 'POST',
-        mode: 'no-cors',
-        body: JSON.stringify(nuevoEscenario)
+        mode: 'no-cors', // Necesario para Apps Script
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: formData.toString()
       });
-      // Actualización local
-      setHistorial(prev => [nuevoEscenario, ...prev]);
-      alert(`✅ Escenario "${nombre}" guardado y sincronizado en el Sheet.`);
+
+      setHistorial(prev => [nuevoRegistro, ...prev]);
+      alert(`✅ Sincronizado en Google Sheets.`);
     } catch(e) {
-      alert("Error al sincronizar con Horizon Cloud.");
+      alert("Error al sincronizar.");
     }
   };
 
@@ -786,8 +790,8 @@ function App() {
                     </div>
                     <p className="text-[10px] text-slate-400 font-bold mb-3">{item.fecha}</p>
                     <div className="space-y-1 mb-4">
-                      <div className="flex justify-between text-xs"><span className="text-slate-500">Venta Propuesta:</span><span className="font-bold text-green-600">{format(item.eerr.propuesta.ventasTotales)}</span></div>
-                      <div className="flex justify-between text-xs"><span className="text-slate-500">Ganancia Neta:</span><span className="font-bold text-blue-600">{format(item.eerr.gananciaNetaTotal)}</span></div>
+                      <div className="flex justify-between text-xs"><span className="text-slate-500">Venta Propuesta:</span><span className="font-bold text-green-600">{format(item.eerr?.propuesta?.ventasTotales || 0)}</span></div>
+                      <div className="flex justify-between text-xs"><span className="text-slate-500">Ganancia Neta:</span><span className="font-bold text-blue-600">{format(item.eerr?.gananciaNetaTotal || 0)}</span></div>
                     </div>
                     <button onClick={() => {
                       if(window.confirm(`¿Cargar el escenario "${item.nombre}"? Se perderán los cambios actuales.`)) {
@@ -961,7 +965,7 @@ function App() {
                     <tr className="bg-gradient-to-r from-purple-100 to-pink-100 border-t-4 border-purple-400">
                       <td className="p-4 font-black text-slate-900 text-sm">Ganancia neta</td>
                       <td className="p-4 text-right font-mono font-black text-purple-700 border-r border-purple-200 text-sm">{format(tolerantGet(dataSheets.eerrBase, 'Ganancia neta'))}</td>
-                      <td className="p-4 text-right font-black border-r border-purple-200">{formatPct((tolerantGet(dataSheets.eerrBase, 'Ganancia neta') / tolerantGet(dataSheets.eerrBase, 'Ingreso')) * 100)}</td>
+                      <td className="p-4 text-right font-black border-r border-purple-200">{formatPct((tolerantGet(dataSheets.eerrBase, 'Ganancia neta') / (tolerantGet(dataSheets.eerrBase, 'Ingreso') || 1)) * 100)}</td>
                       <td className="p-4 text-right font-mono font-black text-green-700 bg-green-100 border-r border-green-300 text-sm">{format(propuesta.margenBruto)}</td>
                       <td className="p-4 text-right font-black bg-green-100 border-r border-green-300">{formatPct(propuesta.margenBrutoPct)}</td>
                       <td className="p-4 text-right font-mono font-black text-blue-700 bg-blue-100 border-r border-blue-300 text-sm">{format(eerr.gananciaNetaTotal)}</td>
