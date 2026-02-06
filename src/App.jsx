@@ -485,6 +485,12 @@ function App() {
     const totalReal = calcularTotalLineas(lineas);
     const pctCumplimiento = objetivo > 0 ? Math.min((totalReal / objetivo) * 100, 100) : 0;
     const angle = -90 + (pctCumplimiento * 1.8);
+    
+    // El largo total del arco en coordenadas de strokeDasharray es 251.2
+    const totalArcLength = 251.2;
+    const filledLength = (pctCumplimiento / 100) * totalArcLength;
+    const gapLength = totalArcLength - filledLength;
+
     const getColor = () => {
       if (pctCumplimiento >= 100) return '#16a34a';
       if (pctCumplimiento >= 75) return '#eab308';
@@ -497,14 +503,53 @@ function App() {
         <h3 className="text-sm font-black text-center mb-2 uppercase" style={{ color: color }}>{titulo}</h3>
         <div className="relative w-full flex justify-center mb-4">
           <svg viewBox="0 0 200 120" className="w-full max-w-xs">
-            <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#e2e8f0" strokeWidth="20" strokeLinecap="round" />
-            <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke={getColor()} strokeWidth="20" strokeLinecap="round" strokeDasharray={`${(pctCumplimiento / 100) * 251.2} 251.2`} style={{ transition: 'all 0.5s ease' }} />
-            <line x1="100" y1="100" x2="100" y2="30" stroke={getColor()} strokeWidth="3" strokeLinecap="round" transform={`rotate(${angle} 100 100)`} style={{ transition: 'all 0.5s ease' }} />
+            {/* 1. Fondo base (Gris muy claro) */}
+            <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#f1f5f9" strokeWidth="20" strokeLinecap="round" />
+            
+            {/* 2. PARTE DE DIFERENCIA (Rojo) - Se dibuja en el fondo de todo el arco restante */}
+            {pctCumplimiento < 100 && (
+              <path 
+                d="M 20 100 A 80 80 0 0 1 180 100" 
+                fill="none" 
+                stroke="#fee2e2" 
+                strokeWidth="20" 
+                strokeLinecap="round" 
+              />
+            )}
+            {pctCumplimiento < 100 && (
+              <path 
+                d="M 20 100 A 80 80 0 0 1 180 100" 
+                fill="none" 
+                stroke="#ef4444" 
+                strokeWidth="20" 
+                strokeLinecap="round" 
+                strokeDasharray={`${gapLength} ${totalArcLength}`}
+                strokeDashoffset={`-${filledLength}`}
+                style={{ transition: 'all 0.8s ease-out' }}
+              />
+            )}
+
+            {/* 3. PARTE COMPLETADA (Verde/Amarillo/Naranja) */}
+            <path 
+              d="M 20 100 A 80 80 0 0 1 180 100" 
+              fill="none" 
+              stroke={getColor()} 
+              strokeWidth="20" 
+              strokeLinecap="round" 
+              strokeDasharray={`${filledLength} ${totalArcLength}`} 
+              style={{ transition: 'all 0.8s ease-out' }} 
+            />
+            
+            {/* Aguja */}
+            <line x1="100" y1="100" x2="100" y2="30" stroke={getColor()} strokeWidth="3" strokeLinecap="round" transform={`rotate(${angle} 100 100)`} style={{ transition: 'all 0.8s ease-out' }} />
             <circle cx="100" cy="100" r="8" fill={getColor()} />
           </svg>
         </div>
         <div className="text-center mb-4">
           <p className="text-4xl font-black" style={{ color: getColor() }}>{pctCumplimiento.toFixed(1)}%</p>
+          {pctCumplimiento < 100 && (
+            <p className="text-[10px] font-bold text-red-500 uppercase mt-1">Faltan: {format(objetivo - totalReal)}</p>
+          )}
         </div>
         <div className="space-y-3 bg-gradient-to-br from-purple-50 to-pink-50 p-4 rounded-lg">
           <div>
