@@ -310,7 +310,8 @@ function App() {
         tipoIdx: 0,
         cantidad: 1,
         sueldoBruto: precioDefault.sueldoSugerido || 0,
-        ventaUnit: precioDefault.valor || 0
+        ventaUnit: precioDefault.valor || 0,
+        mesesInflacion: 0
       }
     ]));
   };
@@ -322,6 +323,8 @@ function App() {
       if (campo === 'ventaUnit' || campo === 'sueldoBruto') {
         const num = typeof valor === 'string' ? parseInt(valor.replace(/\D/g, '')) || 0 : Number(valor || 0);
         updated[campo] = num;
+      } else if (campo === 'mesesInflacion') {
+        updated.mesesInflacion = Number(valor) || 0;
       } else if (campo === 'tipoIdx') {
         updated.tipoIdx = Number(valor) || 0;
         const p = dataSheets.preciosNuevos[Number(valor)];
@@ -368,17 +371,23 @@ function App() {
     escenarios.forEach(e => {
       const p = dataSheets.preciosNuevos && dataSheets.preciosNuevos[e.tipoIdx];
       if (!p) return;
-      const ventaFila = (Number(e.cantidad) || 0) * (Number(e.ventaUnit) || 0);
+      
+      const meses = Number(e.mesesInflacion) || 0;
+      const ventaUnitConInflacion = aplicarInflacion(Number(e.ventaUnit) || 0, meses);
+      const sueldoBrutoConInflacion = aplicarInflacion(Number(e.sueldoBruto) || 0, meses);
+      
+      const ventaFila = (Number(e.cantidad) || 0) * ventaUnitConInflacion;
       let costoTotalFila = 0;
       if ((p.categoria || '').toLowerCase().includes('staff')) {
-        const sueldoTotal = (Number(e.cantidad) || 0) * (Number(e.sueldoBruto) || 0);
+        const sueldoTotal = (Number(e.cantidad) || 0) * sueldoBrutoConInflacion;
         // Aplicar factor de cargas sociales al sueldo
         const sueldoConCargas = sueldoTotal * factorCargas;
         const costoLaboral = sueldoConCargas * (pctCostoLaboral / 100);
         const indirectos = sueldoConCargas * (pctIndirectos / 100);
         costoTotalFila = sueldoConCargas + costoLaboral + indirectos;
       } else {
-        const base = (Number(e.cantidad) || 0) * (Number(p.costoFijo) || 0);
+        const costoFijoConInflacion = aplicarInflacion(Number(p.costoFijo) || 0, meses);
+        const base = (Number(e.cantidad) || 0) * costoFijoConInflacion;
         const indirectos = base * (pctIndirectos / 100);
         costoTotalFila = base + indirectos;
       }
@@ -578,16 +587,21 @@ function App() {
       const p = dataSheets.preciosNuevos[e.tipoIdx];
       if (!p) return;
       const isStaff = p.categoria === 'Staff Augmentation';
+      const meses = Number(e.mesesInflacion) || 0;
+      const ventaUnitConInflacion = aplicarInflacion(Number(e.ventaUnit) || 0, meses);
+      const sueldoBrutoConInflacion = aplicarInflacion(Number(e.sueldoBruto) || 0, meses);
+      
       let costoTotal = 0;
       if (isStaff) {
-        const sueldo = e.cantidad * e.sueldoBruto;
+        const sueldo = e.cantidad * sueldoBrutoConInflacion;
         const sueldoConCargas = sueldo * factorCargas;
         costoTotal = sueldoConCargas + (sueldoConCargas * pctCostoLaboral/100) + (sueldoConCargas * pctIndirectos/100);
       } else {
-        const base = e.cantidad * p.costoFijo;
+        const costoFijoConInflacion = aplicarInflacion(Number(p.costoFijo) || 0, meses);
+        const base = e.cantidad * costoFijoConInflacion;
         costoTotal = base + (base * pctIndirectos/100);
       }
-      const venta = e.cantidad * e.ventaUnit;
+      const venta = e.cantidad * ventaUnitConInflacion;
       const res = venta - costoTotal;
       const mgn = venta > 0 ? (res / venta) * 100 : 0;
 
@@ -596,8 +610,8 @@ function App() {
         <td>${e.cliente}</td>  
         <td>${p.categoria} - ${p.tipo}</td>  
         <td class="right">${e.cantidad}</td>  
-        <td class="right">${format(e.ventaUnit)}</td>  
-        <td class="right">${isStaff ? format(e.sueldoBruto) : '-'}</td>  
+        <td class="right">${format(ventaUnitConInflacion)}</td>  
+        <td class="right">${isStaff ? format(sueldoBrutoConInflacion) : '-'}</td>  
         <td class="right red">-${format(costoTotal)}</td>  
         <td class="right green bold">${format(res)}</td>  
         <td class="right bold">${mgn.toFixed(1)}%</td>  
@@ -807,25 +821,30 @@ function App() {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="text-[10px] font-bold text-purple-400 uppercase bg-purple-50/30">
-                  <th className="p-4">Cliente</th><th className="p-4">Servicio</th><th className="p-4 text-center">Cant</th><th className="p-4 text-right">Venta Unit</th><th className="p-4 text-right">Sueldo Bruto</th><th className="p-4 text-right">Costo Total</th><th className="p-4 text-right">Resultado</th><th className="p-4 text-center">Margen</th><th className="p-4"></th>
+                  <th className="p-4">Cliente</th><th className="p-4">Servicio</th><th className="p-4 text-center">Cant</th><th className="p-4 text-center">Meses</th><th className="p-4 text-right">Venta Unit</th><th className="p-4 text-right">Sueldo Bruto</th><th className="p-4 text-right">Costo Total</th><th className="p-4 text-right">Resultado</th><th className="p-4 text-center">Margen</th><th className="p-4"></th>
                 </tr>
               </thead>
               <tbody className="text-sm">
                 {escenarios.map(e => {
                   const p = dataSheets.preciosNuevos && dataSheets.preciosNuevos[e.tipoIdx];
                   const isStaff = p && (p.categoria || '').toLowerCase().includes('staff');
+                  const meses = Number(e.mesesInflacion) || 0;
+                  const ventaUnitConInflacion = aplicarInflacion(Number(e.ventaUnit) || 0, meses);
+                  const sueldoBrutoConInflacion = aplicarInflacion(Number(e.sueldoBruto) || 0, meses);
+
                   let costoTotal = 0;
                   if (p) {
                     if (isStaff) {
-                      const sueldo = (Number(e.cantidad) || 0) * (Number(e.sueldoBruto) || 0);
+                      const sueldo = (Number(e.cantidad) || 0) * sueldoBrutoConInflacion;
                       const sueldoConCargas = sueldo * factorCargas;
                       costoTotal = sueldoConCargas + (sueldoConCargas * pctCostoLaboral/100) + (sueldoConCargas * pctIndirectos/100);
                     } else {
-                      const base = (Number(e.cantidad) || 0) * (Number(p.costoFijo) || 0);
+                      const costoFijoConInflacion = aplicarInflacion(Number(p.costoFijo) || 0, meses);
+                      const base = (Number(e.cantidad) || 0) * costoFijoConInflacion;
                       costoTotal = base + (base * pctIndirectos/100);
                     }
                   }
-                  const venta = (Number(e.cantidad) || 0) * (Number(e.ventaUnit) || 0);
+                  const venta = (Number(e.cantidad) || 0) * ventaUnitConInflacion;
                   const res = venta - costoTotal;
                   const mgn = venta > 0 ? (res / venta) * 100 : 0;
 
@@ -847,28 +866,44 @@ function App() {
                       <td className="p-4 text-center">
                         <input type="number" value={e.cantidad} onChange={(ev) => actualizarFila(e.id, 'cantidad', ev.target.value)} className="w-10 text-center bg-purple-50 rounded font-bold" min="0" />
                       </td>
-                      <td className="p-4 text-right">
+                      <td className="p-4 text-center">
                         <input
-                          type="text"
-                          value={ventaUnitStr}
-                          onChange={(ev) => {
-                            const val = ev.target.value.replace(/\D/g, '');
-                            actualizarFila(e.id, 'ventaUnit', val === '' ? 0 : Number(val));
-                          }}
-                          className="w-28 text-right bg-blue-50 text-blue-700 font-bold rounded px-2 border border-blue-200"
+                          type="number"
+                          value={e.mesesInflacion || 0}
+                          onChange={(ev) => actualizarFila(e.id, 'mesesInflacion', ev.target.value)}
+                          className="w-12 text-center bg-orange-50 rounded font-bold border border-orange-200"
+                          min="0"
+                          max="60"
                         />
                       </td>
                       <td className="p-4 text-right">
-                        {isStaff ? (
+                        <div className="flex flex-col items-end">
                           <input
                             type="text"
-                            value={sueldoBrutoStr}
+                            value={ventaUnitStr}
                             onChange={(ev) => {
                               const val = ev.target.value.replace(/\D/g, '');
-                              actualizarFila(e.id, 'sueldoBruto', val === '' ? 0 : Number(val));
+                              actualizarFila(e.id, 'ventaUnit', val === '' ? 0 : Number(val));
                             }}
-                            className="w-24 text-right bg-pink-50 text-pink-700 font-bold rounded px-2 border border-pink-200"
+                            className="w-28 text-right bg-blue-50 text-blue-700 font-bold rounded px-2 border border-blue-200"
                           />
+                          {meses > 0 && <span className="text-[9px] text-orange-500 font-bold">Inf: {format(ventaUnitConInflacion)}</span>}
+                        </div>
+                      </td>
+                      <td className="p-4 text-right">
+                        {isStaff ? (
+                          <div className="flex flex-col items-end">
+                            <input
+                              type="text"
+                              value={sueldoBrutoStr}
+                              onChange={(ev) => {
+                                const val = ev.target.value.replace(/\D/g, '');
+                                actualizarFila(e.id, 'sueldoBruto', val === '' ? 0 : Number(val));
+                              }}
+                              className="w-24 text-right bg-pink-50 text-pink-700 font-bold rounded px-2 border border-pink-200"
+                            />
+                            {meses > 0 && <span className="text-[9px] text-orange-500 font-bold">Inf: {format(sueldoBrutoConInflacion)}</span>}
+                          </div>
                         ) : (
                           <span className="text-slate-300">-</span>
                         )}
