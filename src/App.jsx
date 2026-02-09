@@ -48,7 +48,7 @@ const fetchSheet = async (sheetName) => {
   };
 
   const headers = parseCSVLine(lines[0]);
-  
+
   return lines.slice(1).map(line => {
     const cells = parseCSVLine(line);
     const obj = {};
@@ -78,9 +78,8 @@ function App() {
   const [gastosOperativos, setGastosOperativos] = useState(0);
   const [margenObjetivo, setMargenObjetivo] = useState(0);
 
-  // INFLACIÓN Y CARGAS SOCIALES
+  // INFLACIÓN
   const [inflacionAnual, setInflacionAnual] = useState(24); // 24% anual
-  const [factorCargas, setFactorCargas] = useState(1.45); // 1.45 (45% de cargas)
 
   // FIX 1: Flag para bloquear guardado en localStorage durante carga desde nube
   const [isReady, setIsReady] = useState(false);
@@ -177,7 +176,7 @@ function App() {
         try {
           const resNube = await fetch(`${SCRIPT_URL}?sheet=HistorialCompartido`);
           const dataNube = await resNube.json();
-          
+
           if (dataNube && Array.isArray(dataNube)) {
             const findKey = (obj, k) => Object.keys(obj).find(key => key.toLowerCase() === k.toLowerCase());
 
@@ -232,7 +231,7 @@ function App() {
                 eerr: eerrParseada
               };
             });
-            
+
             setHistorial(historialSincronizado);
 
             // CARGA AUTOMÁTICA DEL ÚLTIMO ESCENARIO AL ENTRAR
@@ -244,6 +243,7 @@ function App() {
                 setPctCostoLaboral(ultimo.config.pctCostoLaboral ?? 45);
                 setGastosOperativos(ultimo.config.gastosOperativos ?? 46539684.59);
                 setMargenObjetivo(ultimo.config.margenObjetivo ?? 25);
+                setInflacionAnual(ultimo.config.inflacionAnual ?? 24);
                 if(ultimo.config.lineasVentaTotal) setLineasVentaTotal(ultimo.config.lineasVentaTotal);
                 if(ultimo.config.lineasRenovacion) setLineasRenovacion(ultimo.config.lineasRenovacion);
                 if(ultimo.config.lineasIncremental) setLineasIncremental(ultimo.config.lineasIncremental);
@@ -265,7 +265,7 @@ function App() {
             ventaUnit: preciosProcesados[0].valor || 0
           }]);
         }
-        
+
         // Desbloqueamos el guardado en LocalStorage
         setIsReady(true);
 
@@ -288,10 +288,11 @@ function App() {
     localStorage.setItem('hzn_pctLab', pctCostoLaboral);
     localStorage.setItem('hzn_gastosOp', gastosOperativos);
     localStorage.setItem('hzn_margenObj', margenObjetivo);
+    localStorage.setItem('hzn_inflacionAnual', inflacionAnual);
     localStorage.setItem('hzn_lineasVenta', JSON.stringify(lineasVentaTotal));
     localStorage.setItem('hzn_lineasReno', JSON.stringify(lineasRenovacion));
     localStorage.setItem('hzn_lineasIncr', JSON.stringify(lineasIncremental));
-  }, [escenarios, pctIndirectos, pctCostoLaboral, gastosOperativos, margenObjetivo, lineasVentaTotal, lineasRenovacion, lineasIncremental, isReady, isLoadingFromCloud]);
+  }, [escenarios, pctIndirectos, pctCostoLaboral, gastosOperativos, margenObjetivo, inflacionAnual, lineasVentaTotal, lineasRenovacion, lineasIncremental, isReady, isLoadingFromCloud]);
 
   const agregarFila = () => {
     if (dataSheets.loading) {
@@ -371,24 +372,23 @@ function App() {
     escenarios.forEach(e => {
       const p = dataSheets.preciosNuevos && dataSheets.preciosNuevos[e.tipoIdx];
       if (!p) return;
-      
+
       const meses = Number(e.mesesInflacion) || 0;
       const ventaUnitConInflacion = aplicarInflacion(Number(e.ventaUnit) || 0, meses);
       const sueldoBrutoConInflacion = aplicarInflacion(Number(e.sueldoBruto) || 0, meses);
-      
+
       const ventaFila = (Number(e.cantidad) || 0) * ventaUnitConInflacion;
       let costoTotalFila = 0;
       if ((p.categoria || '').toLowerCase().includes('staff')) {
-        const sueldoTotal = (Number(e.cantidad) || 0) * sueldoBrutoConInflacion;
-        // Aplicar factor de cargas sociales al sueldo
-        const sueldoConCargas = sueldoTotal * factorCargas;
-        const costoLaboral = sueldoConCargas * (pctCostoLaboral / 100);
-        const indirectos = sueldoConCargas * (pctIndirectos / 100);
-        costoTotalFila = sueldoConCargas + costoLaboral + indirectos;
+        const sueldoBrutoTotal = (Number(e.cantidad) || 0) * sueldoBrutoConInflacion;
+        // % Costo Laboral = cargas / costo empresa (reemplaza "Cargas x")
+        const costoLaboralEmpresa = sueldoBrutoTotal * (1 + (pctCostoLaboral / 100));
+        const indirectos = ventaFila * (pctIndirectos / 100);
+        costoTotalFila = costoLaboralEmpresa + indirectos;
       } else {
         const costoFijoConInflacion = aplicarInflacion(Number(p.costoFijo) || 0, meses);
         const base = (Number(e.cantidad) || 0) * costoFijoConInflacion;
-        const indirectos = base * (pctIndirectos / 100);
+        const indirectos = ventaFila * (pctIndirectos / 100);
         costoTotalFila = base + indirectos;
       }
       ventasTotales += ventaFila;
@@ -467,13 +467,22 @@ function App() {
     if (!nombre) return;
     const eerrActual = calcularEERRTotal();
     const timestamp = new Date().toLocaleString('es-AR');
-    
+
     const nuevoRegistro = {
       id: Date.now(),
       nombre: nombre,
       fecha: timestamp,
       escenarios: escenarios,
-      config: { pctIndirectos, pctCostoLaboral, gastosOperativos, margenObjetivo, lineasVentaTotal, lineasRenovacion, lineasIncremental },
+      config: {
+        pctIndirectos,
+        pctCostoLaboral,
+        gastosOperativos,
+        margenObjetivo,
+        inflacionAnual,
+        lineasVentaTotal,
+        lineasRenovacion,
+        lineasIncremental
+      },
       eerr: eerrActual
     };
 
@@ -500,26 +509,27 @@ function App() {
   // FIX 4: Función para cargar escenario con bloqueo temporal de localStorage
   const cargarEscenarioDesdeHistorial = (item) => {
     if(!window.confirm(`¿Cargar el escenario "${item.nombre}"? Se perderán los cambios actuales.`)) return;
-    
+
     // Activamos el flag de bloqueo
     setIsLoadingFromCloud(true);
-    
+
     // Validamos que los datos sean arrays/objetos válidos antes de cargar
     const escenariosValidos = Array.isArray(item.escenarios) ? item.escenarios : [];
     const configValida = (typeof item.config === 'object' && item.config !== null) ? item.config : {};
-    
+
     setEscenarios(escenariosValidos);
     setPctIndirectos(configValida.pctIndirectos ?? 37);
     setPctCostoLaboral(configValida.pctCostoLaboral ?? 45);
     setGastosOperativos(configValida.gastosOperativos ?? 46539684.59);
     setMargenObjetivo(configValida.margenObjetivo ?? 25);
-    
+    setInflacionAnual(configValida.inflacionAnual ?? 24);
+
     if(configValida.lineasVentaTotal) setLineasVentaTotal(configValida.lineasVentaTotal);
     if(configValida.lineasRenovacion) setLineasRenovacion(configValida.lineasRenovacion);
     if(configValida.lineasIncremental) setLineasIncremental(configValida.lineasIncremental);
-    
+
     setMostrarHistorial(false);
-    
+
     // Desbloqueamos después de 200ms para que React termine de renderizar
     setTimeout(() => {
       setIsLoadingFromCloud(false);
@@ -553,7 +563,7 @@ function App() {
 <body>  
   <h1>HORIZON - Estado de Resultados Proyectado 2026</h1>  
   <p class="header">Generado: ${timestamp}</p>  
-  
+
   <div class="section">  
     <h3>Resumen Financiero</h3>  
     <table>  
@@ -566,7 +576,7 @@ function App() {
       <tr><td class="bold">Ganancia Neta:</td><td class="right bold ${eerr.gananciaNetaTotal >= 0 ? 'green' : 'red'}">${format(eerr.gananciaNetaTotal)} (${eerr.margenNetoPct.toFixed(1)}%)</td></tr>  
     </table>  
   </div>  
-  
+
   <h3>Detalle de Servicios Propuestos</h3>  
   <table>  
     <thead>  
@@ -590,16 +600,18 @@ function App() {
       const meses = Number(e.mesesInflacion) || 0;
       const ventaUnitConInflacion = aplicarInflacion(Number(e.ventaUnit) || 0, meses);
       const sueldoBrutoConInflacion = aplicarInflacion(Number(e.sueldoBruto) || 0, meses);
-      
+
       let costoTotal = 0;
       if (isStaff) {
         const sueldo = e.cantidad * sueldoBrutoConInflacion;
-        const sueldoConCargas = sueldo * factorCargas;
-        costoTotal = sueldoConCargas + (sueldoConCargas * pctCostoLaboral/100) + (sueldoConCargas * pctIndirectos/100);
+        const costoLaboralEmpresa = sueldo * (1 + (pctCostoLaboral / 100));
+        const venta = e.cantidad * ventaUnitConInflacion;
+        costoTotal = costoLaboralEmpresa + (venta * pctIndirectos/100);
       } else {
         const costoFijoConInflacion = aplicarInflacion(Number(p.costoFijo) || 0, meses);
         const base = e.cantidad * costoFijoConInflacion;
-        costoTotal = base + (base * pctIndirectos/100);
+        const venta = e.cantidad * ventaUnitConInflacion;
+        costoTotal = base + (venta * pctIndirectos/100);
       }
       const venta = e.cantidad * ventaUnitConInflacion;
       const res = venta - costoTotal;
@@ -621,12 +633,12 @@ function App() {
     html += `  
     </tbody>  
   </table>  
-  
+
   <div class="section">  
     <h3>Configuración Utilizada</h3>  
     <p><strong>Indirectos:</strong> ${pctIndirectos}% | <strong>Costo Laboral:</strong> ${pctCostoLaboral}% | <strong>Margen Objetivo:</strong> ${margenObjetivo}%</p>  
   </div>  
-  
+
   <div class="footer">  
     <h2>Ganancia Neta Proyectada: ${format(eerr.gananciaNetaTotal)}</h2>  
     <p>Margen Neto: ${eerr.margenNetoPct.toFixed(1)}% | Desvío vs Dic-25: ${eerr.desvioGananciaNeta >= 0 ? '+' : ''}${format(eerr.desvioGananciaNeta)}</p>  
@@ -651,7 +663,7 @@ function App() {
     const totalReal = calcularTotalLineas(lineas);
     const pctCumplimiento = objetivo > 0 ? Math.min((totalReal / objetivo) * 100, 100) : 0;
     const angle = -90 + (pctCumplimiento * 1.8);
-    
+
     const totalArcLength = 251.2;
     const filledLength = (pctCumplimiento / 100) * totalArcLength;
     const gapLength = totalArcLength - filledLength;
@@ -669,7 +681,7 @@ function App() {
         <div className="relative w-full flex justify-center mb-4">
           <svg viewBox="0 0 200 120" className="w-full max-w-xs">
             <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#f1f5f9" strokeWidth="20" strokeLinecap="round" />
-            
+
             {pctCumplimiento < 100 && (
               <path 
                 d="M 20 100 A 80 80 0 0 1 180 100" 
@@ -701,7 +713,7 @@ function App() {
               strokeDasharray={`${filledLength} ${totalArcLength}`} 
               style={{ transition: 'all 0.8s ease-out' }} 
             />
-            
+
             <line x1="100" y1="100" x2="100" y2="30" stroke={getColor()} strokeWidth="3" strokeLinecap="round" transform={`rotate(${angle} 100 100)`} style={{ transition: 'all 0.8s ease-out' }} />
             <circle cx="100" cy="100" r="8" fill={getColor()} />
           </svg>
@@ -795,10 +807,6 @@ function App() {
                 <span className="text-[10px] font-bold text-orange-400 block uppercase">Inflación</span>
                 <input type="number" value={inflacionAnual} onChange={e => setInflacionAnual(cleanNum(e.target.value))} className="w-16 font-bold text-orange-600 focus:outline-none" step="0.1" />%
              </div>
-             <div className="bg-white px-4 py-2 rounded-lg shadow-sm border border-teal-100">
-                <span className="text-[10px] font-bold text-teal-400 block uppercase">Cargas</span>
-                <input type="number" value={factorCargas} onChange={e => setFactorCargas(parseFloat(e.target.value) || 1)} className="w-16 font-bold text-teal-600 focus:outline-none" step="0.01" />x
-             </div>
           </div>
         </div>
 
@@ -808,7 +816,7 @@ function App() {
             <div className="flex gap-2">
                <button onClick={() => setMostrarHistorial(!mostrarHistorial)} className={`text-xs font-bold px-3 py-1 border rounded-lg transition ${mostrarHistorial ? 'bg-purple-600 text-white border-purple-600' : 'text-slate-600 border-purple-200 hover:text-purple-600'}`}>📋 Historial ({historial.length})</button>
                <button onClick={guardarEscenario} className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold hover:shadow-lg transition">💾 Guardar Escenario</button>
-               
+
                <button onClick={descargarPDF} className="bg-gradient-to-r from-purple-500 to-pink-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold hover:shadow-lg transition">
                  📄 Descargar PDF
                </button>
@@ -836,12 +844,14 @@ function App() {
                   if (p) {
                     if (isStaff) {
                       const sueldo = (Number(e.cantidad) || 0) * sueldoBrutoConInflacion;
-                      const sueldoConCargas = sueldo * factorCargas;
-                      costoTotal = sueldoConCargas + (sueldoConCargas * pctCostoLaboral/100) + (sueldoConCargas * pctIndirectos/100);
+                      const costoLaboralEmpresa = sueldo * (1 + (pctCostoLaboral / 100));
+                      const venta = (Number(e.cantidad) || 0) * ventaUnitConInflacion;
+                      costoTotal = costoLaboralEmpresa + (venta * pctIndirectos / 100);
                     } else {
                       const costoFijoConInflacion = aplicarInflacion(Number(p.costoFijo) || 0, meses);
                       const base = (Number(e.cantidad) || 0) * costoFijoConInflacion;
-                      costoTotal = base + (base * pctIndirectos/100);
+                      const venta = (Number(e.cantidad) || 0) * ventaUnitConInflacion;
+                      costoTotal = base + (venta * pctIndirectos / 100);
                     }
                   }
                   const venta = (Number(e.cantidad) || 0) * ventaUnitConInflacion;
@@ -997,7 +1007,7 @@ function App() {
                           style={{ width: `${(margenObjetivo - margen) * 2}%` }}
                         ></div>
                       )}
-                      
+
                       <div 
                         className="absolute top-0 h-full border-l-2 border-white/50 z-20"
                         style={{ left: `${margenObjetivo * 2}%` }}
