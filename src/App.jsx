@@ -78,6 +78,10 @@ function App() {
   const [gastosOperativos, setGastosOperativos] = useState(0);
   const [margenObjetivo, setMargenObjetivo] = useState(0);
 
+  // INFLACIÓN Y CARGAS SOCIALES
+  const [inflacionAnual, setInflacionAnual] = useState(24); // 24% anual
+  const [factorCargas, setFactorCargas] = useState(1.45); // 1.45 (45% de cargas)
+
   // FIX 1: Flag para bloquear guardado en localStorage durante carga desde nube
   const [isReady, setIsReady] = useState(false);
   const [isLoadingFromCloud, setIsLoadingFromCloud] = useState(false);
@@ -98,6 +102,16 @@ function App() {
   const [mostrarHistorial, setMostrarHistorial] = useState(false);
   const [mostrarEERR, setMostrarEERR] = useState(true);
   const [mostrarAporte, setMostrarAporte] = useState(true);
+
+  // Cálculo de tasa mensual de inflación
+  const tasaMensualInflacion = useMemo(() => {
+    return Math.pow(1 + (inflacionAnual / 100), 1/12) - 1;
+  }, [inflacionAnual]);
+
+  // Función para aplicar inflación a un valor según meses transcurridos
+  const aplicarInflacion = (valor, meses = 0) => {
+    return Number(valor) * Math.pow(1 + tasaMensualInflacion, meses);
+  };
 
   useEffect(() => {
     const cargarDatos = async () => {
@@ -358,9 +372,11 @@ function App() {
       let costoTotalFila = 0;
       if ((p.categoria || '').toLowerCase().includes('staff')) {
         const sueldoTotal = (Number(e.cantidad) || 0) * (Number(e.sueldoBruto) || 0);
-        const costoLaboral = sueldoTotal * (pctCostoLaboral / 100);
-        const indirectos = sueldoTotal * (pctIndirectos / 100);
-        costoTotalFila = sueldoTotal + costoLaboral + indirectos;
+        // Aplicar factor de cargas sociales al sueldo
+        const sueldoConCargas = sueldoTotal * factorCargas;
+        const costoLaboral = sueldoConCargas * (pctCostoLaboral / 100);
+        const indirectos = sueldoConCargas * (pctIndirectos / 100);
+        costoTotalFila = sueldoConCargas + costoLaboral + indirectos;
       } else {
         const base = (Number(e.cantidad) || 0) * (Number(p.costoFijo) || 0);
         const indirectos = base * (pctIndirectos / 100);
@@ -565,7 +581,8 @@ function App() {
       let costoTotal = 0;
       if (isStaff) {
         const sueldo = e.cantidad * e.sueldoBruto;
-        costoTotal = sueldo + (sueldo * pctCostoLaboral/100) + (sueldo * pctIndirectos/100);
+        const sueldoConCargas = sueldo * factorCargas;
+        costoTotal = sueldoConCargas + (sueldoConCargas * pctCostoLaboral/100) + (sueldoConCargas * pctIndirectos/100);
       } else {
         const base = e.cantidad * p.costoFijo;
         costoTotal = base + (base * pctIndirectos/100);
@@ -760,6 +777,14 @@ function App() {
                 <span className="text-[10px] font-bold text-purple-400 block uppercase">Margen Obj.</span>
                 <input type="number" value={margenObjetivo} onChange={e => setMargenObjetivo(cleanNum(e.target.value))} className="w-16 font-bold text-purple-600 focus:outline-none" />%
              </div>
+             <div className="bg-white px-4 py-2 rounded-lg shadow-sm border border-orange-100">
+                <span className="text-[10px] font-bold text-orange-400 block uppercase">Inflación</span>
+                <input type="number" value={inflacionAnual} onChange={e => setInflacionAnual(cleanNum(e.target.value))} className="w-16 font-bold text-orange-600 focus:outline-none" step="0.1" />%
+             </div>
+             <div className="bg-white px-4 py-2 rounded-lg shadow-sm border border-teal-100">
+                <span className="text-[10px] font-bold text-teal-400 block uppercase">Cargas</span>
+                <input type="number" value={factorCargas} onChange={e => setFactorCargas(parseFloat(e.target.value) || 1)} className="w-16 font-bold text-teal-600 focus:outline-none" step="0.01" />x
+             </div>
           </div>
         </div>
 
@@ -793,7 +818,8 @@ function App() {
                   if (p) {
                     if (isStaff) {
                       const sueldo = (Number(e.cantidad) || 0) * (Number(e.sueldoBruto) || 0);
-                      costoTotal = sueldo + (sueldo * pctCostoLaboral/100) + (sueldo * pctIndirectos/100);
+                      const sueldoConCargas = sueldo * factorCargas;
+                      costoTotal = sueldoConCargas + (sueldoConCargas * pctCostoLaboral/100) + (sueldoConCargas * pctIndirectos/100);
                     } else {
                       const base = (Number(e.cantidad) || 0) * (Number(p.costoFijo) || 0);
                       costoTotal = base + (base * pctIndirectos/100);
