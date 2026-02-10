@@ -1,3 +1,5 @@
+import React, { useState, useEffect, useMemo } from 'react';
+
 const SHEET_ID = '1fJVmm7i5g1IfOLHDTByRM-W01pWIF46k7aDOYsH4UKA';
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzCxPqker3JsD9YKVDeTY5zOqmguQM10hpRAvUbjlEe3PUOHI8uScpLvAMQ4QvrSu7x/exec';
 
@@ -76,10 +78,8 @@ function App() {
   const [gastosOperativos, setGastosOperativos] = useState(0);
   const [margenObjetivo, setMargenObjetivo] = useState(0);
 
-  // INFLACIÓN - NUEVO MÓDULO
-  const [inflacionAnual, setInflacionAnual] = useState(24); // 24% anual por defecto
-  const [inflacionVentas, setInflacionVentas] = useState(24); // Inflación específica para ventas
-  const [inflacionCostos, setInflacionCostos] = useState(24); // Inflación específica para costos
+  // INFLACIÓN
+  const [inflacionAnual, setInflacionAnual] = useState(24); // 24% anual
 
   // FIX 1: Flag para bloquear guardado en localStorage durante carga desde nube
   const [isReady, setIsReady] = useState(false);
@@ -103,21 +103,13 @@ function App() {
   const [mostrarAporte, setMostrarAporte] = useState(true);
 
   // Cálculo de tasa mensual de inflación
-  const tasaMensualInflacionVentas = useMemo(() => {
-    return Math.pow(1 + (inflacionVentas / 100), 1/12) - 1;
-  }, [inflacionVentas]);
-
-  const tasaMensualInflacionCostos = useMemo(() => {
-    return Math.pow(1 + (inflacionCostos / 100), 1/12) - 1;
-  }, [inflacionCostos]);
+  const tasaMensualInflacion = useMemo(() => {
+    return Math.pow(1 + (inflacionAnual / 100), 1/12) - 1;
+  }, [inflacionAnual]);
 
   // Función para aplicar inflación a un valor según meses transcurridos
-  const aplicarInflacionVentas = (valor, meses = 0) => {
-    return Number(valor) * Math.pow(1 + tasaMensualInflacionVentas, meses);
-  };
-
-  const aplicarInflacionCostos = (valor, meses = 0) => {
-    return Number(valor) * Math.pow(1 + tasaMensualInflacionCostos, meses);
+  const aplicarInflacion = (valor, meses = 0) => {
+    return Number(valor) * Math.pow(1 + tasaMensualInflacion, meses);
   };
 
   useEffect(() => {
@@ -252,8 +244,6 @@ function App() {
                 setGastosOperativos(ultimo.config.gastosOperativos ?? 46539684.59);
                 setMargenObjetivo(ultimo.config.margenObjetivo ?? 25);
                 setInflacionAnual(ultimo.config.inflacionAnual ?? 24);
-                setInflacionVentas(ultimo.config.inflacionVentas ?? 24);
-                setInflacionCostos(ultimo.config.inflacionCostos ?? 24);
                 if(ultimo.config.lineasVentaTotal) setLineasVentaTotal(ultimo.config.lineasVentaTotal);
                 if(ultimo.config.lineasRenovacion) setLineasRenovacion(ultimo.config.lineasRenovacion);
                 if(ultimo.config.lineasIncremental) setLineasIncremental(ultimo.config.lineasIncremental);
@@ -299,12 +289,10 @@ function App() {
     localStorage.setItem('hzn_gastosOp', gastosOperativos);
     localStorage.setItem('hzn_margenObj', margenObjetivo);
     localStorage.setItem('hzn_inflacionAnual', inflacionAnual);
-    localStorage.setItem('hzn_inflacionVentas', inflacionVentas);
-    localStorage.setItem('hzn_inflacionCostos', inflacionCostos);
     localStorage.setItem('hzn_lineasVenta', JSON.stringify(lineasVentaTotal));
     localStorage.setItem('hzn_lineasReno', JSON.stringify(lineasRenovacion));
     localStorage.setItem('hzn_lineasIncr', JSON.stringify(lineasIncremental));
-  }, [escenarios, pctIndirectos, pctCostoLaboral, gastosOperativos, margenObjetivo, inflacionAnual, inflacionVentas, inflacionCostos, lineasVentaTotal, lineasRenovacion, lineasIncremental, isReady, isLoadingFromCloud]);
+  }, [escenarios, pctIndirectos, pctCostoLaboral, gastosOperativos, margenObjetivo, inflacionAnual, lineasVentaTotal, lineasRenovacion, lineasIncremental, isReady, isLoadingFromCloud]);
 
   const agregarFila = () => {
     if (dataSheets.loading) {
@@ -386,8 +374,8 @@ function App() {
       if (!p) return;
 
       const meses = Number(e.mesesInflacion) || 0;
-      const ventaUnitConInflacion = aplicarInflacionVentas(Number(e.ventaUnit) || 0, meses);
-      const sueldoBrutoConInflacion = aplicarInflacionCostos(Number(e.sueldoBruto) || 0, meses);
+      const ventaUnitConInflacion = aplicarInflacion(Number(e.ventaUnit) || 0, meses);
+      const sueldoBrutoConInflacion = aplicarInflacion(Number(e.sueldoBruto) || 0, meses);
 
       const ventaFila = (Number(e.cantidad) || 0) * ventaUnitConInflacion;
       let costoTotalFila = 0;
@@ -398,7 +386,7 @@ function App() {
         const indirectos = ventaFila * (pctIndirectos / 100);
         costoTotalFila = costoLaboralEmpresa + indirectos;
       } else {
-        const costoFijoConInflacion = aplicarInflacionCostos(Number(p.costoFijo) || 0, meses);
+        const costoFijoConInflacion = aplicarInflacion(Number(p.costoFijo) || 0, meses);
         const base = (Number(e.cantidad) || 0) * costoFijoConInflacion;
         const indirectos = ventaFila * (pctIndirectos / 100);
         costoTotalFila = base + indirectos;
@@ -472,7 +460,7 @@ function App() {
     const costo = propuesta.costosTotales;
     const gananciaNeta = eerr.gananciaNetaTotal - (eerr.gananciaNetaBase || 0);
     return { ingreso, costo, gananciaNeta };
-  }, [escenarios, pctCostoLaboral, pctIndirectos, gastosOperativos, inflacionVentas, inflacionCostos, dataSheets.eerrBase]);
+  }, [escenarios, pctCostoLaboral, pctIndirectos, gastosOperativos, dataSheets.eerrBase]);
 
   const guardarEscenario = async () => {
     const nombre = window.prompt("Ingrese un nombre para este escenario:", `Escenario ${historial.length + 1}`);
@@ -491,8 +479,6 @@ function App() {
         gastosOperativos,
         margenObjetivo,
         inflacionAnual,
-        inflacionVentas,
-        inflacionCostos,
         lineasVentaTotal,
         lineasRenovacion,
         lineasIncremental
@@ -537,8 +523,6 @@ function App() {
     setGastosOperativos(configValida.gastosOperativos ?? 46539684.59);
     setMargenObjetivo(configValida.margenObjetivo ?? 25);
     setInflacionAnual(configValida.inflacionAnual ?? 24);
-    setInflacionVentas(configValida.inflacionVentas ?? 24);
-    setInflacionCostos(configValida.inflacionCostos ?? 24);
 
     if(configValida.lineasVentaTotal) setLineasVentaTotal(configValida.lineasVentaTotal);
     if(configValida.lineasRenovacion) setLineasRenovacion(configValida.lineasRenovacion);
@@ -614,8 +598,8 @@ function App() {
       if (!p) return;
       const isStaff = p.categoria === 'Staff Augmentation';
       const meses = Number(e.mesesInflacion) || 0;
-      const ventaUnitConInflacion = aplicarInflacionVentas(Number(e.ventaUnit) || 0, meses);
-      const sueldoBrutoConInflacion = aplicarInflacionCostos(Number(e.sueldoBruto) || 0, meses);
+      const ventaUnitConInflacion = aplicarInflacion(Number(e.ventaUnit) || 0, meses);
+      const sueldoBrutoConInflacion = aplicarInflacion(Number(e.sueldoBruto) || 0, meses);
 
       let costoTotal = 0;
       if (isStaff) {
@@ -624,7 +608,7 @@ function App() {
         const venta = e.cantidad * ventaUnitConInflacion;
         costoTotal = costoLaboralEmpresa + (venta * pctIndirectos/100);
       } else {
-        const costoFijoConInflacion = aplicarInflacionCostos(Number(p.costoFijo) || 0, meses);
+        const costoFijoConInflacion = aplicarInflacion(Number(p.costoFijo) || 0, meses);
         const base = e.cantidad * costoFijoConInflacion;
         const venta = e.cantidad * ventaUnitConInflacion;
         costoTotal = base + (venta * pctIndirectos/100);
@@ -653,7 +637,6 @@ function App() {
   <div class="section">
     <h3>Configuración Utilizada</h3>
     <p><strong>Indirectos:</strong> ${pctIndirectos}% | <strong>Costo Laboral:</strong> ${pctCostoLaboral}% | <strong>Margen Objetivo:</strong> ${margenObjetivo}%</p>
-    <p><strong>Inflación Ventas:</strong> ${inflacionVentas}% anual | <strong>Inflación Costos:</strong> ${inflacionCostos}% anual</p>
   </div>
 
   <div class="footer">
@@ -820,83 +803,10 @@ function App() {
                 <span className="text-[10px] font-bold text-purple-400 block uppercase">Margen Obj.</span>
                 <input type="number" value={margenObjetivo} onChange={e => setMargenObjetivo(cleanNum(e.target.value))} className="w-16 font-bold text-purple-600 focus:outline-none" />%
              </div>
-          </div>
-        </div>
-
-        {/* NUEVO PANEL DE INFLACIÓN */}
-        <div className="bg-gradient-to-r from-orange-50 to-red-50 rounded-xl shadow-lg border-2 border-orange-300 p-6 mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-black text-orange-700 uppercase flex items-center gap-2">
-              <span className="text-2xl">📈</span> Simulador de Inflación
-            </h2>
-            <div className="text-xs text-orange-600 font-bold">
-              Tasa Mensual: Ventas {(tasaMensualInflacionVentas * 100).toFixed(2)}% | Costos {(tasaMensualInflacionCostos * 100).toFixed(2)}%
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-white rounded-lg p-4 border-2 border-green-300">
-              <label className="text-sm font-black text-green-700 uppercase block mb-2">
-                🟢 Inflación Ventas (Anual)
-              </label>
-              <div className="flex items-center gap-3">
-                <input 
-                  type="range" 
-                  min="0" 
-                  max="200" 
-                  step="1" 
-                  value={inflacionVentas} 
-                  onChange={e => setInflacionVentas(Number(e.target.value))}
-                  className="flex-1 h-3 bg-green-200 rounded-lg appearance-none cursor-pointer"
-                  style={{
-                    background: `linear-gradient(to right, #22c55e 0%, #22c55e ${inflacionVentas/2}%, #e5e7eb ${inflacionVentas/2}%, #e5e7eb 100%)`
-                  }}
-                />
-                <input 
-                  type="number" 
-                  value={inflacionVentas} 
-                  onChange={e => setInflacionVentas(cleanNum(e.target.value))} 
-                  className="w-20 text-center font-black text-green-700 border-2 border-green-400 rounded px-2 py-1"
-                  step="0.1"
-                />
-                <span className="text-green-700 font-black">%</span>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-lg p-4 border-2 border-red-300">
-              <label className="text-sm font-black text-red-700 uppercase block mb-2">
-                🔴 Inflación Costos (Anual)
-              </label>
-              <div className="flex items-center gap-3">
-                <input 
-                  type="range" 
-                  min="0" 
-                  max="200" 
-                  step="1" 
-                  value={inflacionCostos} 
-                  onChange={e => setInflacionCostos(Number(e.target.value))}
-                  className="flex-1 h-3 bg-red-200 rounded-lg appearance-none cursor-pointer"
-                  style={{
-                    background: `linear-gradient(to right, #ef4444 0%, #ef4444 ${inflacionCostos/2}%, #e5e7eb ${inflacionCostos/2}%, #e5e7eb 100%)`
-                  }}
-                />
-                <input 
-                  type="number" 
-                  value={inflacionCostos} 
-                  onChange={e => setInflacionCostos(cleanNum(e.target.value))} 
-                  className="w-20 text-center font-black text-red-700 border-2 border-red-400 rounded px-2 py-1"
-                  step="0.1"
-                />
-                <span className="text-red-700 font-black">%</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-4 bg-white/50 rounded-lg p-3 border border-orange-200">
-            <p className="text-xs text-orange-800 font-bold">
-              💡 <strong>Tip:</strong> Ajustá la inflación de ventas y costos por separado para simular escenarios realistas. 
-              La columna "Meses" en la tabla aplica estos porcentajes de forma compuesta.
-            </p>
+             <div className="bg-white px-4 py-2 rounded-lg shadow-sm border border-orange-100">
+                <span className="text-[10px] font-bold text-orange-400 block uppercase">Inflación</span>
+                <input type="number" value={inflacionAnual} onChange={e => setInflacionAnual(cleanNum(e.target.value))} className="w-16 font-bold text-orange-600 focus:outline-none" step="0.1" />%
+             </div>
           </div>
         </div>
 
@@ -927,8 +837,8 @@ function App() {
                   const p = dataSheets.preciosNuevos && dataSheets.preciosNuevos[e.tipoIdx];
                   const isStaff = p && (p.categoria || '').toLowerCase().includes('staff');
                   const meses = Number(e.mesesInflacion) || 0;
-                  const ventaUnitConInflacion = aplicarInflacionVentas(Number(e.ventaUnit) || 0, meses);
-                  const sueldoBrutoConInflacion = aplicarInflacionCostos(Number(e.sueldoBruto) || 0, meses);
+                  const ventaUnitConInflacion = aplicarInflacion(Number(e.ventaUnit) || 0, meses);
+                  const sueldoBrutoConInflacion = aplicarInflacion(Number(e.sueldoBruto) || 0, meses);
 
                   let costoTotal = 0;
                   if (p) {
@@ -938,7 +848,7 @@ function App() {
                       const venta = (Number(e.cantidad) || 0) * ventaUnitConInflacion;
                       costoTotal = costoLaboralEmpresa + (venta * pctIndirectos / 100);
                     } else {
-                      const costoFijoConInflacion = aplicarInflacionCostos(Number(p.costoFijo) || 0, meses);
+                      const costoFijoConInflacion = aplicarInflacion(Number(p.costoFijo) || 0, meses);
                       const base = (Number(e.cantidad) || 0) * costoFijoConInflacion;
                       const venta = (Number(e.cantidad) || 0) * ventaUnitConInflacion;
                       costoTotal = base + (venta * pctIndirectos / 100);
