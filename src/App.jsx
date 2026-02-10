@@ -1,3 +1,5 @@
+import React, { useState, useEffect, useMemo } from 'react';
+
 const SHEET_ID = '1fJVmm7i5g1IfOLHDTByRM-W01pWIF46k7aDOYsH4UKA';
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzCxPqker3JsD9YKVDeTY5zOqmguQM10hpRAvUbjlEe3PUOHI8uScpLvAMQ4QvrSu7x/exec';
 
@@ -46,7 +48,7 @@ const fetchSheet = async (sheetName) => {
   };
 
   const headers = parseCSVLine(lines[0]);
-
+  
   return lines.slice(1).map(line => {
     const cells = parseCSVLine(line);
     const obj = {};
@@ -55,35 +57,6 @@ const fetchSheet = async (sheetName) => {
     });
     return obj;
   });
-};
-
-// Función para generar opciones de meses
-const generarOpcionesMeses = () => {
-  const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-  const opciones = [];
-  const añoActual = 2026;
-  
-  for (let año = añoActual; año <= añoActual + 4; año++) {
-    for (let mes = 0; mes < 12; mes++) {
-      opciones.push({
-        value: `${año}-${String(mes + 1).padStart(2, '0')}`,
-        label: `${meses[mes]} ${año}`
-      });
-    }
-  }
-  return opciones;
-};
-
-// Función para calcular meses desde hoy
-const calcularMesesDesdeHoy = (mesInicio) => {
-  const hoy = new Date('2026-02-10'); // Fecha actual del sistema
-  const [año, mes] = mesInicio.split('-').map(Number);
-  const fechaInicio = new Date(año, mes - 1, 1);
-  
-  const diffMeses = (fechaInicio.getFullYear() - hoy.getFullYear()) * 12 
-                    + (fechaInicio.getMonth() - hoy.getMonth());
-  
-  return Math.max(0, diffMeses);
 };
 
 function App() {
@@ -105,9 +78,6 @@ function App() {
   const [gastosOperativos, setGastosOperativos] = useState(0);
   const [margenObjetivo, setMargenObjetivo] = useState(0);
 
-  // INFLACIÓN
-  const [inflacionAnual, setInflacionAnual] = useState(24); // 24% anual
-
   // FIX 1: Flag para bloquear guardado en localStorage durante carga desde nube
   const [isReady, setIsReady] = useState(false);
   const [isLoadingFromCloud, setIsLoadingFromCloud] = useState(false);
@@ -128,72 +98,6 @@ function App() {
   const [mostrarHistorial, setMostrarHistorial] = useState(false);
   const [mostrarEERR, setMostrarEERR] = useState(true);
   const [mostrarAporte, setMostrarAporte] = useState(true);
-  const [mostrarErosion, setMostrarErosion] = useState(true);
-
-  // Cálculo de tasa mensual de inflación
-  const tasaMensualInflacion = useMemo(() => {
-    return Math.pow(1 + (inflacionAnual / 100), 1/12) - 1;
-  }, [inflacionAnual]);
-
-  // Función para aplicar inflación a un valor según meses transcurridos
-  const aplicarInflacion = (valor, meses = 0) => {
-    return Number(valor) * Math.pow(1 + tasaMensualInflacion, meses);
-  };
-
-  // Función para calcular erosión de margen
-  const calcularErosionMargen = (escenario, precio) => {
-    const mesesAProyectar = 12;
-    const datos = [];
-    
-    const ventaBase = Number(escenario.ventaUnit) || 0;
-    const sueldoBase = Number(escenario.sueldoBruto) || 0;
-    const isStaff = (precio.categoria || '').toLowerCase().includes('staff');
-    
-    for (let mes = 0; mes <= mesesAProyectar; mes++) {
-      // Sin inflación
-      const ventaSinInf = ventaBase * escenario.cantidad;
-      let costoSinInf = 0;
-      
-      if (isStaff) {
-        const sueldoTotal = sueldoBase * escenario.cantidad;
-        const costoLaboral = sueldoTotal * (1 + pctCostoLaboral / 100);
-        costoSinInf = costoLaboral + (ventaSinInf * pctIndirectos / 100);
-      } else {
-        const base = (precio.costoFijo || 0) * escenario.cantidad;
-        costoSinInf = base + (ventaSinInf * pctIndirectos / 100);
-      }
-      
-      const margenSinInflacion = ventaSinInf > 0 
-        ? ((ventaSinInf - costoSinInf) / ventaSinInf) * 100 
-        : 0;
-      
-      // Con inflación
-      const ventaConInf = aplicarInflacion(ventaBase, mes) * escenario.cantidad;
-      let costoConInf = 0;
-      
-      if (isStaff) {
-        const sueldoTotal = aplicarInflacion(sueldoBase, mes) * escenario.cantidad;
-        const costoLaboral = sueldoTotal * (1 + pctCostoLaboral / 100);
-        costoConInf = costoLaboral + (ventaConInf * pctIndirectos / 100);
-      } else {
-        const base = aplicarInflacion(precio.costoFijo || 0, mes) * escenario.cantidad;
-        costoConInf = base + (ventaConInf * pctIndirectos / 100);
-      }
-      
-      const margenConInflacion = ventaConInf > 0 
-        ? ((ventaConInf - costoConInf) / ventaConInf) * 100 
-        : 0;
-      
-      datos.push({
-        mes,
-        margenSinInflacion,
-        margenConInflacion,
-        erosion: margenSinInflacion - margenConInflacion
-      });
-    }
-    
-    return datos;
-  };
 
   useEffect(() => {
     const cargarDatos = async () => {
@@ -259,7 +163,7 @@ function App() {
         try {
           const resNube = await fetch(`${SCRIPT_URL}?sheet=HistorialCompartido`);
           const dataNube = await resNube.json();
-
+          
           if (dataNube && Array.isArray(dataNube)) {
             const findKey = (obj, k) => Object.keys(obj).find(key => key.toLowerCase() === k.toLowerCase());
 
@@ -314,7 +218,7 @@ function App() {
                 eerr: eerrParseada
               };
             });
-
+            
             setHistorial(historialSincronizado);
 
             // CARGA AUTOMÁTICA DEL ÚLTIMO ESCENARIO AL ENTRAR
@@ -326,7 +230,6 @@ function App() {
                 setPctCostoLaboral(ultimo.config.pctCostoLaboral ?? 45);
                 setGastosOperativos(ultimo.config.gastosOperativos ?? 46539684.59);
                 setMargenObjetivo(ultimo.config.margenObjetivo ?? 25);
-                setInflacionAnual(ultimo.config.inflacionAnual ?? 24);
                 if(ultimo.config.lineasVentaTotal) setLineasVentaTotal(ultimo.config.lineasVentaTotal);
                 if(ultimo.config.lineasRenovacion) setLineasRenovacion(ultimo.config.lineasRenovacion);
                 if(ultimo.config.lineasIncremental) setLineasIncremental(ultimo.config.lineasIncremental);
@@ -345,11 +248,10 @@ function App() {
             tipoIdx: 0,
             cantidad: 1,
             sueldoBruto: preciosProcesados[0].sueldoSugerido || 0,
-            ventaUnit: preciosProcesados[0].valor || 0,
-            mesInicio: '2026-02'
+            ventaUnit: preciosProcesados[0].valor || 0
           }]);
         }
-
+        
         // Desbloqueamos el guardado en LocalStorage
         setIsReady(true);
 
@@ -372,11 +274,10 @@ function App() {
     localStorage.setItem('hzn_pctLab', pctCostoLaboral);
     localStorage.setItem('hzn_gastosOp', gastosOperativos);
     localStorage.setItem('hzn_margenObj', margenObjetivo);
-    localStorage.setItem('hzn_inflacionAnual', inflacionAnual);
     localStorage.setItem('hzn_lineasVenta', JSON.stringify(lineasVentaTotal));
     localStorage.setItem('hzn_lineasReno', JSON.stringify(lineasRenovacion));
     localStorage.setItem('hzn_lineasIncr', JSON.stringify(lineasIncremental));
-  }, [escenarios, pctIndirectos, pctCostoLaboral, gastosOperativos, margenObjetivo, inflacionAnual, lineasVentaTotal, lineasRenovacion, lineasIncremental, isReady, isLoadingFromCloud]);
+  }, [escenarios, pctIndirectos, pctCostoLaboral, gastosOperativos, margenObjetivo, lineasVentaTotal, lineasRenovacion, lineasIncremental, isReady, isLoadingFromCloud]);
 
   const agregarFila = () => {
     if (dataSheets.loading) {
@@ -395,8 +296,7 @@ function App() {
         tipoIdx: 0,
         cantidad: 1,
         sueldoBruto: precioDefault.sueldoSugerido || 0,
-        ventaUnit: precioDefault.valor || 0,
-        mesInicio: '2026-02'
+        ventaUnit: precioDefault.valor || 0
       }
     ]));
   };
@@ -408,8 +308,6 @@ function App() {
       if (campo === 'ventaUnit' || campo === 'sueldoBruto') {
         const num = typeof valor === 'string' ? parseInt(valor.replace(/\D/g, '')) || 0 : Number(valor || 0);
         updated[campo] = num;
-      } else if (campo === 'mesInicio') {
-        updated.mesInicio = valor;
       } else if (campo === 'tipoIdx') {
         updated.tipoIdx = Number(valor) || 0;
         const p = dataSheets.preciosNuevos[Number(valor)];
@@ -456,23 +354,16 @@ function App() {
     escenarios.forEach(e => {
       const p = dataSheets.preciosNuevos && dataSheets.preciosNuevos[e.tipoIdx];
       if (!p) return;
-
-      const meses = calcularMesesDesdeHoy(e.mesInicio || '2026-02');
-      const ventaUnitConInflacion = aplicarInflacion(Number(e.ventaUnit) || 0, meses);
-      const sueldoBrutoConInflacion = aplicarInflacion(Number(e.sueldoBruto) || 0, meses);
-
-      const ventaFila = (Number(e.cantidad) || 0) * ventaUnitConInflacion;
+      const ventaFila = (Number(e.cantidad) || 0) * (Number(e.ventaUnit) || 0);
       let costoTotalFila = 0;
       if ((p.categoria || '').toLowerCase().includes('staff')) {
-        const sueldoBrutoTotal = (Number(e.cantidad) || 0) * sueldoBrutoConInflacion;
-        // % Costo Laboral = cargas / costo empresa (reemplaza "Cargas x")
-        const costoLaboralEmpresa = sueldoBrutoTotal * (1 + (pctCostoLaboral / 100));
-        const indirectos = ventaFila * (pctIndirectos / 100);
-        costoTotalFila = costoLaboralEmpresa + indirectos;
+        const sueldoTotal = (Number(e.cantidad) || 0) * (Number(e.sueldoBruto) || 0);
+        const costoLaboral = sueldoTotal * (pctCostoLaboral / 100);
+        const indirectos = sueldoTotal * (pctIndirectos / 100);
+        costoTotalFila = sueldoTotal + costoLaboral + indirectos;
       } else {
-        const costoFijoConInflacion = aplicarInflacion(Number(p.costoFijo) || 0, meses);
-        const base = (Number(e.cantidad) || 0) * costoFijoConInflacion;
-        const indirectos = ventaFila * (pctIndirectos / 100);
+        const base = (Number(e.cantidad) || 0) * (Number(p.costoFijo) || 0);
+        const indirectos = base * (pctIndirectos / 100);
         costoTotalFila = base + indirectos;
       }
       ventasTotales += ventaFila;
@@ -551,22 +442,13 @@ function App() {
     if (!nombre) return;
     const eerrActual = calcularEERRTotal();
     const timestamp = new Date().toLocaleString('es-AR');
-
+    
     const nuevoRegistro = {
       id: Date.now(),
       nombre: nombre,
       fecha: timestamp,
       escenarios: escenarios,
-      config: {
-        pctIndirectos,
-        pctCostoLaboral,
-        gastosOperativos,
-        margenObjetivo,
-        inflacionAnual,
-        lineasVentaTotal,
-        lineasRenovacion,
-        lineasIncremental
-      },
+      config: { pctIndirectos, pctCostoLaboral, gastosOperativos, margenObjetivo, lineasVentaTotal, lineasRenovacion, lineasIncremental },
       eerr: eerrActual
     };
 
@@ -593,27 +475,26 @@ function App() {
   // FIX 4: Función para cargar escenario con bloqueo temporal de localStorage
   const cargarEscenarioDesdeHistorial = (item) => {
     if(!window.confirm(`¿Cargar el escenario "${item.nombre}"? Se perderán los cambios actuales.`)) return;
-
+    
     // Activamos el flag de bloqueo
     setIsLoadingFromCloud(true);
-
+    
     // Validamos que los datos sean arrays/objetos válidos antes de cargar
     const escenariosValidos = Array.isArray(item.escenarios) ? item.escenarios : [];
     const configValida = (typeof item.config === 'object' && item.config !== null) ? item.config : {};
-
+    
     setEscenarios(escenariosValidos);
     setPctIndirectos(configValida.pctIndirectos ?? 37);
     setPctCostoLaboral(configValida.pctCostoLaboral ?? 45);
     setGastosOperativos(configValida.gastosOperativos ?? 46539684.59);
     setMargenObjetivo(configValida.margenObjetivo ?? 25);
-    setInflacionAnual(configValida.inflacionAnual ?? 24);
-
+    
     if(configValida.lineasVentaTotal) setLineasVentaTotal(configValida.lineasVentaTotal);
     if(configValida.lineasRenovacion) setLineasRenovacion(configValida.lineasRenovacion);
     if(configValida.lineasIncremental) setLineasIncremental(configValida.lineasIncremental);
-
+    
     setMostrarHistorial(false);
-
+    
     // Desbloqueamos después de 200ms para que React termine de renderizar
     setTimeout(() => {
       setIsLoadingFromCloud(false);
@@ -647,7 +528,7 @@ function App() {
 <body>  
   <h1>HORIZON - Estado de Resultados Proyectado 2026</h1>  
   <p class="header">Generado: ${timestamp}</p>  
-
+  
   <div class="section">  
     <h3>Resumen Financiero</h3>  
     <table>  
@@ -660,7 +541,7 @@ function App() {
       <tr><td class="bold">Ganancia Neta:</td><td class="right bold ${eerr.gananciaNetaTotal >= 0 ? 'green' : 'red'}">${format(eerr.gananciaNetaTotal)} (${eerr.margenNetoPct.toFixed(1)}%)</td></tr>  
     </table>  
   </div>  
-
+  
   <h3>Detalle de Servicios Propuestos</h3>  
   <table>  
     <thead>  
@@ -681,23 +562,15 @@ function App() {
       const p = dataSheets.preciosNuevos[e.tipoIdx];
       if (!p) return;
       const isStaff = p.categoria === 'Staff Augmentation';
-      const meses = calcularMesesDesdeHoy(e.mesInicio || '2026-02');
-      const ventaUnitConInflacion = aplicarInflacion(Number(e.ventaUnit) || 0, meses);
-      const sueldoBrutoConInflacion = aplicarInflacion(Number(e.sueldoBruto) || 0, meses);
-
       let costoTotal = 0;
       if (isStaff) {
-        const sueldo = e.cantidad * sueldoBrutoConInflacion;
-        const costoLaboralEmpresa = sueldo * (1 + (pctCostoLaboral / 100));
-        const venta = e.cantidad * ventaUnitConInflacion;
-        costoTotal = costoLaboralEmpresa + (venta * pctIndirectos/100);
+        const sueldo = e.cantidad * e.sueldoBruto;
+        costoTotal = sueldo + (sueldo * pctCostoLaboral/100) + (sueldo * pctIndirectos/100);
       } else {
-        const costoFijoConInflacion = aplicarInflacion(Number(p.costoFijo) || 0, meses);
-        const base = e.cantidad * costoFijoConInflacion;
-        const venta = e.cantidad * ventaUnitConInflacion;
-        costoTotal = base + (venta * pctIndirectos/100);
+        const base = e.cantidad * p.costoFijo;
+        costoTotal = base + (base * pctIndirectos/100);
       }
-      const venta = e.cantidad * ventaUnitConInflacion;
+      const venta = e.cantidad * e.ventaUnit;
       const res = venta - costoTotal;
       const mgn = venta > 0 ? (res / venta) * 100 : 0;
 
@@ -706,8 +579,8 @@ function App() {
         <td>${e.cliente}</td>  
         <td>${p.categoria} - ${p.tipo}</td>  
         <td class="right">${e.cantidad}</td>  
-        <td class="right">${format(ventaUnitConInflacion)}</td>  
-        <td class="right">${isStaff ? format(sueldoBrutoConInflacion) : '-'}</td>  
+        <td class="right">${format(e.ventaUnit)}</td>  
+        <td class="right">${isStaff ? format(e.sueldoBruto) : '-'}</td>  
         <td class="right red">-${format(costoTotal)}</td>  
         <td class="right green bold">${format(res)}</td>  
         <td class="right bold">${mgn.toFixed(1)}%</td>  
@@ -717,12 +590,12 @@ function App() {
     html += `  
     </tbody>  
   </table>  
-
+  
   <div class="section">  
     <h3>Configuración Utilizada</h3>  
     <p><strong>Indirectos:</strong> ${pctIndirectos}% | <strong>Costo Laboral:</strong> ${pctCostoLaboral}% | <strong>Margen Objetivo:</strong> ${margenObjetivo}%</p>  
   </div>  
-
+  
   <div class="footer">  
     <h2>Ganancia Neta Proyectada: ${format(eerr.gananciaNetaTotal)}</h2>  
     <p>Margen Neto: ${eerr.margenNetoPct.toFixed(1)}% | Desvío vs Dic-25: ${eerr.desvioGananciaNeta >= 0 ? '+' : ''}${format(eerr.desvioGananciaNeta)}</p>  
@@ -747,7 +620,7 @@ function App() {
     const totalReal = calcularTotalLineas(lineas);
     const pctCumplimiento = objetivo > 0 ? Math.min((totalReal / objetivo) * 100, 100) : 0;
     const angle = -90 + (pctCumplimiento * 1.8);
-
+    
     const totalArcLength = 251.2;
     const filledLength = (pctCumplimiento / 100) * totalArcLength;
     const gapLength = totalArcLength - filledLength;
@@ -765,7 +638,7 @@ function App() {
         <div className="relative w-full flex justify-center mb-4">
           <svg viewBox="0 0 200 120" className="w-full max-w-xs">
             <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#f1f5f9" strokeWidth="20" strokeLinecap="round" />
-
+            
             {pctCumplimiento < 100 && (
               <path 
                 d="M 20 100 A 80 80 0 0 1 180 100" 
@@ -797,7 +670,7 @@ function App() {
               strokeDasharray={`${filledLength} ${totalArcLength}`} 
               style={{ transition: 'all 0.8s ease-out' }} 
             />
-
+            
             <line x1="100" y1="100" x2="100" y2="30" stroke={getColor()} strokeWidth="3" strokeLinecap="round" transform={`rotate(${angle} 100 100)`} style={{ transition: 'all 0.8s ease-out' }} />
             <circle cx="100" cy="100" r="8" fill={getColor()} />
           </svg>
@@ -887,10 +760,6 @@ function App() {
                 <span className="text-[10px] font-bold text-purple-400 block uppercase">Margen Obj.</span>
                 <input type="number" value={margenObjetivo} onChange={e => setMargenObjetivo(cleanNum(e.target.value))} className="w-16 font-bold text-purple-600 focus:outline-none" />%
              </div>
-             <div className="bg-white px-4 py-2 rounded-lg shadow-sm border border-orange-100">
-                <span className="text-[10px] font-bold text-orange-400 block uppercase">Inflación</span>
-                <input type="number" value={inflacionAnual} onChange={e => setInflacionAnual(cleanNum(e.target.value))} className="w-16 font-bold text-orange-600 focus:outline-none" step="0.1" />%
-             </div>
           </div>
         </div>
 
@@ -900,7 +769,7 @@ function App() {
             <div className="flex gap-2">
                <button onClick={() => setMostrarHistorial(!mostrarHistorial)} className={`text-xs font-bold px-3 py-1 border rounded-lg transition ${mostrarHistorial ? 'bg-purple-600 text-white border-purple-600' : 'text-slate-600 border-purple-200 hover:text-purple-600'}`}>📋 Historial ({historial.length})</button>
                <button onClick={guardarEscenario} className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold hover:shadow-lg transition">💾 Guardar Escenario</button>
-
+               
                <button onClick={descargarPDF} className="bg-gradient-to-r from-purple-500 to-pink-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold hover:shadow-lg transition">
                  📄 Descargar PDF
                </button>
@@ -913,32 +782,24 @@ function App() {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="text-[10px] font-bold text-purple-400 uppercase bg-purple-50/30">
-                  <th className="p-4">Cliente</th><th className="p-4">Servicio</th><th className="p-4 text-center">Cant</th><th className="p-4 text-center">Mes Inicio</th><th className="p-4 text-right">Venta Unit</th><th className="p-4 text-right">Sueldo Bruto</th><th className="p-4 text-right">Costo Total</th><th className="p-4 text-right">Resultado</th><th className="p-4 text-center">Margen</th><th className="p-4"></th>
+                  <th className="p-4">Cliente</th><th className="p-4">Servicio</th><th className="p-4 text-center">Cant</th><th className="p-4 text-right">Venta Unit</th><th className="p-4 text-right">Sueldo Bruto</th><th className="p-4 text-right">Costo Total</th><th className="p-4 text-right">Resultado</th><th className="p-4 text-center">Margen</th><th className="p-4"></th>
                 </tr>
               </thead>
               <tbody className="text-sm">
                 {escenarios.map(e => {
                   const p = dataSheets.preciosNuevos && dataSheets.preciosNuevos[e.tipoIdx];
                   const isStaff = p && (p.categoria || '').toLowerCase().includes('staff');
-                  const meses = calcularMesesDesdeHoy(e.mesInicio || '2026-02');
-                  const ventaUnitConInflacion = aplicarInflacion(Number(e.ventaUnit) || 0, meses);
-                  const sueldoBrutoConInflacion = aplicarInflacion(Number(e.sueldoBruto) || 0, meses);
-
                   let costoTotal = 0;
                   if (p) {
                     if (isStaff) {
-                      const sueldo = (Number(e.cantidad) || 0) * sueldoBrutoConInflacion;
-                      const costoLaboralEmpresa = sueldo * (1 + (pctCostoLaboral / 100));
-                      const venta = (Number(e.cantidad) || 0) * ventaUnitConInflacion;
-                      costoTotal = costoLaboralEmpresa + (venta * pctIndirectos / 100);
+                      const sueldo = (Number(e.cantidad) || 0) * (Number(e.sueldoBruto) || 0);
+                      costoTotal = sueldo + (sueldo * pctCostoLaboral/100) + (sueldo * pctIndirectos/100);
                     } else {
-                      const costoFijoConInflacion = aplicarInflacion(Number(p.costoFijo) || 0, meses);
-                      const base = (Number(e.cantidad) || 0) * costoFijoConInflacion;
-                      const venta = (Number(e.cantidad) || 0) * ventaUnitConInflacion;
-                      costoTotal = base + (venta * pctIndirectos / 100);
+                      const base = (Number(e.cantidad) || 0) * (Number(p.costoFijo) || 0);
+                      costoTotal = base + (base * pctIndirectos/100);
                     }
                   }
-                  const venta = (Number(e.cantidad) || 0) * ventaUnitConInflacion;
+                  const venta = (Number(e.cantidad) || 0) * (Number(e.ventaUnit) || 0);
                   const res = venta - costoTotal;
                   const mgn = venta > 0 ? (res / venta) * 100 : 0;
 
@@ -960,45 +821,28 @@ function App() {
                       <td className="p-4 text-center">
                         <input type="number" value={e.cantidad} onChange={(ev) => actualizarFila(e.id, 'cantidad', ev.target.value)} className="w-10 text-center bg-purple-50 rounded font-bold" min="0" />
                       </td>
-                      <td className="p-4 text-center">
-                        <select
-                          value={e.mesInicio || '2026-02'}
-                          onChange={(ev) => actualizarFila(e.id, 'mesInicio', ev.target.value)}
-                          className="text-[10px] bg-orange-50 rounded font-bold border border-orange-200 px-1"
-                        >
-                          {generarOpcionesMeses().map(m => (
-                            <option key={m.value} value={m.value}>{m.label}</option>
-                          ))}
-                        </select>
-                      </td>
                       <td className="p-4 text-right">
-                        <div className="flex flex-col items-end">
-                          <input
-                            type="text"
-                            value={ventaUnitStr}
-                            onChange={(ev) => {
-                              const val = ev.target.value.replace(/\D/g, '');
-                              actualizarFila(e.id, 'ventaUnit', val === '' ? 0 : Number(val));
-                            }}
-                            className="w-28 text-right bg-blue-50 text-blue-700 font-bold rounded px-2 border border-blue-200"
-                          />
-                          {meses > 0 && <span className="text-[9px] text-orange-500 font-bold">Inf: {format(ventaUnitConInflacion)}</span>}
-                        </div>
+                        <input
+                          type="text"
+                          value={ventaUnitStr}
+                          onChange={(ev) => {
+                            const val = ev.target.value.replace(/\D/g, '');
+                            actualizarFila(e.id, 'ventaUnit', val === '' ? 0 : Number(val));
+                          }}
+                          className="w-28 text-right bg-blue-50 text-blue-700 font-bold rounded px-2 border border-blue-200"
+                        />
                       </td>
                       <td className="p-4 text-right">
                         {isStaff ? (
-                          <div className="flex flex-col items-end">
-                            <input
-                              type="text"
-                              value={sueldoBrutoStr}
-                              onChange={(ev) => {
-                                const val = ev.target.value.replace(/\D/g, '');
-                                actualizarFila(e.id, 'sueldoBruto', val === '' ? 0 : Number(val));
-                              }}
-                              className="w-24 text-right bg-pink-50 text-pink-700 font-bold rounded px-2 border border-pink-200"
-                            />
-                            {meses > 0 && <span className="text-[9px] text-orange-500 font-bold">Inf: {format(sueldoBrutoConInflacion)}</span>}
-                          </div>
+                          <input
+                            type="text"
+                            value={sueldoBrutoStr}
+                            onChange={(ev) => {
+                              const val = ev.target.value.replace(/\D/g, '');
+                              actualizarFila(e.id, 'sueldoBruto', val === '' ? 0 : Number(val));
+                            }}
+                            className="w-24 text-right bg-pink-50 text-pink-700 font-bold rounded px-2 border border-pink-200"
+                          />
                         ) : (
                           <span className="text-slate-300">-</span>
                         )}
@@ -1092,7 +936,7 @@ function App() {
                           style={{ width: `${(margenObjetivo - margen) * 2}%` }}
                         ></div>
                       )}
-
+                      
                       <div 
                         className="absolute top-0 h-full border-l-2 border-white/50 z-20"
                         style={{ left: `${margenObjetivo * 2}%` }}
@@ -1103,86 +947,6 @@ function App() {
               })}
               {Object.keys(propuesta.porCliente).length === 0 && (
                 <p className="text-center text-slate-300 text-xs py-4 italic">Sin datos de simulación</p>
-              )}
-            </div>
-          )}
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm border border-orange-100 mb-6 overflow-hidden">
-          <div className="p-4 border-b border-orange-50 flex justify-between items-center bg-gradient-to-r from-orange-50 to-red-50">
-            <h2 className="font-bold text-orange-700 text-sm uppercase">📉 Erosión de Margen por Inflación</h2>
-            <button 
-              onClick={() => setMostrarErosion(!mostrarErosion)} 
-              className="bg-orange-600/10 hover:bg-orange-600/20 text-orange-700 px-3 py-1 rounded text-[10px] font-black uppercase transition"
-            >
-              {mostrarErosion ? '✕ Ocultar' : '👁️ Mostrar'}
-            </button>
-          </div>
-          {mostrarErosion && (
-            <div className="p-6">
-              {escenarios.length > 0 ? (
-                <div className="space-y-6">
-                  {escenarios.map(e => {
-                    const p = dataSheets.preciosNuevos[e.tipoIdx];
-                    if (!p) return null;
-                    
-                    const datosErosion = calcularErosionMargen(e, p);
-                    
-                    return (
-                      <div key={e.id} className="border border-orange-100 rounded-lg p-4">
-                        <h3 className="text-xs font-bold text-slate-700 mb-3">
-                          {e.cliente} - {p.categoria} ({p.tipo})
-                        </h3>
-                        
-                        <div className="relative h-32 flex items-end gap-1">
-                          {datosErosion.map((punto, idx) => {
-                            const alturaMargenSinInflacion = (punto.margenSinInflacion / 100) * 100;
-                            const alturaMargenConInflacion = (punto.margenConInflacion / 100) * 100;
-                            
-                            return (
-                              <div key={idx} className="flex-1 flex flex-col items-center gap-1">
-                                <div className="w-full flex flex-col justify-end h-24 gap-0.5">
-                                  <div 
-                                    className="w-full bg-green-400 rounded-t transition-all duration-300"
-                                    style={{ height: `${alturaMargenSinInflacion}%` }}
-                                    title={`Sin inflación: ${punto.margenSinInflacion.toFixed(1)}%`}
-                                  ></div>
-                                  <div 
-                                    className="w-full bg-red-400 rounded-t transition-all duration-300"
-                                    style={{ height: `${alturaMargenConInflacion}%` }}
-                                    title={`Con inflación: ${punto.margenConInflacion.toFixed(1)}%`}
-                                  ></div>
-                                </div>
-                                <span className="text-[8px] text-slate-400 font-bold">M{idx}</span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                        
-                        <div className="flex justify-center gap-4 mt-4 text-[10px]">
-                          <div className="flex items-center gap-1">
-                            <div className="w-3 h-3 bg-green-400 rounded"></div>
-                            <span className="text-slate-600">Sin inflación</span>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <div className="w-3 h-3 bg-red-400 rounded"></div>
-                            <span className="text-slate-600">Con inflación</span>
-                          </div>
-                        </div>
-                        
-                        <div className="mt-3 text-center">
-                          <span className="text-xs font-bold text-red-600">
-                            Erosión total: {(datosErosion[0].margenSinInflacion - datosErosion[datosErosion.length - 1].margenConInflacion).toFixed(1)}%
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className="text-center text-slate-300 text-xs py-8 italic">
-                  Agregá servicios para ver la erosión de margen
-                </p>
               )}
             </div>
           )}
