@@ -1,28 +1,6 @@
 const SHEET_ID = '1fJVmm7i5g1IfOLHDTByRM-W01pWIF46k7aDOYsH4UKA';
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzCxPqker3JsD9YKVDeTY5zOqmguQM10hpRAvUbjlEe3PUOHI8uScpLvAMQ4QvrSu7x/exec';
 
-const MESES = [
-  { valor: 0, nombre: 'Hoy (Feb 2026)' },
-  { valor: 1, nombre: 'Mar 2026' },
-  { valor: 2, nombre: 'Abr 2026' },
-  { valor: 3, nombre: 'May 2026' },
-  { valor: 4, nombre: 'Jun 2026' },
-  { valor: 5, nombre: 'Jul 2026' },
-  { valor: 6, nombre: 'Ago 2026' },
-  { valor: 7, nombre: 'Sep 2026' },
-  { valor: 8, nombre: 'Oct 2026' },
-  { valor: 9, nombre: 'Nov 2026' },
-  { valor: 10, nombre: 'Dic 2026' },
-  { valor: 11, nombre: 'Ene 2027' },
-  { valor: 12, nombre: 'Feb 2027' },
-  { valor: 13, nombre: 'Mar 2027' },
-  { valor: 14, nombre: 'Abr 2027' },
-  { valor: 15, nombre: 'May 2027' },
-  { valor: 16, nombre: 'Jun 2027' },
-  { valor: 17, nombre: 'Jul 2027' },
-  { valor: 18, nombre: 'Ago 2027' }
-];
-
 const cleanNum = (val) => {
   if (val === undefined || val === null || val === '') return 0;
   let s = String(val);
@@ -98,9 +76,12 @@ function App() {
   const [gastosOperativos, setGastosOperativos] = useState(0);
   const [margenObjetivo, setMargenObjetivo] = useState(0);
 
-  // INFLACIÓN
-  const [inflacionAnual, setInflacionAnual] = useState(24);
+  // INFLACIÓN - NUEVO MÓDULO
+  const [inflacionAnual, setInflacionAnual] = useState(24); // 24% anual por defecto
+  const [inflacionVentas, setInflacionVentas] = useState(24); // Inflación específica para ventas
+  const [inflacionCostos, setInflacionCostos] = useState(24); // Inflación específica para costos
 
+  // FIX 1: Flag para bloquear guardado en localStorage durante carga desde nube
   const [isReady, setIsReady] = useState(false);
   const [isLoadingFromCloud, setIsLoadingFromCloud] = useState(false);
 
@@ -120,16 +101,23 @@ function App() {
   const [mostrarHistorial, setMostrarHistorial] = useState(false);
   const [mostrarEERR, setMostrarEERR] = useState(true);
   const [mostrarAporte, setMostrarAporte] = useState(true);
-  const [mostrarGraficoErosion, setMostrarGraficoErosion] = useState(false);
 
   // Cálculo de tasa mensual de inflación
-  const tasaMensualInflacion = useMemo(() => {
-    return Math.pow(1 + (inflacionAnual / 100), 1/12) - 1;
-  }, [inflacionAnual]);
+  const tasaMensualInflacionVentas = useMemo(() => {
+    return Math.pow(1 + (inflacionVentas / 100), 1/12) - 1;
+  }, [inflacionVentas]);
+
+  const tasaMensualInflacionCostos = useMemo(() => {
+    return Math.pow(1 + (inflacionCostos / 100), 1/12) - 1;
+  }, [inflacionCostos]);
 
   // Función para aplicar inflación a un valor según meses transcurridos
-  const aplicarInflacion = (valor, meses = 0) => {
-    return Number(valor) * Math.pow(1 + tasaMensualInflacion, meses);
+  const aplicarInflacionVentas = (valor, meses = 0) => {
+    return Number(valor) * Math.pow(1 + tasaMensualInflacionVentas, meses);
+  };
+
+  const aplicarInflacionCostos = (valor, meses = 0) => {
+    return Number(valor) * Math.pow(1 + tasaMensualInflacionCostos, meses);
   };
 
   useEffect(() => {
@@ -192,6 +180,7 @@ function App() {
 
         let escenariosCargados = false;
 
+        // --- CARGA DESDE LA NUBE (FIX 2: Parseo robusto) ---
         try {
           const resNube = await fetch(`${SCRIPT_URL}?sheet=HistorialCompartido`);
           const dataNube = await resNube.json();
@@ -204,6 +193,7 @@ function App() {
               const conf = item[findKey(item, 'Configuracion')];
               const eerrData = item[findKey(item, 'EERR')];
 
+              // FIX 2: Parseo robusto - siempre devolvemos arrays/objetos válidos
               let escenariosParseados = [];
               if (Array.isArray(dEsc)) {
                 escenariosParseados = dEsc;
@@ -252,6 +242,7 @@ function App() {
 
             setHistorial(historialSincronizado);
 
+            // CARGA AUTOMÁTICA DEL ÚLTIMO ESCENARIO AL ENTRAR
             const ultimo = historialSincronizado[historialSincronizado.length - 1];
             if (ultimo && Array.isArray(ultimo.escenarios) && ultimo.escenarios.length > 0) {
               setEscenarios(ultimo.escenarios);
@@ -261,6 +252,8 @@ function App() {
                 setGastosOperativos(ultimo.config.gastosOperativos ?? 46539684.59);
                 setMargenObjetivo(ultimo.config.margenObjetivo ?? 25);
                 setInflacionAnual(ultimo.config.inflacionAnual ?? 24);
+                setInflacionVentas(ultimo.config.inflacionVentas ?? 24);
+                setInflacionCostos(ultimo.config.inflacionCostos ?? 24);
                 if(ultimo.config.lineasVentaTotal) setLineasVentaTotal(ultimo.config.lineasVentaTotal);
                 if(ultimo.config.lineasRenovacion) setLineasRenovacion(ultimo.config.lineasRenovacion);
                 if(ultimo.config.lineasIncremental) setLineasIncremental(ultimo.config.lineasIncremental);
@@ -271,6 +264,7 @@ function App() {
           console.error("Error cargando historial de la nube:", e); 
         }
 
+        // Si después de la nube no hay escenarios cargados, creamos uno inicial
         if (preciosProcesados.length > 0 && escenarios.length === 0) {
           setEscenarios([{
             id: Date.now(),
@@ -278,25 +272,26 @@ function App() {
             tipoIdx: 0,
             cantidad: 1,
             sueldoBruto: preciosProcesados[0].sueldoSugerido || 0,
-            ventaUnit: preciosProcesados[0].valor || 0,
-            mesInicio: 0
+            ventaUnit: preciosProcesados[0].valor || 0
           }]);
         }
 
+        // Desbloqueamos el guardado en LocalStorage
         setIsReady(true);
 
       } catch (error) {
         console.error('Error cargando sheets', error);
         setDataSheets(prev => ({ ...prev, loading: false, error: 'Error cargando datos desde Google Sheets.' }));
-        setIsReady(true);
+        setIsReady(true); // Desbloqueamos incluso si hay error
       }
     };
     cargarDatos();
   }, []);
 
+  // FIX 3: Guardar en localStorage solo cuando isReady=true, isLoadingFromCloud=false y hay datos válidos
   useEffect(() => {
     if (!isReady || isLoadingFromCloud) return;
-    if (!Array.isArray(escenarios)) return;
+    if (!Array.isArray(escenarios)) return; // Validación extra
 
     localStorage.setItem('hzn_escenarios', JSON.stringify(escenarios));
     localStorage.setItem('hzn_pctInd', pctIndirectos);
@@ -304,10 +299,12 @@ function App() {
     localStorage.setItem('hzn_gastosOp', gastosOperativos);
     localStorage.setItem('hzn_margenObj', margenObjetivo);
     localStorage.setItem('hzn_inflacionAnual', inflacionAnual);
+    localStorage.setItem('hzn_inflacionVentas', inflacionVentas);
+    localStorage.setItem('hzn_inflacionCostos', inflacionCostos);
     localStorage.setItem('hzn_lineasVenta', JSON.stringify(lineasVentaTotal));
     localStorage.setItem('hzn_lineasReno', JSON.stringify(lineasRenovacion));
     localStorage.setItem('hzn_lineasIncr', JSON.stringify(lineasIncremental));
-  }, [escenarios, pctIndirectos, pctCostoLaboral, gastosOperativos, margenObjetivo, inflacionAnual, lineasVentaTotal, lineasRenovacion, lineasIncremental, isReady, isLoadingFromCloud]);
+  }, [escenarios, pctIndirectos, pctCostoLaboral, gastosOperativos, margenObjetivo, inflacionAnual, inflacionVentas, inflacionCostos, lineasVentaTotal, lineasRenovacion, lineasIncremental, isReady, isLoadingFromCloud]);
 
   const agregarFila = () => {
     if (dataSheets.loading) {
@@ -327,7 +324,7 @@ function App() {
         cantidad: 1,
         sueldoBruto: precioDefault.sueldoSugerido || 0,
         ventaUnit: precioDefault.valor || 0,
-        mesInicio: 0
+        mesesInflacion: 0
       }
     ]));
   };
@@ -339,8 +336,8 @@ function App() {
       if (campo === 'ventaUnit' || campo === 'sueldoBruto') {
         const num = typeof valor === 'string' ? parseInt(valor.replace(/\D/g, '')) || 0 : Number(valor || 0);
         updated[campo] = num;
-      } else if (campo === 'mesInicio') {
-        updated.mesInicio = Number(valor) || 0;
+      } else if (campo === 'mesesInflacion') {
+        updated.mesesInflacion = Number(valor) || 0;
       } else if (campo === 'tipoIdx') {
         updated.tipoIdx = Number(valor) || 0;
         const p = dataSheets.preciosNuevos[Number(valor)];
@@ -388,19 +385,20 @@ function App() {
       const p = dataSheets.preciosNuevos && dataSheets.preciosNuevos[e.tipoIdx];
       if (!p) return;
 
-      const meses = Number(e.mesInicio) || 0;
-      const ventaUnitConInflacion = aplicarInflacion(Number(e.ventaUnit) || 0, meses);
-      const sueldoBrutoConInflacion = aplicarInflacion(Number(e.sueldoBruto) || 0, meses);
+      const meses = Number(e.mesesInflacion) || 0;
+      const ventaUnitConInflacion = aplicarInflacionVentas(Number(e.ventaUnit) || 0, meses);
+      const sueldoBrutoConInflacion = aplicarInflacionCostos(Number(e.sueldoBruto) || 0, meses);
 
       const ventaFila = (Number(e.cantidad) || 0) * ventaUnitConInflacion;
       let costoTotalFila = 0;
       if ((p.categoria || '').toLowerCase().includes('staff')) {
         const sueldoBrutoTotal = (Number(e.cantidad) || 0) * sueldoBrutoConInflacion;
+        // % Costo Laboral = cargas / costo empresa (reemplaza "Cargas x")
         const costoLaboralEmpresa = sueldoBrutoTotal * (1 + (pctCostoLaboral / 100));
         const indirectos = ventaFila * (pctIndirectos / 100);
         costoTotalFila = costoLaboralEmpresa + indirectos;
       } else {
-        const costoFijoConInflacion = aplicarInflacion(Number(p.costoFijo) || 0, meses);
+        const costoFijoConInflacion = aplicarInflacionCostos(Number(p.costoFijo) || 0, meses);
         const base = (Number(e.cantidad) || 0) * costoFijoConInflacion;
         const indirectos = ventaFila * (pctIndirectos / 100);
         costoTotalFila = base + indirectos;
@@ -474,7 +472,7 @@ function App() {
     const costo = propuesta.costosTotales;
     const gananciaNeta = eerr.gananciaNetaTotal - (eerr.gananciaNetaBase || 0);
     return { ingreso, costo, gananciaNeta };
-  }, [escenarios, pctCostoLaboral, pctIndirectos, gastosOperativos, dataSheets.eerrBase]);
+  }, [escenarios, pctCostoLaboral, pctIndirectos, gastosOperativos, inflacionVentas, inflacionCostos, dataSheets.eerrBase]);
 
   const guardarEscenario = async () => {
     const nombre = window.prompt("Ingrese un nombre para este escenario:", `Escenario ${historial.length + 1}`);
@@ -493,6 +491,8 @@ function App() {
         gastosOperativos,
         margenObjetivo,
         inflacionAnual,
+        inflacionVentas,
+        inflacionCostos,
         lineasVentaTotal,
         lineasRenovacion,
         lineasIncremental
@@ -520,11 +520,14 @@ function App() {
     }
   };
 
+  // FIX 4: Función para cargar escenario con bloqueo temporal de localStorage
   const cargarEscenarioDesdeHistorial = (item) => {
     if(!window.confirm(`¿Cargar el escenario "${item.nombre}"? Se perderán los cambios actuales.`)) return;
 
+    // Activamos el flag de bloqueo
     setIsLoadingFromCloud(true);
 
+    // Validamos que los datos sean arrays/objetos válidos antes de cargar
     const escenariosValidos = Array.isArray(item.escenarios) ? item.escenarios : [];
     const configValida = (typeof item.config === 'object' && item.config !== null) ? item.config : {};
 
@@ -534,6 +537,8 @@ function App() {
     setGastosOperativos(configValida.gastosOperativos ?? 46539684.59);
     setMargenObjetivo(configValida.margenObjetivo ?? 25);
     setInflacionAnual(configValida.inflacionAnual ?? 24);
+    setInflacionVentas(configValida.inflacionVentas ?? 24);
+    setInflacionCostos(configValida.inflacionCostos ?? 24);
 
     if(configValida.lineasVentaTotal) setLineasVentaTotal(configValida.lineasVentaTotal);
     if(configValida.lineasRenovacion) setLineasRenovacion(configValida.lineasRenovacion);
@@ -541,6 +546,7 @@ function App() {
 
     setMostrarHistorial(false);
 
+    // Desbloqueamos después de 200ms para que React termine de renderizar
     setTimeout(() => {
       setIsLoadingFromCloud(false);
     }, 200);
@@ -550,66 +556,66 @@ function App() {
     const eerr = calcularEERRTotal();
     const propuesta = eerr.propuesta;
     const timestamp = new Date().toLocaleString('es-AR');
-    let html = `<!DOCTYPE html>  
-<html lang="es">  
-<head>  
-  <meta charset="UTF-8">  
-  <title>Horizon - Proyección ${timestamp}</title>  
-  <style>  
-    body { font-family: Arial, sans-serif; padding: 40px; max-width: 900px; margin: auto; }  
-    h1 { color: #7c3aed; border-bottom: 3px solid #a78bfa; padding-bottom: 10px; }  
-    .header { color: #64748b; font-size: 14px; margin-bottom: 30px; }  
-    .section { background: #f5f3ff; padding: 20px; border-radius: 8px; margin: 20px 0; }  
-    table { width: 100%; border-collapse: collapse; margin: 15px 0; }  
-    th { background: #e9d5ff; padding: 10px; text-align: left; border: 1px solid #cbd5e1; font-size: 12px; }  
-    td { padding: 10px; border: 1px solid #e2e8f0; font-size: 12px; }  
-    .right { text-align: right; }  
-    .bold { font-weight: bold; }  
-    .green { color: #16a34a; }  
-    .red { color: #dc2626; }  
-    .footer { margin-top: 30px; padding: 20px; background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%); color: white; border-radius: 8px; text-align: center; }  
-  </style>  
-</head>  
-<body>  
-  <h1>HORIZON - Estado de Resultados Proyectado 2026</h1>  
-  <p class="header">Generado: ${timestamp}</p>  
+    let html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Horizon - Proyección ${timestamp}</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 40px; max-width: 900px; margin: auto; }
+    h1 { color: #7c3aed; border-bottom: 3px solid #a78bfa; padding-bottom: 10px; }
+    .header { color: #64748b; font-size: 14px; margin-bottom: 30px; }
+    .section { background: #f5f3ff; padding: 20px; border-radius: 8px; margin: 20px 0; }
+    table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+    th { background: #e9d5ff; padding: 10px; text-align: left; border: 1px solid #cbd5e1; font-size: 12px; }
+    td { padding: 10px; border: 1px solid #e2e8f0; font-size: 12px; }
+    .right { text-align: right; }
+    .bold { font-weight: bold; }
+    .green { color: #16a34a; }
+    .red { color: #dc2626; }
+    .footer { margin-top: 30px; padding: 20px; background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%); color: white; border-radius: 8px; text-align: center; }
+  </style>
+</head>
+<body>
+  <h1>HORIZON - Estado de Resultados Proyectado 2026</h1>
+  <p class="header">Generado: ${timestamp}</p>
 
-  <div class="section">  
-    <h3>Resumen Financiero</h3>  
-    <table>  
-      <tr><td class="bold">Ingreso Base (Dic-25):</td><td class="right">${format(dataSheets.eerrBase['Ingreso'] || 0)}</td></tr>  
-      <tr><td class="bold">Ingreso Propuesta:</td><td class="right green">${format(propuesta.ventasTotales)}</td></tr>  
-      <tr><td class="bold">Ingreso Total:</td><td class="right bold">${format(eerr.ingresoTotal)}</td></tr>  
-      <tr><td class="bold">Costo Total:</td><td class="right red">-${format(eerr.costoIngresosTotal)}</td></tr>  
-      <tr><td class="bold">Ganancia Bruta:</td><td class="right green bold">${format(eerr.gananciaBrutaTotal)} (${eerr.margenBrutoPct.toFixed(1)}%)</td></tr>  
-      <tr><td class="bold">Gastos Operativos:</td><td class="right red">-${format(gastosOperativos)}</td></tr>  
-      <tr><td class="bold">Ganancia Neta:</td><td class="right bold ${eerr.gananciaNetaTotal >= 0 ? 'green' : 'red'}">${format(eerr.gananciaNetaTotal)} (${eerr.margenNetoPct.toFixed(1)}%)</td></tr>  
-    </table>  
-  </div>  
+  <div class="section">
+    <h3>Resumen Financiero</h3>
+    <table>
+      <tr><td class="bold">Ingreso Base (Dic-25):</td><td class="right">${format(dataSheets.eerrBase['Ingreso'] || 0)}</td></tr>
+      <tr><td class="bold">Ingreso Propuesta:</td><td class="right green">${format(propuesta.ventasTotales)}</td></tr>
+      <tr><td class="bold">Ingreso Total:</td><td class="right bold">${format(eerr.ingresoTotal)}</td></tr>
+      <tr><td class="bold">Costo Total:</td><td class="right red">-${format(eerr.costoIngresosTotal)}</td></tr>
+      <tr><td class="bold">Ganancia Bruta:</td><td class="right green bold">${format(eerr.gananciaBrutaTotal)} (${eerr.margenBrutoPct.toFixed(1)}%)</td></tr>
+      <tr><td class="bold">Gastos Operativos:</td><td class="right red">-${format(gastosOperativos)}</td></tr>
+      <tr><td class="bold">Ganancia Neta:</td><td class="right bold ${eerr.gananciaNetaTotal >= 0 ? 'green' : 'red'}">${format(eerr.gananciaNetaTotal)} (${eerr.margenNetoPct.toFixed(1)}%)</td></tr>
+    </table>
+  </div>
 
-  <h3>Detalle de Servicios Propuestos</h3>  
-  <table>  
-    <thead>  
-      <tr>  
-        <th>Cliente</th>  
-        <th>Servicio</th>  
-        <th>Cant</th>  
-        <th>Venta Unit</th>  
-        <th>Sueldo Bruto</th>  
-        <th>Costo Total</th>  
-        <th>Resultado</th>  
-        <th>Margen %</th>  
-      </tr>  
-    </thead>  
+  <h3>Detalle de Servicios Propuestos</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Cliente</th>
+        <th>Servicio</th>
+        <th>Cant</th>
+        <th>Venta Unit</th>
+        <th>Sueldo Bruto</th>
+        <th>Costo Total</th>
+        <th>Resultado</th>
+        <th>Margen %</th>
+      </tr>
+    </thead>
     <tbody>`;
 
     escenarios.forEach(e => {
       const p = dataSheets.preciosNuevos[e.tipoIdx];
       if (!p) return;
       const isStaff = p.categoria === 'Staff Augmentation';
-      const meses = Number(e.mesInicio) || 0;
-      const ventaUnitConInflacion = aplicarInflacion(Number(e.ventaUnit) || 0, meses);
-      const sueldoBrutoConInflacion = aplicarInflacion(Number(e.sueldoBruto) || 0, meses);
+      const meses = Number(e.mesesInflacion) || 0;
+      const ventaUnitConInflacion = aplicarInflacionVentas(Number(e.ventaUnit) || 0, meses);
+      const sueldoBrutoConInflacion = aplicarInflacionCostos(Number(e.sueldoBruto) || 0, meses);
 
       let costoTotal = 0;
       if (isStaff) {
@@ -618,7 +624,7 @@ function App() {
         const venta = e.cantidad * ventaUnitConInflacion;
         costoTotal = costoLaboralEmpresa + (venta * pctIndirectos/100);
       } else {
-        const costoFijoConInflacion = aplicarInflacion(Number(p.costoFijo) || 0, meses);
+        const costoFijoConInflacion = aplicarInflacionCostos(Number(p.costoFijo) || 0, meses);
         const base = e.cantidad * costoFijoConInflacion;
         const venta = e.cantidad * ventaUnitConInflacion;
         costoTotal = base + (venta * pctIndirectos/100);
@@ -627,33 +633,34 @@ function App() {
       const res = venta - costoTotal;
       const mgn = venta > 0 ? (res / venta) * 100 : 0;
 
-      html += `  
-      <tr>  
-        <td>${e.cliente}</td>  
-        <td>${p.categoria} - ${p.tipo}</td>  
-        <td class="right">${e.cantidad}</td>  
-        <td class="right">${format(ventaUnitConInflacion)}</td>  
-        <td class="right">${isStaff ? format(sueldoBrutoConInflacion) : '-'}</td>  
-        <td class="right red">-${format(costoTotal)}</td>  
-        <td class="right green bold">${format(res)}</td>  
-        <td class="right bold">${mgn.toFixed(1)}%</td>  
+      html += `
+      <tr>
+        <td>${e.cliente}</td>
+        <td>${p.categoria} - ${p.tipo}</td>
+        <td class="right">${e.cantidad}</td>
+        <td class="right">${format(ventaUnitConInflacion)}</td>
+        <td class="right">${isStaff ? format(sueldoBrutoConInflacion) : '-'}</td>
+        <td class="right red">-${format(costoTotal)}</td>
+        <td class="right green bold">${format(res)}</td>
+        <td class="right bold">${mgn.toFixed(1)}%</td>
       </tr>`;
     });
 
-    html += `  
-    </tbody>  
-  </table>  
+    html += `
+    </tbody>
+  </table>
 
-  <div class="section">  
-    <h3>Configuración Utilizada</h3>  
-    <p><strong>Indirectos:</strong> ${pctIndirectos}% | <strong>Costo Laboral:</strong> ${pctCostoLaboral}% | <strong>Margen Objetivo:</strong> ${margenObjetivo}%</p>  
-  </div>  
+  <div class="section">
+    <h3>Configuración Utilizada</h3>
+    <p><strong>Indirectos:</strong> ${pctIndirectos}% | <strong>Costo Laboral:</strong> ${pctCostoLaboral}% | <strong>Margen Objetivo:</strong> ${margenObjetivo}%</p>
+    <p><strong>Inflación Ventas:</strong> ${inflacionVentas}% anual | <strong>Inflación Costos:</strong> ${inflacionCostos}% anual</p>
+  </div>
 
-  <div class="footer">  
-    <h2>Ganancia Neta Proyectada: ${format(eerr.gananciaNetaTotal)}</h2>  
-    <p>Margen Neto: ${eerr.margenNetoPct.toFixed(1)}% | Desvío vs Dic-25: ${eerr.desvioGananciaNeta >= 0 ? '+' : ''}${format(eerr.desvioGananciaNeta)}</p>  
-  </div>  
-</body>  
+  <div class="footer">
+    <h2>Ganancia Neta Proyectada: ${format(eerr.gananciaNetaTotal)}</h2>
+    <p>Margen Neto: ${eerr.margenNetoPct.toFixed(1)}% | Desvío vs Dic-25: ${eerr.desvioGananciaNeta >= 0 ? '+' : ''}${format(eerr.desvioGananciaNeta)}</p>
+  </div>
+</body>
 </html>`;
 
     const blob = new Blob([html], { type: 'text/html' });
@@ -773,138 +780,6 @@ function App() {
     );
   };
 
-  // NUEVO: Componente de Gráfico de Erosión de Margen
-  const renderGraficoErosion = () => {
-    if (escenarios.length === 0) return null;
-
-    // Tomamos el primer escenario como referencia
-    const escenarioRef = escenarios[0];
-    const p = dataSheets.preciosNuevos && dataSheets.preciosNuevos[escenarioRef.tipoIdx];
-    if (!p) return null;
-
-    const isStaff = (p.categoria || '').toLowerCase().includes('staff');
-    const ventaBase = Number(escenarioRef.ventaUnit) || 0;
-    const sueldoBase = Number(escenarioRef.sueldoBruto) || 0;
-
-    // Calculamos margen para cada mes (0 a 18)
-    const datosGrafico = [];
-    for (let mes = 0; mes <= 18; mes++) {
-      const ventaConInflacion = aplicarInflacion(ventaBase, mes);
-      const sueldoConInflacion = aplicarInflacion(sueldoBase, mes);
-
-      let costoTotal = 0;
-      if (isStaff) {
-        const costoLaboralEmpresa = sueldoConInflacion * (1 + (pctCostoLaboral / 100));
-        const indirectos = ventaConInflacion * (pctIndirectos / 100);
-        costoTotal = costoLaboralEmpresa + indirectos;
-      } else {
-        const costoFijoConInflacion = aplicarInflacion(Number(p.costoFijo) || 0, mes);
-        const indirectos = ventaConInflacion * (pctIndirectos / 100);
-        costoTotal = costoFijoConInflacion + indirectos;
-      }
-
-      const margen = ventaConInflacion > 0 ? ((ventaConInflacion - costoTotal) / ventaConInflacion) * 100 : 0;
-      datosGrafico.push({ mes, margen, venta: ventaConInflacion, costo: costoTotal });
-    }
-
-    const maxMargen = Math.max(...datosGrafico.map(d => d.margen));
-    const minMargen = Math.min(...datosGrafico.map(d => d.margen));
-    const rangoMargen = maxMargen - minMargen;
-
-    const svgWidth = 800;
-    const svgHeight = 300;
-    const padding = 50;
-    const graphWidth = svgWidth - 2 * padding;
-    const graphHeight = svgHeight - 2 * padding;
-
-    const puntos = datosGrafico.map((d, i) => {
-      const x = padding + (i / 18) * graphWidth;
-      const y = padding + graphHeight - ((d.margen - minMargen) / rangoMargen) * graphHeight;
-      return { x, y, ...d };
-    });
-
-    const pathData = puntos.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
-
-    // Línea del margen objetivo
-    const yObjetivo = padding + graphHeight - ((margenObjetivo - minMargen) / rangoMargen) * graphHeight;
-
-    return (
-      <div className="bg-white rounded-xl shadow-lg border border-orange-200 p-6 mb-6">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-sm font-black text-orange-600 uppercase">📉 Erosión de Margen por Inflación ({inflacionAnual}% anual)</h3>
-          <button onClick={() => setMostrarGraficoErosion(false)} className="text-slate-400 hover:text-slate-600 text-xs">Cerrar</button>
-        </div>
-        <p className="text-xs text-slate-500 mb-4">Proyección del margen del primer servicio en la tabla a lo largo de 18 meses</p>
-        
-        <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} className="w-full">
-          {/* Grilla horizontal */}
-          {[0, 25, 50, 75, 100].map(pct => {
-            const y = padding + graphHeight - ((pct - minMargen) / rangoMargen) * graphHeight;
-            return (
-              <g key={pct}>
-                <line x1={padding} y1={y} x2={svgWidth - padding} y2={y} stroke="#e2e8f0" strokeWidth="1" />
-                <text x={padding - 10} y={y + 5} fontSize="10" fill="#94a3b8" textAnchor="end">{pct.toFixed(0)}%</text>
-              </g>
-            );
-          })}
-
-          {/* Línea del margen objetivo */}
-          <line x1={padding} y1={yObjetivo} x2={svgWidth - padding} y2={yObjetivo} stroke="#7c3aed" strokeWidth="2" strokeDasharray="5,5" />
-          <text x={svgWidth - padding - 5} y={yObjetivo - 5} fontSize="10" fill="#7c3aed" textAnchor="end" fontWeight="bold">Objetivo {margenObjetivo}%</text>
-
-          {/* Área bajo la curva */}
-          <path 
-            d={`${pathData} L ${puntos[puntos.length - 1].x} ${padding + graphHeight} L ${padding} ${padding + graphHeight} Z`}
-            fill="url(#gradientErosion)"
-            opacity="0.3"
-          />
-
-          {/* Línea del margen */}
-          <path d={pathData} fill="none" stroke="#f97316" strokeWidth="3" />
-
-          {/* Puntos */}
-          {puntos.map((p, i) => (
-            <g key={i}>
-              <circle cx={p.x} cy={p.y} r="4" fill={p.margen >= margenObjetivo ? '#16a34a' : '#dc2626'} />
-              {i % 3 === 0 && (
-                <text x={p.x} y={svgHeight - padding + 20} fontSize="10" fill="#64748b" textAnchor="middle">M{p.mes}</text>
-              )}
-            </g>
-          ))}
-
-          {/* Gradiente */}
-          <defs>
-            <linearGradient id="gradientErosion" x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" stopColor="#f97316" stopOpacity="0.8" />
-              <stop offset="100%" stopColor="#f97316" stopOpacity="0.1" />
-            </linearGradient>
-          </defs>
-        </svg>
-
-        <div className="mt-4 grid grid-cols-3 gap-4 text-xs">
-          <div className="bg-green-50 p-3 rounded">
-            <p className="font-bold text-green-700">Margen Inicial (Hoy)</p>
-            <p className="text-2xl font-black text-green-600">{datosGrafico[0].margen.toFixed(1)}%</p>
-          </div>
-          <div className="bg-orange-50 p-3 rounded">
-            <p className="font-bold text-orange-700">Margen a 12 meses</p>
-            <p className="text-2xl font-black text-orange-600">{datosGrafico[12].margen.toFixed(1)}%</p>
-          </div>
-          <div className="bg-red-50 p-3 rounded">
-            <p className="font-bold text-red-700">Erosión Total</p>
-            <p className="text-2xl font-black text-red-600">-{(datosGrafico[0].margen - datosGrafico[18].margen).toFixed(1)}%</p>
-          </div>
-        </div>
-
-        {datosGrafico[18].margen < margenObjetivo && (
-          <div className="mt-4 bg-red-50 border-l-4 border-red-500 p-4">
-            <p className="text-xs font-bold text-red-700">⚠️ ALERTA: El margen cae por debajo del objetivo en el mes {datosGrafico.findIndex(d => d.margen < margenObjetivo)}</p>
-          </div>
-        )}
-      </div>
-    );
-  };
-
   const eerr = calcularEERRTotal();
   const propuesta = eerr.propuesta;
 
@@ -945,27 +820,85 @@ function App() {
                 <span className="text-[10px] font-bold text-purple-400 block uppercase">Margen Obj.</span>
                 <input type="number" value={margenObjetivo} onChange={e => setMargenObjetivo(cleanNum(e.target.value))} className="w-16 font-bold text-purple-600 focus:outline-none" />%
              </div>
-             <div className="bg-white px-4 py-2 rounded-lg shadow-sm border border-orange-100">
-                <span className="text-[10px] font-bold text-orange-400 block uppercase">Inflación</span>
-                <input type="number" value={inflacionAnual} onChange={e => setInflacionAnual(cleanNum(e.target.value))} className="w-16 font-bold text-orange-600 focus:outline-none" step="0.1" />%
-             </div>
           </div>
         </div>
 
-        {/* NUEVO: Botón para mostrar gráfico de erosión */}
-        {!mostrarGraficoErosion && escenarios.length > 0 && (
-          <div className="mb-4 flex justify-end">
-            <button 
-              onClick={() => setMostrarGraficoErosion(true)} 
-              className="bg-gradient-to-r from-orange-500 to-red-500 text-white px-4 py-2 rounded-lg text-xs font-bold hover:shadow-lg transition"
-            >
-              📊 Ver Erosión de Margen por Inflación
-            </button>
+        {/* NUEVO PANEL DE INFLACIÓN */}
+        <div className="bg-gradient-to-r from-orange-50 to-red-50 rounded-xl shadow-lg border-2 border-orange-300 p-6 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-black text-orange-700 uppercase flex items-center gap-2">
+              <span className="text-2xl">📈</span> Simulador de Inflación
+            </h2>
+            <div className="text-xs text-orange-600 font-bold">
+              Tasa Mensual: Ventas {(tasaMensualInflacionVentas * 100).toFixed(2)}% | Costos {(tasaMensualInflacionCostos * 100).toFixed(2)}%
+            </div>
           </div>
-        )}
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="bg-white rounded-lg p-4 border-2 border-green-300">
+              <label className="text-sm font-black text-green-700 uppercase block mb-2">
+                🟢 Inflación Ventas (Anual)
+              </label>
+              <div className="flex items-center gap-3">
+                <input 
+                  type="range" 
+                  min="0" 
+                  max="200" 
+                  step="1" 
+                  value={inflacionVentas} 
+                  onChange={e => setInflacionVentas(Number(e.target.value))}
+                  className="flex-1 h-3 bg-green-200 rounded-lg appearance-none cursor-pointer"
+                  style={{
+                    background: `linear-gradient(to right, #22c55e 0%, #22c55e ${inflacionVentas/2}%, #e5e7eb ${inflacionVentas/2}%, #e5e7eb 100%)`
+                  }}
+                />
+                <input 
+                  type="number" 
+                  value={inflacionVentas} 
+                  onChange={e => setInflacionVentas(cleanNum(e.target.value))} 
+                  className="w-20 text-center font-black text-green-700 border-2 border-green-400 rounded px-2 py-1"
+                  step="0.1"
+                />
+                <span className="text-green-700 font-black">%</span>
+              </div>
+            </div>
 
-        {/* NUEVO: Gráfico de Erosión */}
-        {mostrarGraficoErosion && renderGraficoErosion()}
+            <div className="bg-white rounded-lg p-4 border-2 border-red-300">
+              <label className="text-sm font-black text-red-700 uppercase block mb-2">
+                🔴 Inflación Costos (Anual)
+              </label>
+              <div className="flex items-center gap-3">
+                <input 
+                  type="range" 
+                  min="0" 
+                  max="200" 
+                  step="1" 
+                  value={inflacionCostos} 
+                  onChange={e => setInflacionCostos(Number(e.target.value))}
+                  className="flex-1 h-3 bg-red-200 rounded-lg appearance-none cursor-pointer"
+                  style={{
+                    background: `linear-gradient(to right, #ef4444 0%, #ef4444 ${inflacionCostos/2}%, #e5e7eb ${inflacionCostos/2}%, #e5e7eb 100%)`
+                  }}
+                />
+                <input 
+                  type="number" 
+                  value={inflacionCostos} 
+                  onChange={e => setInflacionCostos(cleanNum(e.target.value))} 
+                  className="w-20 text-center font-black text-red-700 border-2 border-red-400 rounded px-2 py-1"
+                  step="0.1"
+                />
+                <span className="text-red-700 font-black">%</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-4 bg-white/50 rounded-lg p-3 border border-orange-200">
+            <p className="text-xs text-orange-800 font-bold">
+              💡 <strong>Tip:</strong> Ajustá la inflación de ventas y costos por separado para simular escenarios realistas. 
+              La columna "Meses" en la tabla aplica estos porcentajes de forma compuesta.
+            </p>
+          </div>
+        </div>
 
         <div className="bg-white rounded-xl shadow-sm border border-purple-100 overflow-hidden mb-6">
           <div className="p-4 border-b border-purple-50 flex justify-between items-center bg-gradient-to-r from-purple-50 to-pink-50">
@@ -986,16 +919,16 @@ function App() {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="text-[10px] font-bold text-purple-400 uppercase bg-purple-50/30">
-                  <th className="p-4">Cliente</th><th className="p-4">Servicio</th><th className="p-4 text-center">Cant</th><th className="p-4 text-center">Mes Inicio</th><th className="p-4 text-right">Venta Unit</th><th className="p-4 text-right">Sueldo Bruto</th><th className="p-4 text-right">Costo Total</th><th className="p-4 text-right">Resultado</th><th className="p-4 text-center">Margen</th><th className="p-4"></th>
+                  <th className="p-4">Cliente</th><th className="p-4">Servicio</th><th className="p-4 text-center">Cant</th><th className="p-4 text-center">Meses</th><th className="p-4 text-right">Venta Unit</th><th className="p-4 text-right">Sueldo Bruto</th><th className="p-4 text-right">Costo Total</th><th className="p-4 text-right">Resultado</th><th className="p-4 text-center">Margen</th><th className="p-4"></th>
                 </tr>
               </thead>
               <tbody className="text-sm">
                 {escenarios.map(e => {
                   const p = dataSheets.preciosNuevos && dataSheets.preciosNuevos[e.tipoIdx];
                   const isStaff = p && (p.categoria || '').toLowerCase().includes('staff');
-                  const meses = Number(e.mesInicio) || 0;
-                  const ventaUnitConInflacion = aplicarInflacion(Number(e.ventaUnit) || 0, meses);
-                  const sueldoBrutoConInflacion = aplicarInflacion(Number(e.sueldoBruto) || 0, meses);
+                  const meses = Number(e.mesesInflacion) || 0;
+                  const ventaUnitConInflacion = aplicarInflacionVentas(Number(e.ventaUnit) || 0, meses);
+                  const sueldoBrutoConInflacion = aplicarInflacionCostos(Number(e.sueldoBruto) || 0, meses);
 
                   let costoTotal = 0;
                   if (p) {
@@ -1005,7 +938,7 @@ function App() {
                       const venta = (Number(e.cantidad) || 0) * ventaUnitConInflacion;
                       costoTotal = costoLaboralEmpresa + (venta * pctIndirectos / 100);
                     } else {
-                      const costoFijoConInflacion = aplicarInflacion(Number(p.costoFijo) || 0, meses);
+                      const costoFijoConInflacion = aplicarInflacionCostos(Number(p.costoFijo) || 0, meses);
                       const base = (Number(e.cantidad) || 0) * costoFijoConInflacion;
                       const venta = (Number(e.cantidad) || 0) * ventaUnitConInflacion;
                       costoTotal = base + (venta * pctIndirectos / 100);
@@ -1034,15 +967,14 @@ function App() {
                         <input type="number" value={e.cantidad} onChange={(ev) => actualizarFila(e.id, 'cantidad', ev.target.value)} className="w-10 text-center bg-purple-50 rounded font-bold" min="0" />
                       </td>
                       <td className="p-4 text-center">
-                        <select
-                          value={e.mesInicio || 0}
-                          onChange={(ev) => actualizarFila(e.id, 'mesInicio', ev.target.value)}
-                          className="w-32 text-center bg-orange-50 rounded font-bold border border-orange-200 text-xs focus:outline-none"
-                        >
-                          {MESES.map(m => (
-                            <option key={m.valor} value={m.valor}>{m.nombre}</option>
-                          ))}
-                        </select>
+                        <input
+                          type="number"
+                          value={e.mesesInflacion || 0}
+                          onChange={(ev) => actualizarFila(e.id, 'mesesInflacion', ev.target.value)}
+                          className="w-12 text-center bg-orange-50 rounded font-bold border border-orange-200"
+                          min="0"
+                          max="60"
+                        />
                       </td>
                       <td className="p-4 text-right">
                         <div className="flex flex-col items-end">
