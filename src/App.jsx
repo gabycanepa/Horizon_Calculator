@@ -1,5 +1,3 @@
-import React, { useState, useEffect, useMemo } from 'react';
-
 const SHEET_ID = '1fJVmm7i5g1IfOLHDTByRM-W01pWIF46k7aDOYsH4UKA';
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzCxPqker3JsD9YKVDeTY5zOqmguQM10hpRAvUbjlEe3PUOHI8uScpLvAMQ4QvrSu7x/exec';
 
@@ -59,6 +57,35 @@ const fetchSheet = async (sheetName) => {
   });
 };
 
+// Función para generar opciones de meses
+const generarOpcionesMeses = () => {
+  const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+  const opciones = [];
+  const añoActual = 2026;
+  
+  for (let año = añoActual; año <= añoActual + 4; año++) {
+    for (let mes = 0; mes < 12; mes++) {
+      opciones.push({
+        value: `${año}-${String(mes + 1).padStart(2, '0')}`,
+        label: `${meses[mes]} ${año}`
+      });
+    }
+  }
+  return opciones;
+};
+
+// Función para calcular meses desde hoy
+const calcularMesesDesdeHoy = (mesInicio) => {
+  const hoy = new Date('2026-02-10'); // Fecha actual del sistema
+  const [año, mes] = mesInicio.split('-').map(Number);
+  const fechaInicio = new Date(año, mes - 1, 1);
+  
+  const diffMeses = (fechaInicio.getFullYear() - hoy.getFullYear()) * 12 
+                    + (fechaInicio.getMonth() - hoy.getMonth());
+  
+  return Math.max(0, diffMeses);
+};
+
 function App() {
   const [dataSheets, setDataSheets] = useState({
     preciosNuevos: [],
@@ -101,6 +128,7 @@ function App() {
   const [mostrarHistorial, setMostrarHistorial] = useState(false);
   const [mostrarEERR, setMostrarEERR] = useState(true);
   const [mostrarAporte, setMostrarAporte] = useState(true);
+  const [mostrarErosion, setMostrarErosion] = useState(true);
 
   // Cálculo de tasa mensual de inflación
   const tasaMensualInflacion = useMemo(() => {
@@ -110,6 +138,61 @@ function App() {
   // Función para aplicar inflación a un valor según meses transcurridos
   const aplicarInflacion = (valor, meses = 0) => {
     return Number(valor) * Math.pow(1 + tasaMensualInflacion, meses);
+  };
+
+  // Función para calcular erosión de margen
+  const calcularErosionMargen = (escenario, precio) => {
+    const mesesAProyectar = 12;
+    const datos = [];
+    
+    const ventaBase = Number(escenario.ventaUnit) || 0;
+    const sueldoBase = Number(escenario.sueldoBruto) || 0;
+    const isStaff = (precio.categoria || '').toLowerCase().includes('staff');
+    
+    for (let mes = 0; mes <= mesesAProyectar; mes++) {
+      // Sin inflación
+      const ventaSinInf = ventaBase * escenario.cantidad;
+      let costoSinInf = 0;
+      
+      if (isStaff) {
+        const sueldoTotal = sueldoBase * escenario.cantidad;
+        const costoLaboral = sueldoTotal * (1 + pctCostoLaboral / 100);
+        costoSinInf = costoLaboral + (ventaSinInf * pctIndirectos / 100);
+      } else {
+        const base = (precio.costoFijo || 0) * escenario.cantidad;
+        costoSinInf = base + (ventaSinInf * pctIndirectos / 100);
+      }
+      
+      const margenSinInflacion = ventaSinInf > 0 
+        ? ((ventaSinInf - costoSinInf) / ventaSinInf) * 100 
+        : 0;
+      
+      // Con inflación
+      const ventaConInf = aplicarInflacion(ventaBase, mes) * escenario.cantidad;
+      let costoConInf = 0;
+      
+      if (isStaff) {
+        const sueldoTotal = aplicarInflacion(sueldoBase, mes) * escenario.cantidad;
+        const costoLaboral = sueldoTotal * (1 + pctCostoLaboral / 100);
+        costoConInf = costoLaboral + (ventaConInf * pctIndirectos / 100);
+      } else {
+        const base = aplicarInflacion(precio.costoFijo || 0, mes) * escenario.cantidad;
+        costoConInf = base + (ventaConInf * pctIndirectos / 100);
+      }
+      
+      const margenConInflacion = ventaConInf > 0 
+        ? ((ventaConInf - costoConInf) / ventaConInf) * 100 
+        : 0;
+      
+      datos.push({
+        mes,
+        margenSinInflacion,
+        margenConInflacion,
+        erosion: margenSinInflacion - margenConInflacion
+      });
+    }
+    
+    return datos;
   };
 
   useEffect(() => {
@@ -262,7 +345,8 @@ function App() {
             tipoIdx: 0,
             cantidad: 1,
             sueldoBruto: preciosProcesados[0].sueldoSugerido || 0,
-            ventaUnit: preciosProcesados[0].valor || 0
+            ventaUnit: preciosProcesados[0].valor || 0,
+            mesInicio: '2026-02'
           }]);
         }
 
@@ -312,7 +396,7 @@ function App() {
         cantidad: 1,
         sueldoBruto: precioDefault.sueldoSugerido || 0,
         ventaUnit: precioDefault.valor || 0,
-        mesesInflacion: 0
+        mesInicio: '2026-02'
       }
     ]));
   };
@@ -324,8 +408,8 @@ function App() {
       if (campo === 'ventaUnit' || campo === 'sueldoBruto') {
         const num = typeof valor === 'string' ? parseInt(valor.replace(/\D/g, '')) || 0 : Number(valor || 0);
         updated[campo] = num;
-      } else if (campo === 'mesesInflacion') {
-        updated.mesesInflacion = Number(valor) || 0;
+      } else if (campo === 'mesInicio') {
+        updated.mesInicio = valor;
       } else if (campo === 'tipoIdx') {
         updated.tipoIdx = Number(valor) || 0;
         const p = dataSheets.preciosNuevos[Number(valor)];
@@ -373,7 +457,7 @@ function App() {
       const p = dataSheets.preciosNuevos && dataSheets.preciosNuevos[e.tipoIdx];
       if (!p) return;
 
-      const meses = Number(e.mesesInflacion) || 0;
+      const meses = calcularMesesDesdeHoy(e.mesInicio || '2026-02');
       const ventaUnitConInflacion = aplicarInflacion(Number(e.ventaUnit) || 0, meses);
       const sueldoBrutoConInflacion = aplicarInflacion(Number(e.sueldoBruto) || 0, meses);
 
@@ -540,64 +624,64 @@ function App() {
     const eerr = calcularEERRTotal();
     const propuesta = eerr.propuesta;
     const timestamp = new Date().toLocaleString('es-AR');
-    let html = `<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <title>Horizon - Proyección ${timestamp}</title>
-  <style>
-    body { font-family: Arial, sans-serif; padding: 40px; max-width: 900px; margin: auto; }
-    h1 { color: #7c3aed; border-bottom: 3px solid #a78bfa; padding-bottom: 10px; }
-    .header { color: #64748b; font-size: 14px; margin-bottom: 30px; }
-    .section { background: #f5f3ff; padding: 20px; border-radius: 8px; margin: 20px 0; }
-    table { width: 100%; border-collapse: collapse; margin: 15px 0; }
-    th { background: #e9d5ff; padding: 10px; text-align: left; border: 1px solid #cbd5e1; font-size: 12px; }
-    td { padding: 10px; border: 1px solid #e2e8f0; font-size: 12px; }
-    .right { text-align: right; }
-    .bold { font-weight: bold; }
-    .green { color: #16a34a; }
-    .red { color: #dc2626; }
-    .footer { margin-top: 30px; padding: 20px; background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%); color: white; border-radius: 8px; text-align: center; }
-  </style>
-</head>
-<body>
-  <h1>HORIZON - Estado de Resultados Proyectado 2026</h1>
-  <p class="header">Generado: ${timestamp}</p>
+    let html = `<!DOCTYPE html>  
+<html lang="es">  
+<head>  
+  <meta charset="UTF-8">  
+  <title>Horizon - Proyección ${timestamp}</title>  
+  <style>  
+    body { font-family: Arial, sans-serif; padding: 40px; max-width: 900px; margin: auto; }  
+    h1 { color: #7c3aed; border-bottom: 3px solid #a78bfa; padding-bottom: 10px; }  
+    .header { color: #64748b; font-size: 14px; margin-bottom: 30px; }  
+    .section { background: #f5f3ff; padding: 20px; border-radius: 8px; margin: 20px 0; }  
+    table { width: 100%; border-collapse: collapse; margin: 15px 0; }  
+    th { background: #e9d5ff; padding: 10px; text-align: left; border: 1px solid #cbd5e1; font-size: 12px; }  
+    td { padding: 10px; border: 1px solid #e2e8f0; font-size: 12px; }  
+    .right { text-align: right; }  
+    .bold { font-weight: bold; }  
+    .green { color: #16a34a; }  
+    .red { color: #dc2626; }  
+    .footer { margin-top: 30px; padding: 20px; background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%); color: white; border-radius: 8px; text-align: center; }  
+  </style>  
+</head>  
+<body>  
+  <h1>HORIZON - Estado de Resultados Proyectado 2026</h1>  
+  <p class="header">Generado: ${timestamp}</p>  
 
-  <div class="section">
-    <h3>Resumen Financiero</h3>
-    <table>
-      <tr><td class="bold">Ingreso Base (Dic-25):</td><td class="right">${format(dataSheets.eerrBase['Ingreso'] || 0)}</td></tr>
-      <tr><td class="bold">Ingreso Propuesta:</td><td class="right green">${format(propuesta.ventasTotales)}</td></tr>
-      <tr><td class="bold">Ingreso Total:</td><td class="right bold">${format(eerr.ingresoTotal)}</td></tr>
-      <tr><td class="bold">Costo Total:</td><td class="right red">-${format(eerr.costoIngresosTotal)}</td></tr>
-      <tr><td class="bold">Ganancia Bruta:</td><td class="right green bold">${format(eerr.gananciaBrutaTotal)} (${eerr.margenBrutoPct.toFixed(1)}%)</td></tr>
-      <tr><td class="bold">Gastos Operativos:</td><td class="right red">-${format(gastosOperativos)}</td></tr>
-      <tr><td class="bold">Ganancia Neta:</td><td class="right bold ${eerr.gananciaNetaTotal >= 0 ? 'green' : 'red'}">${format(eerr.gananciaNetaTotal)} (${eerr.margenNetoPct.toFixed(1)}%)</td></tr>
-    </table>
-  </div>
+  <div class="section">  
+    <h3>Resumen Financiero</h3>  
+    <table>  
+      <tr><td class="bold">Ingreso Base (Dic-25):</td><td class="right">${format(dataSheets.eerrBase['Ingreso'] || 0)}</td></tr>  
+      <tr><td class="bold">Ingreso Propuesta:</td><td class="right green">${format(propuesta.ventasTotales)}</td></tr>  
+      <tr><td class="bold">Ingreso Total:</td><td class="right bold">${format(eerr.ingresoTotal)}</td></tr>  
+      <tr><td class="bold">Costo Total:</td><td class="right red">-${format(eerr.costoIngresosTotal)}</td></tr>  
+      <tr><td class="bold">Ganancia Bruta:</td><td class="right green bold">${format(eerr.gananciaBrutaTotal)} (${eerr.margenBrutoPct.toFixed(1)}%)</td></tr>  
+      <tr><td class="bold">Gastos Operativos:</td><td class="right red">-${format(gastosOperativos)}</td></tr>  
+      <tr><td class="bold">Ganancia Neta:</td><td class="right bold ${eerr.gananciaNetaTotal >= 0 ? 'green' : 'red'}">${format(eerr.gananciaNetaTotal)} (${eerr.margenNetoPct.toFixed(1)}%)</td></tr>  
+    </table>  
+  </div>  
 
-  <h3>Detalle de Servicios Propuestos</h3>
-  <table>
-    <thead>
-      <tr>
-        <th>Cliente</th>
-        <th>Servicio</th>
-        <th>Cant</th>
-        <th>Venta Unit</th>
-        <th>Sueldo Bruto</th>
-        <th>Costo Total</th>
-        <th>Resultado</th>
-        <th>Margen %</th>
-      </tr>
-    </thead>
+  <h3>Detalle de Servicios Propuestos</h3>  
+  <table>  
+    <thead>  
+      <tr>  
+        <th>Cliente</th>  
+        <th>Servicio</th>  
+        <th>Cant</th>  
+        <th>Venta Unit</th>  
+        <th>Sueldo Bruto</th>  
+        <th>Costo Total</th>  
+        <th>Resultado</th>  
+        <th>Margen %</th>  
+      </tr>  
+    </thead>  
     <tbody>`;
 
     escenarios.forEach(e => {
       const p = dataSheets.preciosNuevos[e.tipoIdx];
       if (!p) return;
       const isStaff = p.categoria === 'Staff Augmentation';
-      const meses = Number(e.mesesInflacion) || 0;
+      const meses = calcularMesesDesdeHoy(e.mesInicio || '2026-02');
       const ventaUnitConInflacion = aplicarInflacion(Number(e.ventaUnit) || 0, meses);
       const sueldoBrutoConInflacion = aplicarInflacion(Number(e.sueldoBruto) || 0, meses);
 
@@ -617,33 +701,33 @@ function App() {
       const res = venta - costoTotal;
       const mgn = venta > 0 ? (res / venta) * 100 : 0;
 
-      html += `
-      <tr>
-        <td>${e.cliente}</td>
-        <td>${p.categoria} - ${p.tipo}</td>
-        <td class="right">${e.cantidad}</td>
-        <td class="right">${format(ventaUnitConInflacion)}</td>
-        <td class="right">${isStaff ? format(sueldoBrutoConInflacion) : '-'}</td>
-        <td class="right red">-${format(costoTotal)}</td>
-        <td class="right green bold">${format(res)}</td>
-        <td class="right bold">${mgn.toFixed(1)}%</td>
+      html += `  
+      <tr>  
+        <td>${e.cliente}</td>  
+        <td>${p.categoria} - ${p.tipo}</td>  
+        <td class="right">${e.cantidad}</td>  
+        <td class="right">${format(ventaUnitConInflacion)}</td>  
+        <td class="right">${isStaff ? format(sueldoBrutoConInflacion) : '-'}</td>  
+        <td class="right red">-${format(costoTotal)}</td>  
+        <td class="right green bold">${format(res)}</td>  
+        <td class="right bold">${mgn.toFixed(1)}%</td>  
       </tr>`;
     });
 
-    html += `
-    </tbody>
-  </table>
+    html += `  
+    </tbody>  
+  </table>  
 
-  <div class="section">
-    <h3>Configuración Utilizada</h3>
-    <p><strong>Indirectos:</strong> ${pctIndirectos}% | <strong>Costo Laboral:</strong> ${pctCostoLaboral}% | <strong>Margen Objetivo:</strong> ${margenObjetivo}%</p>
-  </div>
+  <div class="section">  
+    <h3>Configuración Utilizada</h3>  
+    <p><strong>Indirectos:</strong> ${pctIndirectos}% | <strong>Costo Laboral:</strong> ${pctCostoLaboral}% | <strong>Margen Objetivo:</strong> ${margenObjetivo}%</p>  
+  </div>  
 
-  <div class="footer">
-    <h2>Ganancia Neta Proyectada: ${format(eerr.gananciaNetaTotal)}</h2>
-    <p>Margen Neto: ${eerr.margenNetoPct.toFixed(1)}% | Desvío vs Dic-25: ${eerr.desvioGananciaNeta >= 0 ? '+' : ''}${format(eerr.desvioGananciaNeta)}</p>
-  </div>
-</body>
+  <div class="footer">  
+    <h2>Ganancia Neta Proyectada: ${format(eerr.gananciaNetaTotal)}</h2>  
+    <p>Margen Neto: ${eerr.margenNetoPct.toFixed(1)}% | Desvío vs Dic-25: ${eerr.desvioGananciaNeta >= 0 ? '+' : ''}${format(eerr.desvioGananciaNeta)}</p>  
+  </div>  
+</body>  
 </html>`;
 
     const blob = new Blob([html], { type: 'text/html' });
@@ -829,14 +913,14 @@ function App() {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="text-[10px] font-bold text-purple-400 uppercase bg-purple-50/30">
-                  <th className="p-4">Cliente</th><th className="p-4">Servicio</th><th className="p-4 text-center">Cant</th><th className="p-4 text-center">Meses</th><th className="p-4 text-right">Venta Unit</th><th className="p-4 text-right">Sueldo Bruto</th><th className="p-4 text-right">Costo Total</th><th className="p-4 text-right">Resultado</th><th className="p-4 text-center">Margen</th><th className="p-4"></th>
+                  <th className="p-4">Cliente</th><th className="p-4">Servicio</th><th className="p-4 text-center">Cant</th><th className="p-4 text-center">Mes Inicio</th><th className="p-4 text-right">Venta Unit</th><th className="p-4 text-right">Sueldo Bruto</th><th className="p-4 text-right">Costo Total</th><th className="p-4 text-right">Resultado</th><th className="p-4 text-center">Margen</th><th className="p-4"></th>
                 </tr>
               </thead>
               <tbody className="text-sm">
                 {escenarios.map(e => {
                   const p = dataSheets.preciosNuevos && dataSheets.preciosNuevos[e.tipoIdx];
                   const isStaff = p && (p.categoria || '').toLowerCase().includes('staff');
-                  const meses = Number(e.mesesInflacion) || 0;
+                  const meses = calcularMesesDesdeHoy(e.mesInicio || '2026-02');
                   const ventaUnitConInflacion = aplicarInflacion(Number(e.ventaUnit) || 0, meses);
                   const sueldoBrutoConInflacion = aplicarInflacion(Number(e.sueldoBruto) || 0, meses);
 
@@ -877,14 +961,15 @@ function App() {
                         <input type="number" value={e.cantidad} onChange={(ev) => actualizarFila(e.id, 'cantidad', ev.target.value)} className="w-10 text-center bg-purple-50 rounded font-bold" min="0" />
                       </td>
                       <td className="p-4 text-center">
-                        <input
-                          type="number"
-                          value={e.mesesInflacion || 0}
-                          onChange={(ev) => actualizarFila(e.id, 'mesesInflacion', ev.target.value)}
-                          className="w-12 text-center bg-orange-50 rounded font-bold border border-orange-200"
-                          min="0"
-                          max="60"
-                        />
+                        <select
+                          value={e.mesInicio || '2026-02'}
+                          onChange={(ev) => actualizarFila(e.id, 'mesInicio', ev.target.value)}
+                          className="text-[10px] bg-orange-50 rounded font-bold border border-orange-200 px-1"
+                        >
+                          {generarOpcionesMeses().map(m => (
+                            <option key={m.value} value={m.value}>{m.label}</option>
+                          ))}
+                        </select>
                       </td>
                       <td className="p-4 text-right">
                         <div className="flex flex-col items-end">
@@ -1018,6 +1103,86 @@ function App() {
               })}
               {Object.keys(propuesta.porCliente).length === 0 && (
                 <p className="text-center text-slate-300 text-xs py-4 italic">Sin datos de simulación</p>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="bg-white rounded-xl shadow-sm border border-orange-100 mb-6 overflow-hidden">
+          <div className="p-4 border-b border-orange-50 flex justify-between items-center bg-gradient-to-r from-orange-50 to-red-50">
+            <h2 className="font-bold text-orange-700 text-sm uppercase">📉 Erosión de Margen por Inflación</h2>
+            <button 
+              onClick={() => setMostrarErosion(!mostrarErosion)} 
+              className="bg-orange-600/10 hover:bg-orange-600/20 text-orange-700 px-3 py-1 rounded text-[10px] font-black uppercase transition"
+            >
+              {mostrarErosion ? '✕ Ocultar' : '👁️ Mostrar'}
+            </button>
+          </div>
+          {mostrarErosion && (
+            <div className="p-6">
+              {escenarios.length > 0 ? (
+                <div className="space-y-6">
+                  {escenarios.map(e => {
+                    const p = dataSheets.preciosNuevos[e.tipoIdx];
+                    if (!p) return null;
+                    
+                    const datosErosion = calcularErosionMargen(e, p);
+                    
+                    return (
+                      <div key={e.id} className="border border-orange-100 rounded-lg p-4">
+                        <h3 className="text-xs font-bold text-slate-700 mb-3">
+                          {e.cliente} - {p.categoria} ({p.tipo})
+                        </h3>
+                        
+                        <div className="relative h-32 flex items-end gap-1">
+                          {datosErosion.map((punto, idx) => {
+                            const alturaMargenSinInflacion = (punto.margenSinInflacion / 100) * 100;
+                            const alturaMargenConInflacion = (punto.margenConInflacion / 100) * 100;
+                            
+                            return (
+                              <div key={idx} className="flex-1 flex flex-col items-center gap-1">
+                                <div className="w-full flex flex-col justify-end h-24 gap-0.5">
+                                  <div 
+                                    className="w-full bg-green-400 rounded-t transition-all duration-300"
+                                    style={{ height: `${alturaMargenSinInflacion}%` }}
+                                    title={`Sin inflación: ${punto.margenSinInflacion.toFixed(1)}%`}
+                                  ></div>
+                                  <div 
+                                    className="w-full bg-red-400 rounded-t transition-all duration-300"
+                                    style={{ height: `${alturaMargenConInflacion}%` }}
+                                    title={`Con inflación: ${punto.margenConInflacion.toFixed(1)}%`}
+                                  ></div>
+                                </div>
+                                <span className="text-[8px] text-slate-400 font-bold">M{idx}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        
+                        <div className="flex justify-center gap-4 mt-4 text-[10px]">
+                          <div className="flex items-center gap-1">
+                            <div className="w-3 h-3 bg-green-400 rounded"></div>
+                            <span className="text-slate-600">Sin inflación</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <div className="w-3 h-3 bg-red-400 rounded"></div>
+                            <span className="text-slate-600">Con inflación</span>
+                          </div>
+                        </div>
+                        
+                        <div className="mt-3 text-center">
+                          <span className="text-xs font-bold text-red-600">
+                            Erosión total: {(datosErosion[0].margenSinInflacion - datosErosion[datosErosion.length - 1].margenConInflacion).toFixed(1)}%
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-center text-slate-300 text-xs py-8 italic">
+                  Agregá servicios para ver la erosión de margen
+                </p>
               )}
             </div>
           )}
