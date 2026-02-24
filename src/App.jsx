@@ -966,7 +966,7 @@ function App() {
                   <thead>
                     <tr className="bg-purple-50 text-purple-600 font-bold uppercase text-[10px]">
                       <th className="p-3 border-r border-purple-100"></th>
-                      <th className="p-3 text-right border-r border-purple-100">EERR Dic-25</th>
+                      <th className="p-3 text-right border-r border-purple-100">EERR Enero-26</th>
                       <th className="p-3 text-right border-r border-purple-100">%</th>
                       <th className="p-3 text-right bg-green-50 border-r border-green-200">Propuesta</th>
                       <th className="p-3 text-right bg-green-50 border-r border-green-200">%</th>
