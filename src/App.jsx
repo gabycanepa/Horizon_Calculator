@@ -248,7 +248,6 @@ function App() {
           return c['Cliente'] ?? c['cliente'] ?? c['Name'] ?? Object.values(c)[0] ?? '';
         }).filter(Boolean);
 
-        // Parseo de usuarios desde sheet
         const usuariosProcesados = usuarios.map(u => ({
           nombre: u['Nombre'] ?? u['nombre'] ?? Object.values(u)[0] ?? '',
           password: u['Password'] ?? u['password'] ?? Object.values(u)[1] ?? '',
@@ -272,6 +271,7 @@ function App() {
         setGastosOperativos(configObj['Gastos Operativos'] ?? 46539684.59);
         setMargenObjetivo(configObj['Margen Objetivo (%)'] ?? 25);
 
+        // Cargar Historial
         try {
           const resNube = await fetch(`${SCRIPT_URL}?sheet=HistorialCompartido`);
           const dataNube = await resNube.json();
@@ -325,13 +325,36 @@ function App() {
                 setPctCostoLaboral(ultimo.config.pctCostoLaboral ?? 45);
                 setGastosOperativos(ultimo.config.gastosOperativos ?? 46539684.59);
                 setMargenObjetivo(ultimo.config.margenObjetivo ?? 25);
-                if(ultimo.config.lineasVentaTotal) setLineasVentaTotal(ultimo.config.lineasVentaTotal);
-                if(ultimo.config.lineasRenovacion) setLineasRenovacion(ultimo.config.lineasRenovacion);
-                if(ultimo.config.lineasIncremental) setLineasIncremental(ultimo.config.lineasIncremental);
               }
             }
           }
         } catch(e) { console.error("Error cargando historial de la nube:", e); }
+
+        // Cargar Tracking de Objetivos Independiente
+        try {
+          const resTrack = await fetch(`${SCRIPT_URL}?sheet=TrackingObjetivos`);
+          const dataTrack = await resTrack.json();
+          if (dataTrack && Array.isArray(dataTrack) && dataTrack.length > 0) {
+            const ultimo = dataTrack[dataTrack.length - 1];
+            const findKey = (obj, k) => Object.keys(obj).find(key => key.toLowerCase() === k.toLowerCase());
+            
+            const parseLineas = (val) => {
+              if (typeof val === 'string' && val.trim() !== '') {
+                try { return JSON.parse(val); } catch(e){ return null; }
+              }
+              if (Array.isArray(val)) return val;
+              return null;
+            };
+
+            const keyTot = findKey(ultimo, 'lineastotal') || findKey(ultimo, 'ventastotales');
+            const keyRen = findKey(ultimo, 'lineasreno') || findKey(ultimo, 'renovacion');
+            const keyInc = findKey(ultimo, 'lineasincr') || findKey(ultimo, 'incremental');
+
+            if(keyTot) { const lt = parseLineas(ultimo[keyTot]); if(lt) setLineasVentaTotal(lt); }
+            if(keyRen) { const lr = parseLineas(ultimo[keyRen]); if(lr) setLineasRenovacion(lr); }
+            if(keyInc) { const li = parseLineas(ultimo[keyInc]); if(li) setLineasIncremental(li); }
+          }
+        } catch(e) { console.error("Error cargando tracking de la nube:", e); }
 
         if (preciosProcesados.length > 0 && escenarios.length === 0) {
           setEscenarios([{
@@ -456,7 +479,6 @@ function App() {
         const indirectos = sueldoTotal * (pctIndirectos / 100);
         costoTotalFila = sueldoTotal + costoLaboral + indirectos;
       } else if (isWorkshop) {
-        // Workshop: usa costoDirecto editable, SIN indirectos
         costoTotalFila = (Number(e.cantidad) || 0) * (Number(e.costoDirecto) || 0);
       } else {
         const base = (Number(e.cantidad) || 0) * (Number(p.costoFijo) || 0);
@@ -525,15 +547,6 @@ function App() {
     };
   };
 
-  const desvioVsBase = useMemo(() => {
-    const propuesta = calcularPropuesta();
-    const eerr = calcularEERRTotal();
-    const ingreso = propuesta.ventasTotales;
-    const costo = propuesta.costosTotales;
-    const gananciaNeta = eerr.gananciaNetaTotal - (eerr.gananciaNetaBase || 0);
-    return { ingreso, costo, gananciaNeta };
-  }, [escenarios, pctCostoLaboral, pctIndirectos, gastosOperativos, dataSheets.eerrBase]);
-
   const guardarEscenario = async () => {
     const nombre = window.prompt("Ingrese un nombre para este escenario:", `Escenario ${historial.length + 1}`);
     if (!nombre) return;
@@ -545,7 +558,7 @@ function App() {
       nombre: nombre,
       fecha: timestamp,
       escenarios: escenarios,
-      config: { pctIndirectos, pctCostoLaboral, gastosOperativos, margenObjetivo, lineasVentaTotal, lineasRenovacion, lineasIncremental },
+      config: { pctIndirectos, pctCostoLaboral, gastosOperativos, margenObjetivo },
       eerr: eerrActual
     };
 
@@ -569,6 +582,35 @@ function App() {
     }
   };
 
+  // Función exclusiva para guardar Objetivos en la nueva pestaña "TrackingObjetivos"
+  const guardarTracking = async () => {
+    const timestamp = new Date().toLocaleString('es-AR');
+    const payload = {
+      ID: Date.now(),
+      Fecha: timestamp,
+      LineasTotal: JSON.stringify(lineasVentaTotal),
+      LineasReno: JSON.stringify(lineasRenovacion),
+      LineasIncr: JSON.stringify(lineasIncremental)
+    };
+
+    try {
+      const params = new URLSearchParams();
+      params.append('payload', JSON.stringify(payload));
+      params.append('sheet', 'TrackingObjetivos'); // Apunta a la nueva pestaña
+
+      await fetch(SCRIPT_URL, {
+        method: 'POST',
+        mode: 'no-cors', 
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params.toString()
+      });
+      alert('✅ Objetivos guardados exitosamente en la base de datos.');
+    } catch (e) {
+      console.error('Error guardando tracking:', e);
+      alert('Error al guardar los objetivos.');
+    }
+  };
+
   const cargarEscenarioDesdeHistorial = (item) => {
     if(!window.confirm(`¿Cargar el escenario "${item.nombre}"? Se perderán los cambios actuales.`)) return;
     setIsLoadingFromCloud(true);
@@ -581,10 +623,6 @@ function App() {
     setGastosOperativos(configValida.gastosOperativos ?? 46539684.59);
     setMargenObjetivo(configValida.margenObjetivo ?? 25);
     
-    if(configValida.lineasVentaTotal) setLineasVentaTotal(configValida.lineasVentaTotal);
-    if(configValida.lineasRenovacion) setLineasRenovacion(configValida.lineasRenovacion);
-    if(configValida.lineasIncremental) setLineasIncremental(configValida.lineasIncremental);
-    
     setMostrarHistorial(false);
     setTimeout(() => setIsLoadingFromCloud(false), 200);
   };
@@ -593,6 +631,8 @@ function App() {
     const eerr = calcularEERRTotal();
     const propuesta = eerr.propuesta;
     const timestamp = new Date().toLocaleString('es-AR');
+    const nombreUsuario = usuarioActual ? usuarioActual.nombre : 'Usuario';
+    
     let html = `<!DOCTYPE html>  
 <html lang="es">  
 <head>  
@@ -611,12 +651,20 @@ function App() {
     .green { color: #16a34a; }  
     .red { color: #dc2626; }  
     .footer { margin-top: 30px; padding: 20px; background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%); color: white; border-radius: 8px; text-align: center; }  
+    @media print {
+      body { padding: 0; }
+      .section { break-inside: avoid; }
+    }
   </style>  
 </head>  
 <body>  
   <h1>HORIZON - Estado de Resultados Proyectado 2026</h1>  
-  <p class="header">Generado: ${timestamp}</p>  
-  
+  <p class="header">Generado: ${timestamp} | Usuario: ${nombreUsuario}</p>  
+  `;
+
+    // CONDICIÓN EERR (Resumen Financiero)
+    if (tienePermiso('eerr')) {
+      html += `
   <div class="section">  
     <h3>Resumen Financiero</h3>  
     <table>  
@@ -628,8 +676,12 @@ function App() {
       <tr><td class="bold">Gastos Operativos:</td><td class="right red">-${format(gastosOperativos)}</td></tr>  
       <tr><td class="bold">Ganancia Neta:</td><td class="right bold ${eerr.gananciaNetaTotal >= 0 ? 'green' : 'red'}">${format(eerr.gananciaNetaTotal)} (${eerr.margenNetoPct.toFixed(1)}%)</td></tr>  
     </table>  
-  </div>  
+  </div>`;
+    }
   
+    // CONDICIÓN SIMULACIÓN
+    if (tienePermiso('simulacion')) {
+      html += `
   <h3>Detalle de Servicios Propuestos</h3>  
   <table>  
     <thead>  
@@ -647,28 +699,28 @@ function App() {
     </thead>  
     <tbody>`;
 
-    escenarios.forEach(e => {
-      const p = dataSheets.preciosNuevos[e.tipoIdx];
-      if (!p) return;
-      const isStaff = p.categoria === 'Staff Augmentation';
-      const isWorkshop = (p.categoria || '').toLowerCase().includes('workshop') ||
-                         (p.tipo || '').toLowerCase().includes('workshop') ||
-                         (p.tipo || '').toLowerCase().includes('worshop');
-      let costoTotal = 0;
-      if (isStaff) {
-        const sueldo = e.cantidad * e.sueldoBruto;
-        costoTotal = sueldo + (sueldo * pctCostoLaboral/100) + (sueldo * pctIndirectos/100);
-      } else if (isWorkshop) {
-        costoTotal = e.cantidad * e.costoDirecto;
-      } else {
-        const base = e.cantidad * p.costoFijo;
-        costoTotal = base + (base * pctIndirectos/100);
-      }
-      const venta = e.cantidad * e.ventaUnit;
-      const res = venta - costoTotal;
-      const mgn = venta > 0 ? (res / venta) * 100 : 0;
+      escenarios.forEach(e => {
+        const p = dataSheets.preciosNuevos[e.tipoIdx];
+        if (!p) return;
+        const isStaff = p.categoria === 'Staff Augmentation';
+        const isWorkshop = (p.categoria || '').toLowerCase().includes('workshop') ||
+                           (p.tipo || '').toLowerCase().includes('workshop') ||
+                           (p.tipo || '').toLowerCase().includes('worshop');
+        let costoTotal = 0;
+        if (isStaff) {
+          const sueldo = e.cantidad * e.sueldoBruto;
+          costoTotal = sueldo + (sueldo * pctCostoLaboral/100) + (sueldo * pctIndirectos/100);
+        } else if (isWorkshop) {
+          costoTotal = e.cantidad * e.costoDirecto;
+        } else {
+          const base = e.cantidad * p.costoFijo;
+          costoTotal = base + (base * pctIndirectos/100);
+        }
+        const venta = e.cantidad * e.ventaUnit;
+        const res = venta - costoTotal;
+        const mgn = venta > 0 ? (res / venta) * 100 : 0;
 
-      html += `  
+        html += `  
       <tr>  
         <td>${e.cliente}</td>  
         <td>${p.categoria} - ${p.tipo}</td>  
@@ -680,31 +732,41 @@ function App() {
         <td class="right green bold">${format(res)}</td>  
         <td class="right bold">${mgn.toFixed(1)}%</td>  
       </tr>`;
-    });
+      });
+      html += `</tbody></table>`;
+    }
 
-    html += `  
-    </tbody>  
-  </table>  
-  
+    html += `
   <div class="section">  
     <h3>Configuración Utilizada</h3>  
     <p><strong>Indirectos:</strong> ${pctIndirectos}% | <strong>Costo Laboral:</strong> ${pctCostoLaboral}% | <strong>Margen Objetivo:</strong> ${margenObjetivo}%</p>  
-  </div>  
-  
+  </div>`;
+
+    // CONDICIÓN EERR (Ganancia proyectada footer)
+    if (tienePermiso('eerr')) {
+      html += `
   <div class="footer">  
     <h2>Ganancia Neta Proyectada: ${format(eerr.gananciaNetaTotal)}</h2>  
     <p>Margen Neto: ${eerr.margenNetoPct.toFixed(1)}% | Desvío vs Dic-25: ${eerr.desvioGananciaNeta >= 0 ? '+' : ''}${format(eerr.desvioGananciaNeta)}</p>  
-  </div>  
-</body>  
-</html>`;
+  </div>`;
+    }
 
-    const blob = new Blob([html], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `Horizon_Proyeccion_${Date.now()}.html`;
-    a.click();
-    URL.revokeObjectURL(url);
+    html += `</body></html>`;
+
+    // Truco: Abrir ventana de impresión nativa en lugar de bajar un HTML
+    const iframe = document.createElement('iframe');
+    iframe.style.display = 'none';
+    document.body.appendChild(iframe);
+    iframe.contentWindow.document.open();
+    iframe.contentWindow.document.write(html);
+    iframe.contentWindow.document.close();
+
+    // Esperar a que renderice y llamar a imprimir
+    setTimeout(() => {
+      iframe.contentWindow.focus();
+      iframe.contentWindow.print();
+      setTimeout(() => document.body.removeChild(iframe), 1000);
+    }, 250);
   };
 
   const format = (n) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n);
@@ -1218,7 +1280,17 @@ function App() {
 
         {tienePermiso('objetivos') && (
         <div className="mb-6">
-          <h2 className="text-lg font-black text-slate-700 uppercase mb-4">🎯 Objetivos 2026 - Tracking de Ventas</h2>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-black text-slate-700 uppercase">🎯 Objetivos 2026 - Tracking de Ventas</h2>
+            
+            <button 
+              onClick={guardarTracking} 
+              className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-5 py-2 rounded-lg text-xs font-black hover:shadow-lg transition flex items-center gap-2"
+            >
+              💾 Guardar Avance
+            </button>
+          </div>
+          
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {renderVelocimetro("Objetivo Ventas Total 2026", objVentasTotal, lineasVentaTotal, setLineasVentaTotal, "total", "#7c3aed")}
             {renderVelocimetro("Objetivo Renovación 2026", objRenovacion, lineasRenovacion, setLineasRenovacion, "renovacion", "#ec4899")}
