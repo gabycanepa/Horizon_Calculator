@@ -3,60 +3,95 @@ import React, { useState, useEffect, useMemo } from 'react';
 const SHEET_ID = '1fJVmm7i5g1IfOLHDTByRM-W01pWIF46k7aDOYsH4UKA';
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzCxPqker3JsD9YKVDeTY5zOqmguQM10hpRAvUbjlEe3PUOHI8uScpLvAMQ4QvrSu7x/exec';
 
+// ─── UTILS GLOBALES ─────────────────────────────────────────────────────────
 const cleanNum = (val) => {
   if (val === undefined || val === null || val === '') return 0;
-  let s = String(val);
-  s = s.replace(/[$€£\s]/g, '');
-  s = s.replace(/[^\d,.\-]/g, '');
-  if (s.indexOf('.') !== -1 && s.indexOf(',') !== -1) {
-    s = s.replace(/\./g, '').replace(',', '.');
-  } else {
-    s = s.replace(/\./g, '').replace(',', '.');
-  }
+  let s = String(val).replace(/[$€£\s]/g, '').replace(/[^\d,.\-]/g, '');
+  s = (s.indexOf('.') !== -1 && s.indexOf(',') !== -1) ? s.replace(/\./g, '').replace(',', '.') : s.replace(/\./g, '').replace(',', '.');
   const n = parseFloat(s);
   return isNaN(n) ? 0 : n;
 };
 
 const normalizeKey = (k) => {
   if (!k && k !== 0) return '';
-  const s = String(k).toLowerCase().trim();
   const accentMap = { 'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u', 'ñ': 'n' };
-  let out = s.replace(/[áéíóúñ]/g, m => accentMap[m]);
-  out = out.replace(/[^a-z0-9]/g, '');
-  return out;
+  return String(k).toLowerCase().trim().replace(/[áéíóúñ]/g, m => accentMap[m]).replace(/[^a-z0-9]/g, '');
 };
 
 const tolerantGet = (mapObj, key) => {
   if (!mapObj) return 0;
   const nk = normalizeKey(key);
-  for (const k of Object.keys(mapObj)) {
-    if (normalizeKey(k) === nk) return mapObj[k];
-  }
-  return mapObj[key] !== undefined ? mapObj[key] : 0;
+  const found = Object.keys(mapObj).find(k => normalizeKey(k) === nk);
+  return found ? mapObj[found] : (mapObj[key] || 0);
 };
+
+const format = (n) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n);
+const formatNum = (n) => new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 }).format(n);
+const formatPct = (n) => `${Number(n).toFixed(0)}%`;
 
 const fetchSheet = async (sheetName) => {
   const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
-  const response = await fetch(url);
-  const text = await response.text();
+  const text = await (await fetch(url)).text();
   const lines = text.split('\n').filter(l => l.trim() !== '');
   if (lines.length === 0) return [];
-
-  const parseCSVLine = (line) => {
-    const re = /,(?=(?:(?:[^"]*"){2})*[^"]*$)|;(?=(?:(?:[^"]*"){2})*[^"]*$)/g;
-    return line.split(re).map(cell => cell.replace(/^"|"$/g, '').trim());
-  };
-
+  const parseCSVLine = (line) => line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)|;(?=(?:(?:[^"]*"){2})*[^"]*$)/g).map(c => c.replace(/^"|"$/g, '').trim());
   const headers = parseCSVLine(lines[0]);
-  
   return lines.slice(1).map(line => {
     const cells = parseCSVLine(line);
-    const obj = {};
-    headers.forEach((header, i) => {
-      obj[header] = cells[i] !== undefined ? cells[i] : '';
-    });
-    return obj;
+    return headers.reduce((obj, h, i) => ({ ...obj, [h]: cells[i] !== undefined ? cells[i] : '' }), {});
   });
+};
+
+// ─── SUBCOMPONENTES UI ──────────────────────────────────────────────────────
+const HeaderMetric = ({ label, value, onChange, isCurrency, colorPrefix }) => (
+  <div className={`bg-white px-3 sm:px-4 py-2 rounded-lg shadow-sm border border-${colorPrefix}-100 flex-1 min-w-[80px]`}>
+    <span className={`text-[10px] font-bold text-${colorPrefix}-400 block uppercase`}>{label}</span>
+    <div className="flex items-center">
+      {isCurrency ? (
+        <input type="text" value={value === 0 ? '' : formatNum(value)} onChange={e => {
+          const raw = e.target.value.replace(/\./g, '').replace(/\s/g, '');
+          onChange(raw === '' ? 0 : parseFloat(raw) || 0);
+        }} className={`w-full font-bold text-red-600 focus:outline-none text-xs sm:text-sm bg-transparent`} />
+      ) : (
+        <><input type="number" value={value} onChange={e => onChange(cleanNum(e.target.value))} className={`w-full font-bold text-${colorPrefix}-600 focus:outline-none text-xs sm:text-sm`} />%</>
+      )}
+    </div>
+  </div>
+);
+
+const EERRRow = ({ label, base, prop, tot, refBase, refProp, refTot, isNegProp, isNegTot, cProp="", cTot="", indent, isTotalRow }) => {
+  const pBase = refBase ? (base / refBase) * 100 : 0;
+  const pProp = refProp ? (prop / refProp) * 100 : 0;
+  const pTot = refTot ? (tot / refTot) * 100 : 0;
+  
+  if (isTotalRow) {
+    return (
+      <tr className="bg-gradient-to-r from-purple-100 to-pink-100 border-t-2 sm:border-t-4 border-purple-400">
+        <td className="p-3 sm:p-4 font-black text-slate-900 text-xs sm:text-sm">{label}</td>
+        <td className="p-3 sm:p-4 text-right font-mono font-black text-purple-700 border-r border-purple-200 text-[10px] sm:text-xs">{format(base)}</td>
+        <td className="p-3 sm:p-4 text-right font-black border-r border-purple-200">{formatPct(pBase)}</td>
+        <td className="p-3 sm:p-4 text-right font-mono font-black text-green-700 bg-green-100 border-r border-green-300 text-[10px] sm:text-xs">{format(prop)}</td>
+        <td className="p-3 sm:p-4 text-right font-black bg-green-100 border-r border-green-300">{formatPct(pProp)}</td>
+        <td className="p-3 sm:p-4 text-right font-mono font-black text-blue-700 bg-blue-100 border-r border-blue-300 text-[10px] sm:text-xs">{format(tot)}</td>
+        <td className="p-3 sm:p-4 text-right font-black bg-blue-100">{formatPct(pTot)}</td>
+      </tr>
+    );
+  }
+  return (
+    <tr className="border-b border-purple-50 hover:bg-purple-50/30">
+      <td className={`p-2 sm:p-3 font-bold text-slate-700 ${indent ? 'pl-4 sm:pl-6' : ''}`}>{label}</td>
+      <td className={`p-2 sm:p-3 text-right font-mono border-r border-purple-100 ${cProp.includes('red') && isNegTot ? 'text-red-600' : ''}`}>{format(base)}</td>
+      <td className="p-2 sm:p-3 text-right font-bold border-r border-purple-100">{formatPct(pBase)}</td>
+      <td className={`p-2 sm:p-3 text-right font-mono font-bold bg-green-50 border-r border-green-200 ${cProp}`}>
+        {prop === 0 ? <span className="text-slate-400">0.00</span> : `${isNegProp ? '-' : ''}${format(prop)}`}
+      </td>
+      <td className="p-2 sm:p-3 text-right font-bold bg-green-50 border-r border-green-200">{formatPct(pProp)}</td>
+      <td className={`p-2 sm:p-3 text-right font-mono font-bold bg-blue-50 border-r border-blue-200 ${cTot}`}>
+        {`${isNegTot ? '-' : ''}${format(tot)}`}
+      </td>
+      <td className="p-2 sm:p-3 text-right font-bold bg-blue-50">{formatPct(pTot)}</td>
+    </tr>
+  );
 };
 
 // ─── LOGIN SCREEN ───────────────────────────────────────────────────────────
@@ -66,54 +101,26 @@ function LoginScreen({ usuarios, onLogin }) {
   const [error, setError] = useState('');
 
   const handleLogin = () => {
-    const user = usuarios.find(u =>
-      u.nombre.toLowerCase().trim() === nombre.toLowerCase().trim() &&
-      u.password.trim() === password.trim()
-    );
-    if (user) {
-      onLogin(user);
-    } else {
-      setError('Usuario o contraseña incorrectos');
-    }
+    const user = usuarios.find(u => u.nombre.toLowerCase().trim() === nombre.toLowerCase().trim() && u.password.trim() === password.trim());
+    user ? onLogin(user) : setError('Usuario o contraseña incorrectos');
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 via-purple-700 to-pink-600 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl p-8 sm:p-10 w-full max-w-sm">
-        <h1 className="text-2xl font-black text-center bg-gradient-to-r from-purple-600 to-pink-500 bg-clip-text text-transparent uppercase mb-1">
-          Horizon Finance Engine
-        </h1>
+        <h1 className="text-2xl font-black text-center bg-gradient-to-r from-purple-600 to-pink-500 bg-clip-text text-transparent uppercase mb-1">Horizon Finance Engine</h1>
         <p className="text-center text-slate-400 text-xs mb-8">Ingresá tus credenciales para continuar</p>
         <div className="space-y-4">
           <div>
             <label className="text-[10px] font-bold text-purple-500 uppercase block mb-1">Usuario</label>
-            <input
-              type="text"
-              value={nombre}
-              onChange={e => { setNombre(e.target.value); setError(''); }}
-              onKeyDown={e => e.key === 'Enter' && handleLogin()}
-              className="w-full border-2 border-purple-200 rounded-lg px-4 py-2 text-sm font-medium focus:outline-none focus:border-purple-500"
-              placeholder="Tu nombre de usuario"
-            />
+            <input type="text" value={nombre} onChange={e => { setNombre(e.target.value); setError(''); }} onKeyDown={e => e.key === 'Enter' && handleLogin()} className="w-full border-2 border-purple-200 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-purple-500" placeholder="Usuario" />
           </div>
           <div>
             <label className="text-[10px] font-bold text-purple-500 uppercase block mb-1">Contraseña</label>
-            <input
-              type="password"
-              value={password}
-              onChange={e => { setPassword(e.target.value); setError(''); }}
-              onKeyDown={e => e.key === 'Enter' && handleLogin()}
-              className="w-full border-2 border-purple-200 rounded-lg px-4 py-2 text-sm font-medium focus:outline-none focus:border-purple-500"
-              placeholder="••••••••"
-            />
+            <input type="password" value={password} onChange={e => { setPassword(e.target.value); setError(''); }} onKeyDown={e => e.key === 'Enter' && handleLogin()} className="w-full border-2 border-purple-200 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-purple-500" placeholder="••••••••" />
           </div>
           {error && <p className="text-red-500 text-xs font-bold text-center">{error}</p>}
-          <button
-            onClick={handleLogin}
-            className="w-full bg-gradient-to-r from-purple-600 to-pink-500 text-white py-3 rounded-lg font-black text-sm uppercase hover:shadow-lg transition"
-          >
-            Ingresar
-          </button>
+          <button onClick={handleLogin} className="w-full bg-gradient-to-r from-purple-600 to-pink-500 text-white py-3 rounded-lg font-black text-sm uppercase hover:shadow-lg transition">Ingresar</button>
         </div>
       </div>
     </div>
@@ -130,23 +137,15 @@ function ModalValoresServicios({ datos, onClose }) {
           <button onClick={onClose} className="text-white/80 hover:text-white font-black text-lg print:hidden">✕</button>
         </div>
         <div className="overflow-auto p-2">
-          {datos.length === 0 ? (
-            <p className="text-center text-slate-400 py-10 text-sm italic">Sin datos disponibles</p>
-          ) : (
+          {datos.length === 0 ? <p className="text-center text-slate-400 py-10 text-sm italic">Sin datos disponibles</p> : (
             <table className="w-full text-xs border-collapse min-w-[600px]">
               <thead className="sticky top-0 bg-purple-50 shadow-sm">
-                <tr>
-                  {Object.keys(datos[0]).map(h => (
-                    <th key={h} className="p-3 text-left font-bold text-purple-600 uppercase border-b border-purple-100 whitespace-nowrap bg-purple-50">{h}</th>
-                  ))}
-                </tr>
+                <tr>{Object.keys(datos[0]).map(h => <th key={h} className="p-3 text-left font-bold text-purple-600 uppercase border-b border-purple-100 whitespace-nowrap bg-purple-50">{h}</th>)}</tr>
               </thead>
               <tbody>
                 {datos.map((row, i) => (
                   <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-purple-50/30'}>
-                    {Object.values(row).map((val, j) => (
-                      <td key={j} className="p-3 border-b border-slate-100 text-slate-700">{val}</td>
-                    ))}
+                    {Object.values(row).map((val, j) => <td key={j} className="p-3 border-b border-slate-100 text-slate-700">{val}</td>)}
                   </tr>
                 ))}
               </tbody>
@@ -160,110 +159,55 @@ function ModalValoresServicios({ datos, onClose }) {
 
 // ─── APP PRINCIPAL ───────────────────────────────────────────────────────────
 function App() {
-  const [dataSheets, setDataSheets] = useState({
-    preciosNuevos: [], clientes: [], config: {}, eerrBase: {}, eerrBaseNorm: {},
-    usuarios: [], valoresServicios: [], loading: true, error: null
-  });
-
+  const [dataSheets, setDataSheets] = useState({ preciosNuevos: [], clientes: [], config: {}, eerrBase: {}, eerrBaseNorm: {}, usuarios: [], valoresServicios: [], loading: true, error: null });
   const [usuarioActual, setUsuarioActual] = useState(null);
   const [mostrarModalValores, setMostrarModalValores] = useState(false);
-
   const [escenarios, setEscenarios] = useState([]);
   const [historial, setHistorial] = useState([]);
-
   const [pctIndirectos, setPctIndirectos] = useState(0);
   const [pctCostoLaboral, setPctCostoLaboral] = useState(0);
   const [gastosOperativos, setGastosOperativos] = useState(0);
   const [margenObjetivo, setMargenObjetivo] = useState(0);
-
   const [isReady, setIsReady] = useState(false);
   const [isLoadingFromCloud, setIsLoadingFromCloud] = useState(false);
 
   const [objVentasTotal] = useState(2195176117);
-  const [lineasVentaTotal, setLineasVentaTotal] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('hzn_lineasVenta')) || [{ id: 1, cliente: '', monto: '' }]; } catch(e){ return [{ id:1, cliente:'', monto:'' }]; }
-  });
+  const [lineasVentaTotal, setLineasVentaTotal] = useState(() => { try { return JSON.parse(localStorage.getItem('hzn_lineasVenta')) || [{ id: 1, cliente: '', monto: '' }]; } catch(e){ return [{ id:1, cliente:'', monto:'' }]; }});
   const [objRenovacion] = useState(1225673502);
-  const [lineasRenovacion, setLineasRenovacion] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('hzn_lineasReno')) || [{ id: 1, cliente: '', monto: '' }]; } catch(e){ return [{ id:1, cliente:'', monto:'' }]; }
-  });
+  const [lineasRenovacion, setLineasRenovacion] = useState(() => { try { return JSON.parse(localStorage.getItem('hzn_lineasReno')) || [{ id: 1, cliente: '', monto: '' }]; } catch(e){ return [{ id:1, cliente:'', monto:'' }]; }});
   const [objIncremental] = useState(969002614);
-  const [lineasIncremental, setLineasIncremental] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('hzn_lineasIncr')) || [{ id: 1, cliente: '', monto: '' }]; } catch(e){ return [{ id:1, cliente:'', monto:'' }]; }
-  });
+  const [lineasIncremental, setLineasIncremental] = useState(() => { try { return JSON.parse(localStorage.getItem('hzn_lineasIncr')) || [{ id: 1, cliente: '', monto: '' }]; } catch(e){ return [{ id:1, cliente:'', monto:'' }]; }});
 
   const [mostrarHistorial, setMostrarHistorial] = useState(false);
   const [mostrarEERR, setMostrarEERR] = useState(true);
   const [mostrarAporte, setMostrarAporte] = useState(true);
 
-  // ─── PERMISOS ──────────────────────────────────────────────────────────────
-  const tienePermiso = (modulo) => {
-    if (!usuarioActual) return false;
-    const modulos = (usuarioActual.modulos || '').toLowerCase();
-    return modulos.includes('todos') || modulos.includes(modulo.toLowerCase());
-  };
+  const tienePermiso = (modulo) => usuarioActual && ((usuarioActual.modulos || '').toLowerCase().includes('todos') || (usuarioActual.modulos || '').toLowerCase().includes(modulo.toLowerCase()));
 
   useEffect(() => {
     const cargarDatos = async () => {
       try {
         const [precios, clientes, cfg, eerr, usuarios, valoresServ] = await Promise.all([
-          fetchSheet('PreciosNuevos'),
-          fetchSheet('Clientes'),
-          fetchSheet('Configuracion'),
-          fetchSheet('EERRBase'),
-          fetchSheet('Usuarios'),
-          fetchSheet('Valores_Servicios')
+          fetchSheet('PreciosNuevos'), fetchSheet('Clientes'), fetchSheet('Configuracion'), fetchSheet('EERRBase'), fetchSheet('Usuarios'), fetchSheet('Valores_Servicios')
         ]);
 
         const configObj = {};
-        cfg.forEach(row => {
-          const key = row['Parámetro'] ?? row['Parametro'] ?? row['Key'] ?? Object.values(row)[0];
-          const valCell = row['Valor'] ?? row['Value'] ?? Object.values(row)[1];
-          if (key) configObj[String(key).trim()] = cleanNum(valCell);
-        });
+        cfg.forEach(row => { const k = row['Parámetro'] ?? row['Parametro'] ?? row['Key'] ?? Object.values(row)[0]; if (k) configObj[String(k).trim()] = cleanNum(row['Valor'] ?? row['Value'] ?? Object.values(row)[1]); });
 
-        const eerrObj = {};
-        eerr.forEach(row => {
-          const concepto = row['Concepto'] ?? Object.values(row)[0];
-          const montoCell = row['Monto (ARS)'] ?? row['Monto'] ?? Object.values(row)[1];
-          if (concepto !== undefined) {
-            eerrObj[String(concepto).trim()] = cleanNum(montoCell);
-          }
-        });
-
-        const eerrNorm = {};
-        Object.keys(eerrObj).forEach(k => {
-          eerrNorm[normalizeKey(k)] = eerrObj[k];
-        });
+        const eerrObj = {}, eerrNorm = {};
+        eerr.forEach(row => { const c = row['Concepto'] ?? Object.values(row)[0]; if (c) eerrObj[String(c).trim()] = cleanNum(row['Monto (ARS)'] ?? row['Monto'] ?? Object.values(row)[1]); });
+        Object.keys(eerrObj).forEach(k => eerrNorm[normalizeKey(k)] = eerrObj[k]);
 
         const preciosProcesados = precios.map(p => ({
-          categoria: p['Categoria'] ?? p['Categoría'] ?? Object.values(p)[0] ?? 'Otros',
-          tipo: p['Tipo'] ?? Object.values(p)[1] ?? 'Default',
-          valor: cleanNum(p['Valor (ARS)'] ?? p['Valor'] ?? Object.values(p)[2]),
-          sueldoSugerido: cleanNum(p['Sueldo Sugerido (ARS)'] ?? p['Sueldo Sugerido'] ?? Object.values(p)[3]),
-          costoFijo: cleanNum(p['Costo Fijo (ARS)'] ?? p['Costo Fijo'] ?? Object.values(p)[4])
+          categoria: p['Categoria'] ?? p['Categoría'] ?? Object.values(p)[0] ?? 'Otros', tipo: p['Tipo'] ?? Object.values(p)[1] ?? 'Default',
+          valor: cleanNum(p['Valor (ARS)'] ?? p['Valor'] ?? Object.values(p)[2]), sueldoSugerido: cleanNum(p['Sueldo Sugerido (ARS)'] ?? p['Sueldo Sugerido'] ?? Object.values(p)[3]), costoFijo: cleanNum(p['Costo Fijo (ARS)'] ?? p['Costo Fijo'] ?? Object.values(p)[4])
         }));
 
-        const clientesProcesados = clientes.map(c => {
-          return c['Cliente'] ?? c['cliente'] ?? c['Name'] ?? Object.values(c)[0] ?? '';
-        }).filter(Boolean);
-
-        const usuariosProcesados = usuarios.map(u => ({
-          nombre: u['Nombre'] ?? u['nombre'] ?? Object.values(u)[0] ?? '',
-          password: u['Password'] ?? u['password'] ?? Object.values(u)[1] ?? '',
-          modulos: u['Modulos'] ?? u['modulos'] ?? u['Módulos'] ?? Object.values(u)[2] ?? 'todos'
-        })).filter(u => u.nombre);
-
         setDataSheets({
-          preciosNuevos: preciosProcesados,
-          clientes: clientesProcesados,
-          config: configObj,
-          eerrBase: eerrObj,
-          eerrBaseNorm: eerrNorm,
-          usuarios: usuariosProcesados,
-          valoresServicios: valoresServ,
-          loading: false,
-          error: null
+          preciosNuevos: preciosProcesados, clientes: clientes.map(c => c['Cliente'] ?? c['cliente'] ?? c['Name'] ?? Object.values(c)[0] ?? '').filter(Boolean),
+          config: configObj, eerrBase: eerrObj, eerrBaseNorm: eerrNorm,
+          usuarios: usuarios.map(u => ({ nombre: u['Nombre'] ?? u['nombre'] ?? Object.values(u)[0] ?? '', password: u['Password'] ?? u['password'] ?? Object.values(u)[1] ?? '', modulos: u['Modulos'] ?? u['modulos'] ?? u['Módulos'] ?? Object.values(u)[2] ?? 'todos' })).filter(u => u.nombre),
+          valoresServicios: valoresServ, loading: false, error: null
         });
 
         setPctIndirectos(configObj['% Indirectos'] ?? configObj['Indirectos'] ?? 37);
@@ -271,467 +215,158 @@ function App() {
         setGastosOperativos(configObj['Gastos Operativos'] ?? 46539684.59);
         setMargenObjetivo(configObj['Margen Objetivo (%)'] ?? 25);
 
-        // Cargar Historial
         try {
-          const resNube = await fetch(`${SCRIPT_URL}?sheet=HistorialCompartido`);
-          const dataNube = await resNube.json();
-          
+          const dataNube = await (await fetch(`${SCRIPT_URL}?sheet=HistorialCompartido`)).json();
           if (dataNube && Array.isArray(dataNube)) {
             const findKey = (obj, k) => Object.keys(obj).find(key => key.toLowerCase() === k.toLowerCase());
-
-            const historialSincronizado = dataNube.map(item => {
-              const dEsc = item[findKey(item, 'DatosEscenario')];
-              const conf = item[findKey(item, 'Configuracion')];
-              const eerrData = item[findKey(item, 'EERR')];
-
-              let escenariosParseados = [];
-              if (Array.isArray(dEsc)) {
-                escenariosParseados = dEsc;
-              } else if (typeof dEsc === 'string' && dEsc.trim() !== '') {
-                try { escenariosParseados = JSON.parse(dEsc); } catch(e) { escenariosParseados = []; }
-              }
-
-              let configParseada = {};
-              if (typeof conf === 'object' && conf !== null && !Array.isArray(conf)) {
-                configParseada = conf;
-              } else if (typeof conf === 'string' && conf.trim() !== '') {
-                try { configParseada = JSON.parse(conf); } catch(e) { configParseada = {}; }
-              }
-
-              let eerrParseada = {};
-              if (typeof eerrData === 'object' && eerrData !== null && !Array.isArray(eerrData)) {
-                eerrParseada = eerrData;
-              } else if (typeof eerrData === 'string' && eerrData.trim() !== '') {
-                try { eerrParseada = JSON.parse(eerrData); } catch(e) { eerrParseada = {}; }
-              }
-
-              return {
-                id: item[findKey(item, 'ID')] ? String(item[findKey(item, 'ID')]).replace(/'/g, "") : Date.now(),
-                nombre: item[findKey(item, 'Nombre')] || "Sin nombre",
-                fecha: item[findKey(item, 'Fecha')] || "",
-                escenarios: escenariosParseados,
-                config: configParseada,
-                eerr: eerrParseada
-              };
+            const hSync = dataNube.map(item => {
+              const dEsc = item[findKey(item, 'DatosEscenario')], conf = item[findKey(item, 'Configuracion')], eerrD = item[findKey(item, 'EERR')];
+              const parseJson = (val, def) => { try { return typeof val === 'string' && val.trim() ? JSON.parse(val) : (typeof val === 'object' && val !== null ? val : def); } catch { return def; } };
+              return { id: item[findKey(item, 'ID')]?.toString().replace(/'/g, "") || Date.now(), nombre: item[findKey(item, 'Nombre')] || "Sin nombre", fecha: item[findKey(item, 'Fecha')] || "", escenarios: parseJson(dEsc, []), config: parseJson(conf, {}), eerr: parseJson(eerrD, {}) };
             });
-            
-            setHistorial(historialSincronizado);
-
-            const ultimo = historialSincronizado[historialSincronizado.length - 1];
-            if (ultimo && Array.isArray(ultimo.escenarios) && ultimo.escenarios.length > 0) {
-              setEscenarios(ultimo.escenarios);
-              if (ultimo.config && typeof ultimo.config === 'object') {
-                setPctIndirectos(ultimo.config.pctIndirectos ?? 37);
-                setPctCostoLaboral(ultimo.config.pctCostoLaboral ?? 45);
-                setGastosOperativos(ultimo.config.gastosOperativos ?? 46539684.59);
-                setMargenObjetivo(ultimo.config.margenObjetivo ?? 25);
-              }
+            setHistorial(hSync);
+            const ult = hSync[hSync.length - 1];
+            if (ult && ult.escenarios.length > 0) {
+              setEscenarios(ult.escenarios);
+              if (ult.config) { setPctIndirectos(ult.config.pctIndirectos ?? 37); setPctCostoLaboral(ult.config.pctCostoLaboral ?? 45); setGastosOperativos(ult.config.gastosOperativos ?? 46539684.59); setMargenObjetivo(ult.config.margenObjetivo ?? 25); }
             }
           }
-        } catch(e) { console.error("Error cargando historial de la nube:", e); }
+        } catch(e) {}
 
-        // Cargar Tracking de Objetivos Independiente
         try {
-          const resTrack = await fetch(`${SCRIPT_URL}?sheet=TrackingObjetivos`);
-          const dataTrack = await resTrack.json();
-          if (dataTrack && Array.isArray(dataTrack) && dataTrack.length > 0) {
-            const ultimo = dataTrack[dataTrack.length - 1];
-            const findKey = (obj, k) => Object.keys(obj).find(key => key.toLowerCase() === k.toLowerCase());
-            
-            const parseLineas = (val) => {
-              if (typeof val === 'string' && val.trim() !== '') {
-                try { return JSON.parse(val); } catch(e){ return null; }
-              }
-              if (Array.isArray(val)) return val;
-              return null;
-            };
-
-            const keyTot = findKey(ultimo, 'lineastotal') || findKey(ultimo, 'ventastotales');
-            const keyRen = findKey(ultimo, 'lineasreno') || findKey(ultimo, 'renovacion');
-            const keyInc = findKey(ultimo, 'lineasincr') || findKey(ultimo, 'incremental');
-
-            if(keyTot) { const lt = parseLineas(ultimo[keyTot]); if(lt) setLineasVentaTotal(lt); }
-            if(keyRen) { const lr = parseLineas(ultimo[keyRen]); if(lr) setLineasRenovacion(lr); }
-            if(keyInc) { const li = parseLineas(ultimo[keyInc]); if(li) setLineasIncremental(li); }
+          const dTrack = await (await fetch(`${SCRIPT_URL}?sheet=TrackingObjetivos`)).json();
+          if (dTrack && Array.isArray(dTrack) && dTrack.length > 0) {
+            const ult = dTrack[dTrack.length - 1], fk = (obj, k) => Object.keys(obj).find(key => key.toLowerCase() === k.toLowerCase());
+            const parseL = (v) => { try { return typeof v === 'string' && v.trim() ? JSON.parse(v) : (Array.isArray(v) ? v : null); } catch { return null; } };
+            const kT = fk(ult, 'lineastotal') || fk(ult, 'ventastotales'), kR = fk(ult, 'lineasreno') || fk(ult, 'renovacion'), kI = fk(ult, 'lineasincr') || fk(ult, 'incremental');
+            if(kT) { const lt = parseL(ult[kT]); if(lt) setLineasVentaTotal(lt); }
+            if(kR) { const lr = parseL(ult[kR]); if(lr) setLineasRenovacion(lr); }
+            if(kI) { const li = parseL(ult[kI]); if(li) setLineasIncremental(li); }
           }
-        } catch(e) { console.error("Error cargando tracking de la nube:", e); }
+        } catch(e) {}
 
-        if (preciosProcesados.length > 0 && escenarios.length === 0) {
-          setEscenarios([{
-            id: Date.now(),
-            cliente: clientesProcesados[0] || 'Nuevo Cliente',
-            tipoIdx: 0,
-            cantidad: 1,
-            sueldoBruto: preciosProcesados[0].sueldoSugerido || 0,
-            ventaUnit: preciosProcesados[0].valor || 0,
-            costoDirecto: preciosProcesados[0].costoFijo || 0
-          }]);
-        }
-        
+        if (preciosProcesados.length > 0 && escenarios.length === 0) setEscenarios([{ id: Date.now(), cliente: clientes[0] || 'Nuevo Cliente', tipoIdx: 0, cantidad: 1, sueldoBruto: preciosProcesados[0].sueldoSugerido || 0, ventaUnit: preciosProcesados[0].valor || 0, costoDirecto: preciosProcesados[0].costoFijo || 0 }]);
         setIsReady(true);
-      } catch (error) {
-        console.error('Error cargando sheets', error);
-        setDataSheets(prev => ({ ...prev, loading: false, error: 'Error cargando datos desde Google Sheets.' }));
-        setIsReady(true);
+      } catch (err) {
+        setDataSheets(p => ({ ...p, loading: false, error: 'Error cargando datos.' })); setIsReady(true);
       }
     };
     cargarDatos();
   }, []);
 
   useEffect(() => {
-    if (!isReady || isLoadingFromCloud) return;
-    if (!Array.isArray(escenarios)) return;
-
-    localStorage.setItem('hzn_escenarios', JSON.stringify(escenarios));
-    localStorage.setItem('hzn_pctInd', pctIndirectos);
-    localStorage.setItem('hzn_pctLab', pctCostoLaboral);
-    localStorage.setItem('hzn_gastosOp', gastosOperativos);
-    localStorage.setItem('hzn_margenObj', margenObjetivo);
-    localStorage.setItem('hzn_lineasVenta', JSON.stringify(lineasVentaTotal));
-    localStorage.setItem('hzn_lineasReno', JSON.stringify(lineasRenovacion));
-    localStorage.setItem('hzn_lineasIncr', JSON.stringify(lineasIncremental));
+    if (!isReady || isLoadingFromCloud || !Array.isArray(escenarios)) return;
+    localStorage.setItem('hzn_escenarios', JSON.stringify(escenarios)); localStorage.setItem('hzn_pctInd', pctIndirectos); localStorage.setItem('hzn_pctLab', pctCostoLaboral); localStorage.setItem('hzn_gastosOp', gastosOperativos); localStorage.setItem('hzn_margenObj', margenObjetivo); localStorage.setItem('hzn_lineasVenta', JSON.stringify(lineasVentaTotal)); localStorage.setItem('hzn_lineasReno', JSON.stringify(lineasRenovacion)); localStorage.setItem('hzn_lineasIncr', JSON.stringify(lineasIncremental));
   }, [escenarios, pctIndirectos, pctCostoLaboral, gastosOperativos, margenObjetivo, lineasVentaTotal, lineasRenovacion, lineasIncremental, isReady, isLoadingFromCloud]);
 
   const agregarFila = () => {
-    if (dataSheets.loading) { alert('Aún cargando datos. Intentá de nuevo en un momento.'); return; }
+    if (dataSheets.loading) return alert('Cargando...');
     const p = dataSheets.preciosNuevos[0] || { sueldoSugerido: 0, valor: 0, costoFijo: 0, categoria: 'Otros', tipo: 'Default' };
-
-    setEscenarios(prev => ([
-      ...prev,
-      {
-        id: Date.now(),
-        cliente: (dataSheets.clientes && dataSheets.clientes[0]) || 'Nuevo Cliente',
-        tipoIdx: 0,
-        cantidad: 1,
-        sueldoBruto: p.sueldoSugerido || 0,
-        ventaUnit: p.valor || 0,
-        costoDirecto: p.costoFijo || 0
-      }
-    ]));
+    setEscenarios(prev => [...prev, { id: Date.now(), cliente: dataSheets.clientes[0] || 'Nuevo Cliente', tipoIdx: 0, cantidad: 1, sueldoBruto: p.sueldoSugerido || 0, ventaUnit: p.valor || 0, costoDirecto: p.costoFijo || 0 }]);
   };
 
   const actualizarFila = (id, campo, valor) => {
     setEscenarios(prev => prev.map(e => {
       if (e.id !== id) return e;
-      const updated = { ...e };
-      if (campo === 'ventaUnit' || campo === 'sueldoBruto' || campo === 'costoDirecto') {
-        const num = typeof valor === 'string' ? parseInt(valor.replace(/\D/g, '')) || 0 : Number(valor || 0);
-        updated[campo] = num;
-      } else if (campo === 'tipoIdx') {
-        updated.tipoIdx = Number(valor) || 0;
-        const p = dataSheets.preciosNuevos[Number(valor)];
-        if (p) {
-          updated.sueldoBruto = p.sueldoSugerido ?? 0;
-          updated.ventaUnit = p.valor ?? 0;
-          updated.costoDirecto = p.costoFijo ?? 0;
-        }
-      } else if (campo === 'cantidad') {
-        updated.cantidad = Number(valor) || 0;
-      } else if (campo === 'cliente') {
-        updated.cliente = valor;
-      }
-      return updated;
+      const upd = { ...e };
+      if (['ventaUnit', 'sueldoBruto', 'costoDirecto'].includes(campo)) upd[campo] = typeof valor === 'string' ? parseInt(valor.replace(/\D/g, '')) || 0 : Number(valor || 0);
+      else if (campo === 'tipoIdx') { upd.tipoIdx = Number(valor) || 0; const p = dataSheets.preciosNuevos[Number(valor)]; if (p) { upd.sueldoBruto = p.sueldoSugerido ?? 0; upd.ventaUnit = p.valor ?? 0; upd.costoDirecto = p.costoFijo ?? 0; } }
+      else if (campo === 'cantidad') upd.cantidad = Number(valor) || 0;
+      else if (campo === 'cliente') upd.cliente = valor;
+      return upd;
     }));
   };
 
-  const agregarLineaVenta = (tipo) => {
-    const nuevaLinea = { id: Date.now(), cliente: '', monto: '' };
-    if (tipo === 'total') setLineasVentaTotal(prev => [...prev, nuevaLinea]);
-    if (tipo === 'renovacion') setLineasRenovacion(prev => [...prev, nuevaLinea]);
-    if (tipo === 'incremental') setLineasIncremental(prev => [...prev, nuevaLinea]);
-  };
-
-  const actualizarLineaVenta = (tipo, id, campo, valor) => {
-    const actualizar = (lineas) => lineas.map(l => l.id === id ? { ...l, [campo]: valor } : l);
-    if (tipo === 'total') setLineasVentaTotal(prev => actualizar(prev));
-    if (tipo === 'renovacion') setLineasRenovacion(prev => actualizar(prev));
-    if (tipo === 'incremental') setLineasIncremental(prev => actualizar(prev));
-  };
-
-  const eliminarLineaVenta = (tipo, id) => {
-    if (tipo === 'total') setLineasVentaTotal(prev => prev.filter(l => l.id !== id));
-    if (tipo === 'renovacion') setLineasRenovacion(prev => prev.filter(l => l.id !== id));
-    if (tipo === 'incremental') setLineasIncremental(prev => prev.filter(l => l.id !== id));
-  };
-
+  const setLinea = (setter, action, payload) => setter(prev => action === 'add' ? [...prev, { id: Date.now(), cliente: '', monto: '' }] : action === 'upd' ? prev.map(l => l.id === payload.id ? { ...l, [payload.campo]: payload.valor } : l) : prev.filter(l => l.id !== payload));
+  const agregarLineaVenta = (t) => { t === 'total' ? setLinea(setLineasVentaTotal, 'add') : t === 'renovacion' ? setLinea(setLineasRenovacion, 'add') : setLinea(setLineasIncremental, 'add'); };
+  const actualizarLineaVenta = (t, id, c, v) => { const p = {id, campo:c, valor:v}; t === 'total' ? setLinea(setLineasVentaTotal, 'upd', p) : t === 'renovacion' ? setLinea(setLineasRenovacion, 'upd', p) : setLinea(setLineasIncremental, 'upd', p); };
+  const eliminarLineaVenta = (t, id) => { t === 'total' ? setLinea(setLineasVentaTotal, 'del', id) : t === 'renovacion' ? setLinea(setLineasRenovacion, 'del', id) : setLinea(setLineasIncremental, 'del', id); };
   const calcularTotalLineas = (lineas) => lineas.reduce((sum, l) => sum + (Number(l.monto) || 0), 0);
 
   const calcularPropuesta = () => {
-    let ventasTotales = 0;
-    let costosTotales = 0;
-    const porCliente = {};
-
+    let vTot = 0, cTot = 0, pCli = {};
     escenarios.forEach(e => {
-      const p = dataSheets.preciosNuevos && dataSheets.preciosNuevos[e.tipoIdx];
-      if (!p) return;
-      
-      const ventaFila = (Number(e.cantidad) || 0) * (Number(e.ventaUnit) || 0);
-      let costoTotalFila = 0;
-      
-      const isStaff = (p.categoria || '').toLowerCase().includes('staff');
-      const isWorkshop = (p.categoria || '').toLowerCase().includes('workshop') ||
-                         (p.tipo || '').toLowerCase().includes('workshop') ||
-                         (p.tipo || '').toLowerCase().includes('worshop');
-
-      if (isStaff) {
-        const sueldoTotal = (Number(e.cantidad) || 0) * (Number(e.sueldoBruto) || 0);
-        const costoLaboral = sueldoTotal * (pctCostoLaboral / 100);
-        const indirectos = sueldoTotal * (pctIndirectos / 100);
-        costoTotalFila = sueldoTotal + costoLaboral + indirectos;
-      } else if (isWorkshop) {
-        costoTotalFila = (Number(e.cantidad) || 0) * (Number(e.costoDirecto) || 0);
-      } else {
-        const base = (Number(e.cantidad) || 0) * (Number(p.costoFijo) || 0);
-        const indirectos = base * (pctIndirectos / 100);
-        costoTotalFila = base + indirectos;
-      }
-
-      ventasTotales += ventaFila;
-      costosTotales += costoTotalFila;
-
-      if (!porCliente[e.cliente]) porCliente[e.cliente] = { ventas: 0, costos: 0 };
-      porCliente[e.cliente].ventas += ventaFila;
-      porCliente[e.cliente].costos += costoTotalFila;
+      const p = dataSheets.preciosNuevos[e.tipoIdx]; if (!p) return;
+      const isStaff = (p.categoria || '').toLowerCase().includes('staff'), isWks = (p.categoria + p.tipo).toLowerCase().includes('workshop');
+      const vFila = (e.cantidad || 0) * (e.ventaUnit || 0);
+      let cFila = 0;
+      if (isStaff) { const s = e.cantidad * e.sueldoBruto; cFila = s + (s * pctCostoLaboral/100) + (s * pctIndirectos/100); }
+      else if (isWks) { cFila = e.cantidad * e.costoDirecto; }
+      else { const b = e.cantidad * p.costoFijo; cFila = b + (b * pctIndirectos/100); }
+      vTot += vFila; cTot += cFila;
+      if (!pCli[e.cliente]) pCli[e.cliente] = { ventas: 0, costos: 0 };
+      pCli[e.cliente].ventas += vFila; pCli[e.cliente].costos += cFila;
     });
-
-    const margenBruto = ventasTotales - costosTotales;
-    const margenBrutoPct = ventasTotales > 0 ? (margenBruto / ventasTotales) * 100 : 0;
-    return { ventasTotales, costosTotales, margenBruto, margenBrutoPct, porCliente };
+    return { ventasTotales: vTot, costosTotales: cTot, margenBruto: vTot - cTot, margenBrutoPct: vTot > 0 ? ((vTot - cTot) / vTot) * 100 : 0, porCliente: pCli };
   };
 
   const calcularEERRTotal = () => {
-    const propuesta = calcularPropuesta();
-    const eerr = dataSheets.eerrBase ?? {};
-    const eerrNorm = dataSheets.eerrBaseNorm ?? {};
-
-    const ingresoBase = tolerantGet(eerr, 'Ingreso') || tolerantGet(eerrNorm, normalizeKey('Ingreso')) || 0;
-    const costoIngresoBase = tolerantGet(eerr, 'Costo de ingresos') || tolerantGet(eerrNorm, normalizeKey('Costo de ingresos')) || 0;
-    const gananciaBrutaBase = tolerantGet(eerr, 'Ganancia bruta') || tolerantGet(eerrNorm, normalizeKey('Ganancia bruta')) || 0;
-    const gastoOperacionBase = tolerantGet(eerr, 'Menos gasto de operación') || tolerantGet(eerrNorm, normalizeKey('Menos gasto de operación')) || 0;
-    const otrosIngresosBase = tolerantGet(eerr, 'Más otros ingresos') || tolerantGet(eerrNorm, normalizeKey('Más otros ingresos')) || 0;
-    const otrosGastosBase = tolerantGet(eerr, 'Menos gastos de otro tipo') || tolerantGet(eerrNorm, normalizeKey('Menos gastos de otro tipo')) || 0;
-    const gananciaNetaBase = tolerantGet(eerr, 'Ganancia neta') || tolerantGet(eerrNorm, normalizeKey('Ganancia neta')) || 0;
-
-    const ingresoTotal = ingresoBase + propuesta.ventasTotales;
-    const costoIngresosTotal = costoIngresoBase + propuesta.costosTotales;
-    const gananciaBrutaTotal = ingresoTotal - costoIngresosTotal;
-    const gastoOperacionTotal = gastosOperativos || gastoOperacionBase;
-    const ingresoOperacionTotal = gananciaBrutaTotal - gastoOperacionTotal;
-    const otrosIngresosTotal = otrosIngresosBase;
-    const otrosGastosTotal = otrosGastosBase;
-    const gananciaNetaTotal = ingresoOperacionTotal + otrosIngresosTotal - otrosGastosTotal;
-
-    return {
-      ingresoBase,
-      costoIngresoBase,
-      gananciaBrutaBase,
-      gastoOperacionBase,
-      otrosIngresosBase,
-      otrosGastosBase,
-      gananciaNetaBase,
-      ingresoTotal,
-      costoIngresosTotal,
-      gananciaBrutaTotal,
-      gastoOperacionTotal,
-      ingresoOperacionTotal,
-      otrosIngresosTotal,
-      otrosGastosTotal,
-      gananciaNetaTotal,
-      margenBrutoPct: ingresoTotal > 0 ? (gananciaBrutaTotal / ingresoTotal) * 100 : 0,
-      margenOperacionPct: ingresoTotal > 0 ? (ingresoOperacionTotal / ingresoTotal) * 100 : 0,
-      margenNetoPct: ingresoTotal > 0 ? (gananciaNetaTotal / ingresoTotal) * 100 : 0,
-      desvioIngreso: propuesta.ventasTotales,
-      desvioCosto: propuesta.costosTotales,
-      desvioGananciaNeta: gananciaNetaTotal - gananciaNetaBase,
-      propuesta
-    };
+    const prop = calcularPropuesta(), e = dataSheets.eerrBase ?? {}, n = dataSheets.eerrBaseNorm ?? {};
+    const tg = (k) => tolerantGet(e, k) || tolerantGet(n, normalizeKey(k)) || 0;
+    const iB = tg('Ingreso'), ciB = tg('Costo de ingresos'), opB = tg('Menos gasto de operación'), oiB = tg('Más otros ingresos'), ogB = tg('Menos gastos de otro tipo'), gnB = tg('Ganancia neta');
+    const iT = iB + prop.ventasTotales, ciT = ciB + prop.costosTotales, gbT = iT - ciT, opT = gastosOperativos || opB, ioT = gbT - opT, gnT = ioT + oiB - ogB;
+    return { ingresoBase: iB, costoIngresoBase: ciB, gananciaBrutaBase: iB - ciB, gastoOperacionBase: opB, otrosIngresosBase: oiB, otrosGastosBase: ogB, gananciaNetaBase: gnB, ingresoTotal: iT, costoIngresosTotal: ciT, gananciaBrutaTotal: gbT, gastoOperacionTotal: opT, ingresoOperacionTotal: ioT, otrosIngresosTotal: oiB, otrosGastosTotal: ogB, gananciaNetaTotal: gnT, margenBrutoPct: iT > 0 ? (gbT / iT) * 100 : 0, margenOperacionPct: iT > 0 ? (ioT / iT) * 100 : 0, margenNetoPct: iT > 0 ? (gnT / iT) * 100 : 0, desvioGananciaNeta: gnT - gnB, propuesta: prop };
   };
 
-  const guardarEscenario = async () => {
-    const nombre = window.prompt("Ingrese un nombre para este escenario:", `Escenario ${historial.length + 1}`);
-    if (!nombre) return;
-    const eerrActual = calcularEERRTotal();
-    const timestamp = new Date().toLocaleString('es-AR');
-    
-    const nuevoRegistro = {
-      id: Date.now(),
-      nombre: nombre,
-      fecha: timestamp,
-      escenarios: escenarios,
-      config: { pctIndirectos, pctCostoLaboral, gastosOperativos, margenObjetivo },
-      eerr: eerrActual
-    };
-
+  const syncNube = async (payload, sheet, successMsg) => {
     try {
-      const params = new URLSearchParams();
-      params.append('payload', JSON.stringify(nuevoRegistro));
-      params.append('sheet', 'HistorialCompartido');
-
-      await fetch(SCRIPT_URL, {
-        method: 'POST',
-        mode: 'no-cors', 
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: params.toString()
-      });
-
-      setHistorial(prev => [nuevoRegistro, ...prev]);
-      alert(`✅ Sincronizado en la base de datos "OK"`);
-    } catch(e) {
-      console.error("Error sincronización:", e);
-      alert("Error al sincronizar.");
-    }
+      const p = new URLSearchParams(); p.append('payload', JSON.stringify(payload)); p.append('sheet', sheet);
+      await fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: p.toString() });
+      alert(successMsg);
+    } catch { alert("Error al sincronizar."); }
   };
 
-  const guardarTracking = async () => {
-    const timestamp = new Date().toLocaleString('es-AR');
-    const payload = {
-      ID: Date.now(),
-      Fecha: timestamp,
-      LineasTotal: JSON.stringify(lineasVentaTotal),
-      LineasReno: JSON.stringify(lineasRenovacion),
-      LineasIncr: JSON.stringify(lineasIncremental)
-    };
-
-    try {
-      const params = new URLSearchParams();
-      params.append('payload', JSON.stringify(payload));
-      params.append('sheet', 'TrackingObjetivos');
-
-      await fetch(SCRIPT_URL, {
-        method: 'POST',
-        mode: 'no-cors', 
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: params.toString()
-      });
-      alert('✅ Objetivos guardados exitosamente en la base de datos.');
-    } catch (e) {
-      console.error('Error guardando tracking:', e);
-      alert('Error al guardar los objetivos.');
-    }
+  const guardarEscenario = () => {
+    const nom = window.prompt("Nombre del escenario:", `Escenario ${historial.length + 1}`);
+    if (!nom) return;
+    const nR = { id: Date.now(), nombre: nom, fecha: new Date().toLocaleString('es-AR'), escenarios, config: { pctIndirectos, pctCostoLaboral, gastosOperativos, margenObjetivo }, eerr: calcularEERRTotal() };
+    setHistorial(p => [nR, ...p]); syncNube(nR, 'HistorialCompartido', '✅ Escenario guardado');
   };
 
   const cargarEscenarioDesdeHistorial = (item) => {
-    if(!window.confirm(`¿Cargar el escenario "${item.nombre}"? Se perderán los cambios actuales.`)) return;
+    if(!window.confirm(`¿Cargar "${item.nombre}"?`)) return;
     setIsLoadingFromCloud(true);
-    const escenariosValidos = Array.isArray(item.escenarios) ? item.escenarios : [];
-    const configValida = (typeof item.config === 'object' && item.config !== null) ? item.config : {};
-    
-    setEscenarios(escenariosValidos);
-    setPctIndirectos(configValida.pctIndirectos ?? 37);
-    setPctCostoLaboral(configValida.pctCostoLaboral ?? 45);
-    setGastosOperativos(configValida.gastosOperativos ?? 46539684.59);
-    setMargenObjetivo(configValida.margenObjetivo ?? 25);
-    
-    setMostrarHistorial(false);
-    setTimeout(() => setIsLoadingFromCloud(false), 200);
+    setEscenarios(Array.isArray(item.escenarios) ? item.escenarios : []);
+    const c = item.config || {}; setPctIndirectos(c.pctIndirectos ?? 37); setPctCostoLaboral(c.pctCostoLaboral ?? 45); setGastosOperativos(c.gastosOperativos ?? 46539684.59); setMargenObjetivo(c.margenObjetivo ?? 25);
+    setMostrarHistorial(false); setTimeout(() => setIsLoadingFromCloud(false), 200);
   };
-
-  const descargarPDF = () => {
-    window.print();
-  };
-
-  const format = (n) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n);
-  const formatNum = (n) => new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 }).format(n);
-  const formatPct = (n) => `${n.toFixed(0)}%`;
 
   const renderVelocimetro = (titulo, objetivo, lineas, setLineas, tipo, color) => {
-    const totalReal = calcularTotalLineas(lineas);
-    const pctCumplimiento = objetivo > 0 ? Math.min((totalReal / objetivo) * 100, 100) : 0;
-    const angle = -90 + (pctCumplimiento * 1.8);
-    
-    const totalArcLength = 251.2;
-    const filledLength = (pctCumplimiento / 100) * totalArcLength;
-    const gapLength = totalArcLength - filledLength;
-
-    const getColor = () => {
-      if (pctCumplimiento >= 100) return '#16a34a';
-      if (pctCumplimiento >= 75) return '#eab308';
-      if (pctCumplimiento >= 50) return '#f97316';
-      return '#dc2626';
-    };
-
+    const tReal = calcularTotalLineas(lineas), pct = objetivo > 0 ? Math.min((tReal / objetivo) * 100, 100) : 0, angle = -90 + (pct * 1.8), arc = 251.2, fill = (pct / 100) * arc, gap = arc - fill;
+    const cStr = pct >= 100 ? '#16a34a' : pct >= 75 ? '#eab308' : pct >= 50 ? '#f97316' : '#dc2626';
     return (
       <div className="bg-white rounded-xl shadow-lg border border-purple-200 p-4 sm:p-6 flex-1 w-full overflow-hidden">
-        <h3 className="text-xs sm:text-sm font-black text-center mb-2 uppercase truncate" style={{ color: color }}>{titulo}</h3>
+        <h3 className="text-xs sm:text-sm font-black text-center mb-2 uppercase truncate" style={{ color }}>{titulo}</h3>
         <div className="relative w-full flex justify-center mb-4">
           <svg viewBox="0 0 200 120" className="w-full max-w-[200px] sm:max-w-xs">
             <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#f1f5f9" strokeWidth="20" strokeLinecap="round" />
-            
-            {pctCumplimiento < 100 && (
-              <path 
-                d="M 20 100 A 80 80 0 0 1 180 100" 
-                fill="none" 
-                stroke="#fee2e2" 
-                strokeWidth="20" 
-                strokeLinecap="round" 
-              />
-            )}
-            {pctCumplimiento < 100 && (
-              <path 
-                d="M 20 100 A 80 80 0 0 1 180 100" 
-                fill="none" 
-                stroke="#6b6a6a" 
-                strokeWidth="20" 
-                strokeLinecap="round" 
-                strokeDasharray={`${gapLength} ${totalArcLength}`}
-                strokeDashoffset={`-${filledLength}`}
-                style={{ transition: 'all 0.8s ease-out' }}
-              />
-            )}
-
-            <path 
-              d="M 20 100 A 80 80 0 0 1 180 100" 
-              fill="none" 
-              stroke={getColor()} 
-              strokeWidth="20" 
-              strokeLinecap="round" 
-              strokeDasharray={`${filledLength} ${totalArcLength}`} 
-              style={{ transition: 'all 0.8s ease-out' }} 
-            />
-            
-            <line x1="100" y1="100" x2="100" y2="30" stroke={getColor()} strokeWidth="3" strokeLinecap="round" transform={`rotate(${angle} 100 100)`} style={{ transition: 'all 0.8s ease-out' }} />
-            <circle cx="100" cy="100" r="8" fill={getColor()} />
+            {pct < 100 && <><path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#fee2e2" strokeWidth="20" strokeLinecap="round" /><path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#6b6a6a" strokeWidth="20" strokeLinecap="round" strokeDasharray={`${gap} ${arc}`} strokeDashoffset={`-${fill}`} style={{ transition: 'all 0.8s' }} /></>}
+            <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke={cStr} strokeWidth="20" strokeLinecap="round" strokeDasharray={`${fill} ${arc}`} style={{ transition: 'all 0.8s' }} />
+            <line x1="100" y1="100" x2="100" y2="30" stroke={cStr} strokeWidth="3" strokeLinecap="round" transform={`rotate(${angle} 100 100)`} style={{ transition: 'all 0.8s' }} />
+            <circle cx="100" cy="100" r="8" fill={cStr} />
           </svg>
         </div>
         <div className="text-center mb-4">
-          <p className="text-3xl sm:text-4xl font-black" style={{ color: getColor() }}>{pctCumplimiento.toFixed(1)}%</p>
-          {pctCumplimiento < 100 && (
-            <p className="text-[10px] font-bold text-slate-500 uppercase mt-1">Cumplimiento</p>
-          )}
+          <p className="text-3xl sm:text-4xl font-black" style={{ color: cStr }}>{pct.toFixed(1)}%</p>
+          {pct < 100 && <p className="text-[10px] font-bold text-slate-500 uppercase mt-1">Cumplimiento</p>}
         </div>
         <div className="space-y-3 bg-gradient-to-br from-purple-50 to-pink-50 p-3 sm:p-4 rounded-lg">
+          <div><label className="text-[10px] font-bold text-purple-600 uppercase block mb-1">Objetivo 2026</label><div className="w-full bg-white border border-purple-200 rounded px-2 sm:px-3 py-2 text-xs sm:text-sm font-bold text-purple-700 truncate">{formatNum(objetivo)}</div></div>
           <div>
-            <label className="text-[10px] font-bold text-purple-600 uppercase block mb-1">Objetivo 2026</label>
-            <div className="w-full bg-white border border-purple-200 rounded px-2 sm:px-3 py-2 text-xs sm:text-sm font-bold text-purple-700 truncate">{formatNum(objetivo)}</div>
-          </div>
-          <div>
-            <div className="flex justify-between items-center mb-2">
-              <label className="text-[10px] font-bold text-blue-600 uppercase">Ventas por Cliente</label>
-              <button onClick={() => agregarLineaVenta(tipo)} className="text-blue-600 hover:text-blue-800 font-black text-lg leading-none print:hidden">+</button>
-            </div>
+            <div className="flex justify-between items-center mb-2"><label className="text-[10px] font-bold text-blue-600 uppercase">Ventas por Cliente</label><button onClick={() => agregarLineaVenta(tipo)} className="text-blue-600 hover:text-blue-800 font-black text-lg leading-none print:hidden">+</button></div>
             <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-              {lineas.map((linea) => (
-                <div key={linea.id} className="flex gap-1 sm:gap-2 items-center">
-                  <select value={linea.cliente} onChange={(e) => actualizarLineaVenta(tipo, linea.id, 'cliente', e.target.value)} className="flex-1 min-w-[80px] bg-white border border-blue-200 rounded px-1 sm:px-2 py-1 text-[10px] sm:text-xs font-medium text-slate-700 focus:outline-none truncate">
-                    {dataSheets.clientes && dataSheets.clientes.length > 0 ? (
-                      dataSheets.clientes.map(c => <option key={c} value={c}>{c}</option>)
-                    ) : (
-                      <option value="">Cargando clientes...</option>
-                    )}
-                  </select>
-                  <input type="text" value={linea.monto === '' ? '' : formatNum(linea.monto)} onChange={(e) => {
-                      const raw = e.target.value.replace(/\./g, '').replace(/\s/g, '');
-                      const num = raw === '' ? '' : parseFloat(raw) || 0;
-                      actualizarLineaVenta(tipo, linea.id, 'monto', num);
-                    }} className="w-20 sm:w-28 bg-white border-2 border-blue-400 rounded px-1 sm:px-2 py-1 text-[10px] sm:text-xs font-bold text-blue-700 focus:outline-none" placeholder="0" />
-                  {lineas.length > 1 && <button onClick={() => eliminarLineaVenta(tipo, linea.id)} className="text-slate-400 hover:text-red-500 text-sm font-bold print:hidden px-1">✕</button>}
+              {lineas.map(l => (
+                <div key={l.id} className="flex gap-1 sm:gap-2 items-center">
+                  <select value={l.cliente} onChange={e => actualizarLineaVenta(tipo, l.id, 'cliente', e.target.value)} className="flex-1 min-w-[80px] bg-white border border-blue-200 rounded px-1 sm:px-2 py-1 text-[10px] sm:text-xs font-medium text-slate-700 focus:outline-none truncate">{dataSheets.clientes.map(c => <option key={c} value={c}>{c}</option>)}</select>
+                  <input type="text" value={l.monto === '' ? '' : formatNum(l.monto)} onChange={e => { const v = e.target.value.replace(/\./g, '').replace(/\s/g, ''); actualizarLineaVenta(tipo, l.id, 'monto', v === '' ? '' : parseFloat(v) || 0); }} className="w-20 sm:w-28 bg-white border-2 border-blue-400 rounded px-1 sm:px-2 py-1 text-[10px] sm:text-xs font-bold text-blue-700 focus:outline-none" placeholder="0" />
+                  {lineas.length > 1 && <button onClick={() => eliminarLineaVenta(tipo, l.id)} className="text-slate-400 hover:text-red-500 text-sm font-bold print:hidden px-1">✕</button>}
                 </div>
               ))}
             </div>
           </div>
           <div className="pt-2 border-t-2 border-purple-300">
-            <div className="flex justify-between text-[10px] sm:text-xs mb-1"><span className="text-slate-500 font-bold uppercase">Total:</span><span className="font-black text-blue-700 truncate">{format(calcularTotalLineas(lineas))}</span></div>
-            <p className="text-[10px] font-bold text-red-500 uppercase mt-1 truncate">Restan: {format(objetivo - totalReal)}</p>
+            <div className="flex justify-between text-[10px] sm:text-xs mb-1"><span className="text-slate-500 font-bold uppercase">Total:</span><span className="font-black text-blue-700 truncate">{format(tReal)}</span></div>
+            <p className="text-[10px] font-bold text-red-500 uppercase mt-1 truncate">Restan: {format(objetivo - tReal)}</p>
           </div>
         </div>
       </div>
@@ -740,97 +375,30 @@ function App() {
 
   if (dataSheets.loading) return <div className="p-10 sm:p-20 text-center font-black text-purple-600 animate-pulse text-sm sm:text-base">SINCRONIZANDO CON HORIZON CLOUD...</div>;
   if (dataSheets.error) return <div className="p-10 sm:p-20 text-center font-black text-red-600 text-sm sm:text-base">{dataSheets.error}</div>;
+  if (!usuarioActual) return <LoginScreen usuarios={dataSheets.usuarios} onLogin={setUsuarioActual} />;
 
-  // LOGIN GATE
-  if (!usuarioActual) {
-    return <LoginScreen usuarios={dataSheets.usuarios} onLogin={setUsuarioActual} />;
-  }
-
-  const eerr = calcularEERRTotal();
-  const propuesta = eerr.propuesta;
+  const eerr = calcularEERRTotal(), { propuesta } = eerr;
 
   return (
     <div className="p-4 sm:p-8 bg-gradient-to-br from-slate-50 to-purple-50 min-h-screen font-sans text-slate-900 overflow-x-hidden">
+      <style>{`@media print { @page { size: landscape; margin: 10mm; } body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; background-color: #f8fafc !important; } .overflow-x-auto, .overflow-y-auto, .overflow-auto, .max-h-48, .max-h-[80vh], .max-h-[90vh] { overflow: visible !important; max-height: none !important; } .shadow-sm, .shadow-lg, .shadow-2xl { box-shadow: none !important; border: 1px solid #e2e8f0; } }`}</style>
+      {mostrarModalValores && <ModalValoresServicios datos={dataSheets.valoresServicios} onClose={() => setMostrarModalValores(false)} />}
       
-      {/* Estilos globales inyectados específicamente para la hora de imprimir */}
-      <style>{`
-        @media print {
-          @page { size: landscape; margin: 10mm; }
-          body { 
-            -webkit-print-color-adjust: exact !important; 
-            print-color-adjust: exact !important; 
-            background-color: #f8fafc !important; 
-          }
-          /* Desactivar scroll interior para que se impriman todas las filas hacia abajo */
-          .overflow-x-auto, .overflow-y-auto, .overflow-auto, .max-h-48, .max-h-[80vh], .max-h-[90vh] { 
-            overflow: visible !important; 
-            max-height: none !important; 
-          }
-          /* Opcional: reducir sombras que en impresión pueden verse raras */
-          .shadow-sm, .shadow-lg, .shadow-2xl { 
-            box-shadow: none !important; 
-            border: 1px solid #e2e8f0; 
-          }
-        }
-      `}</style>
-
-      {mostrarModalValores && (
-        <ModalValoresServicios datos={dataSheets.valoresServicios} onClose={() => setMostrarModalValores(false)} />
-      )}
-
       <div className="max-w-7xl mx-auto">
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-8">
           <div className="w-full lg:w-auto">
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight bg-gradient-to-r from-purple-600 via-pink-500 to-blue-500 bg-clip-text text-transparent uppercase break-words">Horizon Finance Engine 2026</h1>
             <p className="text-slate-500 text-xs sm:text-sm mt-1">Resultados Proyectados</p>
           </div>
-          
           <div className="flex flex-wrap gap-2 sm:gap-3 items-center w-full lg:w-auto">
-            {/* Lupa Valores Servicios */}
-            {tienePermiso('busqueda') && (
-              <button
-                onClick={() => setMostrarModalValores(true)}
-                title="Ver Valores de Servicios"
-                className="bg-white border border-purple-200 rounded-lg px-3 py-2 text-purple-600 hover:bg-purple-50 hover:border-purple-400 transition shadow-sm text-lg print:hidden shrink-0"
-              >🔍</button>
-            )}
-
-            <div className="bg-white px-3 sm:px-4 py-2 rounded-lg shadow-sm border border-purple-100 flex-1 min-w-[120px]">
-              <span className="text-[10px] font-bold text-purple-400 block uppercase">Gastos Op.</span>
-              <input 
-                type="text" 
-                value={gastosOperativos === 0 ? '' : formatNum(gastosOperativos)} 
-                onChange={e => {
-                  const rawValue = e.target.value.replace(/\./g, '').replace(/\s/g, '');
-                  const num = rawValue === '' ? 0 : parseFloat(rawValue) || 0;
-                  setGastosOperativos(num);
-                }} 
-                className="w-full font-bold text-red-600 focus:outline-none text-xs sm:text-sm bg-transparent" 
-              />
-            </div>
-            <div className="bg-white px-3 sm:px-4 py-2 rounded-lg shadow-sm border border-blue-100 flex-1 min-w-[80px]">
-              <span className="text-[10px] font-bold text-blue-400 block uppercase">Indirectos</span>
-              <div className="flex items-center">
-                <input type="number" value={pctIndirectos} onChange={e => setPctIndirectos(cleanNum(e.target.value))} className="w-full font-bold text-blue-600 focus:outline-none text-xs sm:text-sm" />%
-              </div>
-            </div>
-            <div className="bg-white px-3 sm:px-4 py-2 rounded-lg shadow-sm border border-pink-100 flex-1 min-w-[80px]">
-              <span className="text-[10px] font-bold text-pink-400 block uppercase">Costo Lab.</span>
-              <div className="flex items-center">
-                <input type="number" value={pctCostoLaboral} onChange={e => setPctCostoLaboral(cleanNum(e.target.value))} className="w-full font-bold text-pink-600 focus:outline-none text-xs sm:text-sm" />%
-              </div>
-            </div>
-            <div className="bg-white px-3 sm:px-4 py-2 rounded-lg shadow-sm border border-purple-100 flex-1 min-w-[80px]">
-              <span className="text-[10px] font-bold text-purple-400 block uppercase">Margen Obj.</span>
-              <div className="flex items-center">
-                <input type="number" value={margenObjetivo} onChange={e => setMargenObjetivo(cleanNum(e.target.value))} className="w-full font-bold text-purple-600 focus:outline-none text-xs sm:text-sm" />%
-              </div>
-            </div>
-
-            {/* Usuario logueado */}
+            {tienePermiso('busqueda') && <button onClick={() => setMostrarModalValores(true)} title="Ver Valores" className="bg-white border border-purple-200 rounded-lg px-3 py-2 text-purple-600 hover:bg-purple-50 transition shadow-sm text-lg print:hidden shrink-0">🔍</button>}
+            <HeaderMetric label="Gastos Op." value={gastosOperativos} onChange={setGastosOperativos} isCurrency={true} colorPrefix="purple" />
+            <HeaderMetric label="Indirectos" value={pctIndirectos} onChange={setPctIndirectos} isCurrency={false} colorPrefix="blue" />
+            <HeaderMetric label="Costo Lab." value={pctCostoLaboral} onChange={setPctCostoLaboral} isCurrency={false} colorPrefix="pink" />
+            <HeaderMetric label="Margen Obj." value={margenObjetivo} onChange={setMargenObjetivo} isCurrency={false} colorPrefix="purple" />
             <div className="bg-purple-100 px-3 py-2 rounded-lg text-[10px] sm:text-xs font-bold text-purple-700 flex items-center gap-2 shrink-0">
               👤 <span className="max-w-[80px] truncate">{usuarioActual.nombre}</span>
-              <button onClick={() => setUsuarioActual(null)} className="text-purple-400 hover:text-red-500 ml-1 print:hidden" title="Cerrar sesión">✕</button>
+              <button onClick={() => setUsuarioActual(null)} className="text-purple-400 hover:text-red-500 ml-1 print:hidden" title="Cerrar">✕</button>
             </div>
           </div>
         </div>
@@ -840,131 +408,42 @@ function App() {
           <div className="p-3 sm:p-4 border-b border-purple-50 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-3 bg-gradient-to-r from-purple-50 to-pink-50">
             <h2 className="font-bold text-slate-700 text-xs sm:text-sm">💼 Simulación de Servicios (Propuesta)</h2>
             <div className="flex flex-wrap gap-2 print:hidden w-full xl:w-auto">
-               <button onClick={() => setMostrarHistorial(!mostrarHistorial)} className={`text-[10px] sm:text-xs font-bold px-3 py-1.5 border rounded-lg transition shrink-0 ${mostrarHistorial ? 'bg-purple-600 text-white border-purple-600' : 'text-slate-600 border-purple-200 hover:text-purple-600'}`}>📋 Historial ({historial.length})</button>
-               <button onClick={guardarEscenario} className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-3 sm:px-4 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold hover:shadow-lg transition shrink-0">💾 Guardar Escenario</button>
-               
-               <button onClick={descargarPDF} className="bg-gradient-to-r from-purple-500 to-pink-600 text-white px-3 sm:px-4 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold hover:shadow-lg transition shrink-0">
-                 📄 Descargar PDF
-               </button>
-
-               <button onClick={() => { if(window.confirm('¿Limpiar todos los campos?')) setEscenarios([]); }} className="text-slate-400 hover:text-slate-600 text-[10px] sm:text-xs font-bold px-2 sm:px-3 py-1.5 shrink-0">Limpiar</button>
-               <button onClick={agregarFila} disabled={dataSheets.loading} className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-3 sm:px-4 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold hover:shadow-lg transition disabled:opacity-60 shrink-0">+ Agregar</button>
+               <button onClick={() => setMostrarHistorial(!mostrarHistorial)} className={`text-[10px] sm:text-xs font-bold px-3 py-1.5 border rounded-lg transition shrink-0 ${mostrarHistorial ? 'bg-purple-600 text-white' : 'text-slate-600 hover:text-purple-600'}`}>📋 Historial ({historial.length})</button>
+               <button onClick={guardarEscenario} className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-3 sm:px-4 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold hover:shadow-lg transition shrink-0">💾 Guardar</button>
+               <button onClick={() => window.print()} className="bg-gradient-to-r from-purple-500 to-pink-600 text-white px-3 sm:px-4 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold hover:shadow-lg transition shrink-0">📄 PDF</button>
+               <button onClick={() => window.confirm('¿Limpiar todo?') && setEscenarios([])} className="text-slate-400 hover:text-slate-600 text-[10px] sm:text-xs font-bold px-2 sm:px-3 py-1.5 shrink-0">Limpiar</button>
+               <button onClick={agregarFila} className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-3 sm:px-4 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold hover:shadow-lg transition shrink-0">+ Agregar</button>
             </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse min-w-[900px]">
               <thead>
                 <tr className="text-[10px] font-bold text-purple-400 uppercase bg-purple-50/30">
-                  <th className="p-3 sm:p-4">Cliente</th>
-                  <th className="p-3 sm:p-4">Servicio</th>
-                  <th className="p-3 sm:p-4 text-center">Cant</th>
-                  <th className="p-3 sm:p-4 text-right">Venta Unit</th>
-                  <th className="p-3 sm:p-4 text-right">Sueldo Bruto</th>
-                  <th className="p-3 sm:p-4 text-right">Costo Directo</th>
-                  <th className="p-3 sm:p-4 text-right">Costo Total</th>
-                  <th className="p-3 sm:p-4 text-right">Resultado</th>
-                  <th className="p-3 sm:p-4 text-center">Margen</th>
-                  <th className="p-3 sm:p-4 print:hidden"></th>
+                  <th className="p-3 sm:p-4">Cliente</th><th className="p-3 sm:p-4">Servicio</th><th className="p-3 sm:p-4 text-center">Cant</th>
+                  <th className="p-3 sm:p-4 text-right">Venta Unit</th><th className="p-3 sm:p-4 text-right">Sueldo Bruto</th>
+                  <th className="p-3 sm:p-4 text-right">Costo Directo</th><th className="p-3 sm:p-4 text-right">Costo Total</th>
+                  <th className="p-3 sm:p-4 text-right">Resultado</th><th className="p-3 sm:p-4 text-center">Margen</th><th className="p-3 sm:p-4 print:hidden"></th>
                 </tr>
               </thead>
               <tbody className="text-xs sm:text-sm">
                 {escenarios.map(e => {
-                  const p = dataSheets.preciosNuevos && dataSheets.preciosNuevos[e.tipoIdx];
-                  const isStaff = p && (p.categoria || '').toLowerCase().includes('staff');
-                  const isWorkshop = p && (
-                    (p.categoria || '').toLowerCase().includes('workshop') ||
-                    (p.tipo || '').toLowerCase().includes('workshop') ||
-                    (p.tipo || '').toLowerCase().includes('worshop')
-                  );
-
-                  let costoTotal = 0;
-                  if (p) {
-                    if (isStaff) {
-                      const sueldo = (Number(e.cantidad) || 0) * (Number(e.sueldoBruto) || 0);
-                      costoTotal = sueldo + (sueldo * pctCostoLaboral/100) + (sueldo * pctIndirectos/100);
-                    } else if (isWorkshop) {
-                      costoTotal = (Number(e.cantidad) || 0) * (Number(e.costoDirecto) || 0);
-                    } else {
-                      const base = (Number(e.cantidad) || 0) * (Number(p.costoFijo) || 0);
-                      costoTotal = base + (base * pctIndirectos/100);
-                    }
-                  }
-                  
-                  const venta = (Number(e.cantidad) || 0) * (Number(e.ventaUnit) || 0);
-                  const res = venta - costoTotal;
-                  const mgn = venta > 0 ? (res / venta) * 100 : 0;
-
-                  const ventaUnitStr = (Number(e.ventaUnit) || 0).toLocaleString('es-AR');
-                  const sueldoBrutoStr = (Number(e.sueldoBruto) || 0).toLocaleString('es-AR');
-                  const costoDirectoStr = (Number(e.costoDirecto) || 0).toLocaleString('es-AR');
-
+                  const p = dataSheets.preciosNuevos[e.tipoIdx];
+                  const isStaff = p && (p.categoria || '').toLowerCase().includes('staff'), isWks = p && (p.categoria + p.tipo).toLowerCase().includes('workshop');
+                  let cTot = 0;
+                  if (p) { if(isStaff) { const s = e.cantidad * e.sueldoBruto; cTot = s + s*pctCostoLaboral/100 + s*pctIndirectos/100; } else if(isWks) { cTot = e.cantidad * e.costoDirecto; } else { const b = e.cantidad * p.costoFijo; cTot = b + b*pctIndirectos/100; } }
+                  const res = (e.cantidad * e.ventaUnit) - cTot, mgn = e.ventaUnit ? (res / (e.cantidad * e.ventaUnit)) * 100 : 0;
                   return (
                     <tr key={e.id} className="border-t border-purple-50 hover:bg-purple-50/30 transition">
-                      <td className="p-2 sm:p-4">
-                        <select value={e.cliente} onChange={(ev) => actualizarFila(e.id, 'cliente', ev.target.value)} className="w-full bg-transparent focus:outline-none font-medium truncate">
-                          {dataSheets.clientes && dataSheets.clientes.length > 0 ? dataSheets.clientes.map(c => <option key={c} value={c}>{c}</option>) : <option value="">Sin clientes</option>}
-                        </select>
-                      </td>
-                      <td className="p-2 sm:p-4">
-                        <select value={e.tipoIdx} onChange={(ev) => actualizarFila(e.id, 'tipoIdx', ev.target.value)} className="w-full bg-transparent focus:outline-none text-purple-600 font-bold text-[10px] sm:text-xs truncate">
-                          {dataSheets.preciosNuevos && dataSheets.preciosNuevos.length > 0 ? dataSheets.preciosNuevos.map((p, i) => <option key={i} value={i}>{p.categoria} - {p.tipo}</option>) : <option value={0}>Sin servicios</option>}
-                        </select>
-                      </td>
-                      <td className="p-2 sm:p-4 text-center">
-                        <input type="number" value={e.cantidad} onChange={(ev) => actualizarFila(e.id, 'cantidad', ev.target.value)} className="w-10 sm:w-12 text-center bg-purple-50 rounded font-bold" min="0" />
-                      </td>
-                      <td className="p-2 sm:p-4 text-right">
-                        <input
-                          type="text"
-                          value={ventaUnitStr}
-                          onChange={(ev) => {
-                            const val = ev.target.value.replace(/\D/g, '');
-                            actualizarFila(e.id, 'ventaUnit', val === '' ? 0 : Number(val));
-                          }}
-                          className="w-20 sm:w-28 text-right bg-blue-50 text-blue-700 font-bold rounded px-1 sm:px-2 border border-blue-200"
-                        />
-                      </td>
-                      <td className="p-2 sm:p-4 text-right">
-                        {isStaff ? (
-                          <input
-                            type="text"
-                            value={sueldoBrutoStr}
-                            onChange={(ev) => {
-                              const val = ev.target.value.replace(/\D/g, '');
-                              actualizarFila(e.id, 'sueldoBruto', val === '' ? 0 : Number(val));
-                            }}
-                            className="w-20 sm:w-24 text-right bg-pink-50 text-pink-700 font-bold rounded px-1 sm:px-2 border border-pink-200"
-                          />
-                        ) : (
-                          <span className="text-slate-300">-</span>
-                        )}
-                      </td>
-                      <td className="p-2 sm:p-4 text-right">
-                        {isWorkshop ? (
-                          <input 
-                            type="text" 
-                            value={costoDirectoStr} 
-                            onChange={(ev) => {
-                              const val = ev.target.value.replace(/\D/g, '');
-                              actualizarFila(e.id, 'costoDirecto', val === '' ? 0 : Number(val));
-                            }} 
-                            className="w-20 sm:w-28 text-right bg-orange-50 text-orange-700 font-bold rounded px-1 sm:px-2 border border-orange-300" 
-                            title="Costo directo editable (sin indirectos)" 
-                          />
-                        ) : (
-                          <span className="text-slate-300">-</span>
-                        )}
-                      </td>
-                      <td className="p-2 sm:p-4 text-right font-mono text-red-500 text-[10px] sm:text-xs">-{format(costoTotal)}</td>
+                      <td className="p-2 sm:p-4"><select value={e.cliente} onChange={(ev) => actualizarFila(e.id, 'cliente', ev.target.value)} className="w-full bg-transparent focus:outline-none font-medium truncate">{dataSheets.clientes.map(c => <option key={c} value={c}>{c}</option>)}</select></td>
+                      <td className="p-2 sm:p-4"><select value={e.tipoIdx} onChange={(ev) => actualizarFila(e.id, 'tipoIdx', ev.target.value)} className="w-full bg-transparent focus:outline-none text-purple-600 font-bold text-[10px] sm:text-xs truncate">{dataSheets.preciosNuevos.map((p, i) => <option key={i} value={i}>{p.categoria} - {p.tipo}</option>)}</select></td>
+                      <td className="p-2 sm:p-4 text-center"><input type="number" value={e.cantidad} onChange={(ev) => actualizarFila(e.id, 'cantidad', ev.target.value)} className="w-10 sm:w-12 text-center bg-purple-50 rounded font-bold" min="0" /></td>
+                      <td className="p-2 sm:p-4 text-right"><input type="text" value={Number(e.ventaUnit||0).toLocaleString('es-AR')} onChange={(ev) => actualizarFila(e.id, 'ventaUnit', ev.target.value)} className="w-20 sm:w-28 text-right bg-blue-50 text-blue-700 font-bold rounded px-1 sm:px-2 border border-blue-200" /></td>
+                      <td className="p-2 sm:p-4 text-right">{isStaff ? <input type="text" value={Number(e.sueldoBruto||0).toLocaleString('es-AR')} onChange={(ev) => actualizarFila(e.id, 'sueldoBruto', ev.target.value)} className="w-20 sm:w-24 text-right bg-pink-50 text-pink-700 font-bold rounded px-1 sm:px-2 border border-pink-200" /> : <span className="text-slate-300">-</span>}</td>
+                      <td className="p-2 sm:p-4 text-right">{isWks ? <input type="text" value={Number(e.costoDirecto||0).toLocaleString('es-AR')} onChange={(ev) => actualizarFila(e.id, 'costoDirecto', ev.target.value)} className="w-20 sm:w-28 text-right bg-orange-50 text-orange-700 font-bold rounded px-1 sm:px-2 border border-orange-300" /> : <span className="text-slate-300">-</span>}</td>
+                      <td className="p-2 sm:p-4 text-right font-mono text-red-500 text-[10px] sm:text-xs">-{format(cTot)}</td>
                       <td className="p-2 sm:p-4 text-right font-bold text-green-600 text-xs sm:text-sm">{format(res)}</td>
-                      <td className="p-2 sm:p-4 text-center">
-                        <span className={`text-[9px] sm:text-[10px] font-black px-1.5 sm:px-2 py-1 rounded ${mgn >= margenObjetivo ? 'bg-green-100 text-green-700' : mgn >= 15 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>
-                          {mgn.toFixed(1)}%
-                        </span>
-                      </td>
-                      <td className="p-2 sm:p-4 text-right print:hidden">
-                        <button onClick={() => setEscenarios(prev => prev.filter(x => x.id !== e.id))} className="text-slate-300 hover:text-red-500 font-bold">✕</button>
-                      </td>
+                      <td className="p-2 sm:p-4 text-center"><span className={`text-[9px] sm:text-[10px] font-black px-1.5 sm:px-2 py-1 rounded ${mgn >= margenObjetivo ? 'bg-green-100 text-green-700' : mgn >= 15 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>{mgn.toFixed(1)}%</span></td>
+                      <td className="p-2 sm:p-4 text-right print:hidden"><button onClick={() => setEscenarios(p => p.filter(x => x.id !== e.id))} className="text-slate-300 hover:text-red-500 font-bold">✕</button></td>
                     </tr>
                   );
                 })}
@@ -976,88 +455,39 @@ function App() {
 
         {mostrarHistorial && (
           <div className="bg-white rounded-xl shadow-sm border border-purple-100 overflow-hidden mb-6">
-            <div className="p-3 sm:p-4 border-b border-purple-50 bg-gradient-to-r from-purple-50 to-pink-50 flex justify-between items-center">
-              <h2 className="font-bold text-slate-700 text-xs sm:text-sm">📋 Historial de Escenarios Guardados</h2>
-              <button onClick={() => setMostrarHistorial(false)} className="text-slate-400 hover:text-slate-600 text-[10px] sm:text-xs print:hidden">Cerrar</button>
-            </div>
+            <div className="p-3 sm:p-4 border-b border-purple-50 bg-gradient-to-r from-purple-50 to-pink-50 flex justify-between items-center"><h2 className="font-bold text-slate-700 text-xs sm:text-sm">📋 Historial Guardado</h2><button onClick={() => setMostrarHistorial(false)} className="text-slate-400 hover:text-slate-600 text-[10px] sm:text-xs print:hidden">Cerrar</button></div>
             <div className="p-3 sm:p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-              {historial.length === 0 ? (
-                <div className="col-span-full text-center py-8 text-slate-400 text-[10px] sm:text-sm italic">No hay escenarios guardados en la nube de Horizon.</div>
-              ) : (
-                historial.map(item => (
-                  <div key={item.id} className="border border-purple-100 rounded-lg p-3 sm:p-4 hover:border-purple-400 transition bg-white shadow-sm">
-                    <div className="flex justify-between items-start mb-2">
-                      <h3 className="font-black text-purple-700 text-xs sm:text-sm uppercase truncate pr-2">{item.nombre}</h3>
-                      <button onClick={() => { if(window.confirm('¿Eliminar este escenario?')) setHistorial(prev => prev.filter(h => h.id !== item.id)) }} className="text-slate-300 hover:text-red-500 print:hidden font-bold">✕</button>
-                    </div>
-                    <p className="text-[9px] sm:text-[10px] text-slate-400 font-bold mb-3">{item.fecha}</p>
-                    <div className="space-y-1 mb-4">
-                      <div className="flex justify-between text-[10px] sm:text-xs"><span className="text-slate-500">Venta Propuesta:</span><span className="font-bold text-green-600">{format(item.eerr?.propuesta?.ventasTotales || 0)}</span></div>
-                      <div className="flex justify-between text-[10px] sm:text-xs"><span className="text-slate-500">Ganancia Neta:</span><span className="font-bold text-blue-600">{format(item.eerr?.gananciaNetaTotal || 0)}</span></div>
-                    </div>
-                    <button onClick={() => cargarEscenarioDesdeHistorial(item)} className="w-full bg-purple-50 text-purple-700 py-1.5 sm:py-2 rounded font-black text-[9px] sm:text-[10px] uppercase hover:bg-purple-600 hover:text-white transition print:hidden">Cargar Escenario</button>
+              {historial.length === 0 ? <div className="col-span-full text-center py-8 text-slate-400 text-[10px] sm:text-sm italic">Sin escenarios en nube.</div> : historial.map(i => (
+                  <div key={i.id} className="border border-purple-100 rounded-lg p-3 sm:p-4 hover:border-purple-400 transition bg-white shadow-sm">
+                    <div className="flex justify-between items-start mb-2"><h3 className="font-black text-purple-700 text-xs sm:text-sm uppercase truncate pr-2">{i.nombre}</h3><button onClick={() => window.confirm('¿Eliminar?') && setHistorial(p => p.filter(h => h.id !== i.id))} className="text-slate-300 hover:text-red-500 print:hidden font-bold">✕</button></div>
+                    <p className="text-[9px] sm:text-[10px] text-slate-400 font-bold mb-3">{i.fecha}</p>
+                    <div className="space-y-1 mb-4"><div className="flex justify-between text-[10px] sm:text-xs"><span className="text-slate-500">Venta Prop.:</span><span className="font-bold text-green-600">{format(i.eerr?.propuesta?.ventasTotales||0)}</span></div><div className="flex justify-between text-[10px] sm:text-xs"><span className="text-slate-500">Ganancia:</span><span className="font-bold text-blue-600">{format(i.eerr?.gananciaNetaTotal||0)}</span></div></div>
+                    <button onClick={() => cargarEscenarioDesdeHistorial(i)} className="w-full bg-purple-50 text-purple-700 py-1.5 sm:py-2 rounded font-black text-[9px] sm:text-[10px] uppercase hover:bg-purple-600 hover:text-white transition print:hidden">Cargar</button>
                   </div>
-                ))
-              )}
+              ))}
             </div>
           </div>
         )}
 
         {tienePermiso('simulacion') && (
         <div className="bg-white rounded-xl shadow-sm border border-blue-100 mb-6 overflow-hidden">
-          <div className="p-3 sm:p-4 border-b border-blue-50 flex justify-between items-center bg-gradient-to-r from-blue-50 to-indigo-50">
-            <h2 className="font-bold text-blue-700 text-xs sm:text-sm uppercase">Aporte por Cliente (Propuesta)</h2>
-            <button 
-              onClick={() => setMostrarAporte(!mostrarAporte)} 
-              className="bg-blue-600/10 hover:bg-blue-600/20 text-blue-700 px-2 sm:px-3 py-1 rounded text-[9px] sm:text-[10px] font-black uppercase transition print:hidden"
-            >
-              {mostrarAporte ? '✕ Ocultar' : '👁️ Mostrar'}
-            </button>
-          </div>
-
+          <div className="p-3 sm:p-4 border-b border-blue-50 flex justify-between items-center bg-gradient-to-r from-blue-50 to-indigo-50"><h2 className="font-bold text-blue-700 text-xs sm:text-sm uppercase">Aporte por Cliente</h2><button onClick={() => setMostrarAporte(!mostrarAporte)} className="bg-blue-600/10 hover:bg-blue-600/20 text-blue-700 px-2 sm:px-3 py-1 rounded text-[9px] sm:text-[10px] font-black uppercase transition print:hidden">{mostrarAporte ? '✕ Ocultar' : '👁️ Mostrar'}</button></div>
           {mostrarAporte && (
-            <div className="p-4 sm:p-6 space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
-              {Object.entries(propuesta.porCliente).map(([nombre, datos]) => {
-                const resultado = datos.ventas - datos.costos;
-                const margen = datos.ventas > 0 ? (resultado / datos.ventas) * 100 : 0;
+            <div className="p-4 sm:p-6 space-y-4">
+              {Object.keys(propuesta.porCliente).length === 0 ? <p className="text-center text-slate-300 text-[10px] sm:text-xs py-4 italic">Sin datos</p> : Object.entries(propuesta.porCliente).map(([nombre, datos]) => {
+                const res = datos.ventas - datos.costos, mgn = datos.ventas ? (res / datos.ventas) * 100 : 0;
                 return (
                   <div key={nombre} className="group">
-                    <div className="flex justify-between items-center mb-1">
-                      <span className="text-xs sm:text-sm font-bold text-slate-700 truncate pr-2">{nombre}</span>
-                      <span className="text-[10px] sm:text-xs font-black text-green-600 shrink-0">{format(resultado)}</span>
-                    </div>
-                    <div className="flex justify-between text-[9px] sm:text-[10px] text-slate-400 mb-2">
-                      <span className="truncate">Venta: {format(datos.ventas)}</span>
-                      <span className="shrink-0 pl-2">Margen: {margen.toFixed(1)}%</span>
-                    </div>
+                    <div className="flex justify-between items-center mb-1"><span className="text-xs sm:text-sm font-bold text-slate-700 truncate pr-2">{nombre}</span><span className="text-[10px] sm:text-xs font-black text-green-600 shrink-0">{format(res)}</span></div>
+                    <div className="flex justify-between text-[9px] sm:text-[10px] text-slate-400 mb-2"><span className="truncate">Venta: {format(datos.ventas)}</span><span className="shrink-0 pl-2">Margen: {mgn.toFixed(1)}%</span></div>
                     <div className="w-full bg-slate-100 h-2 sm:h-3 rounded-full overflow-hidden relative flex">
-                      <div 
-                        className={`h-full transition-all duration-500 z-10 ${
-                          margen >= margenObjetivo 
-                            ? 'bg-gradient-to-r from-green-400 to-emerald-500' 
-                            : 'bg-gradient-to-r from-orange-400 to-orange-500'
-                        }`}
-                        style={{ width: `${Math.min(100, Math.max(0, margen * 2))}%` }}
-                      ></div>
-
-                      {margen < margenObjetivo && (
-                        <div 
-                          className="h-full bg-red-500/80 transition-all duration-500 animate-pulse"
-                          style={{ width: `${(margenObjetivo - margen) * 2}%` }}
-                        ></div>
-                      )}
-                      
-                      <div 
-                        className="absolute top-0 h-full border-l-[1px] sm:border-l-2 border-white/50 z-20"
-                        style={{ left: `${margenObjetivo * 2}%` }}
-                      ></div>
+                      <div className={`h-full transition-all duration-500 z-10 ${mgn >= margenObjetivo ? 'bg-gradient-to-r from-green-400 to-emerald-500' : 'bg-gradient-to-r from-orange-400 to-orange-500'}`} style={{ width: `${Math.min(100, Math.max(0, mgn * 2))}%` }}></div>
+                      {mgn < margenObjetivo && <div className="h-full bg-red-500/80 transition-all duration-500 animate-pulse" style={{ width: `${(margenObjetivo - mgn) * 2}%` }}></div>}
+                      <div className="absolute top-0 h-full border-l-[1px] sm:border-l-2 border-white/50 z-20" style={{ left: `${margenObjetivo * 2}%` }}></div>
                     </div>
                   </div>
                 );
               })}
-              {Object.keys(propuesta.porCliente).length === 0 && (
-                <p className="text-center text-slate-300 text-[10px] sm:text-xs py-4 italic">Sin datos de simulación</p>
-              )}
             </div>
           )}
         </div>
@@ -1065,104 +495,29 @@ function App() {
 
         {tienePermiso('eerr') && (
         <div className="bg-white rounded-xl shadow-lg border border-purple-200 overflow-hidden mb-6">
-          <div className="p-3 sm:p-4 border-b border-purple-100 flex justify-between items-center bg-gradient-to-r from-purple-600 to-pink-600 text-white">
-            <h2 className="font-bold text-xs sm:text-sm">📊 Estado de Resultados Comparativo</h2>
-            <button onClick={() => setMostrarEERR(!mostrarEERR)} className="bg-white/20 hover:bg-white/40 px-2 sm:px-3 py-1 rounded text-[9px] sm:text-[10px] font-black uppercase transition print:hidden">
-              {mostrarEERR ? '✕ Ocultar' : '👁️ Mostrar'}
-            </button>
-          </div>
+          <div className="p-3 sm:p-4 border-b border-purple-100 flex justify-between items-center bg-gradient-to-r from-purple-600 to-pink-600 text-white"><h2 className="font-bold text-xs sm:text-sm">📊 Estado de Resultados</h2><button onClick={() => setMostrarEERR(!mostrarEERR)} className="bg-white/20 hover:bg-white/40 px-2 sm:px-3 py-1 rounded text-[9px] sm:text-[10px] font-black uppercase transition print:hidden">{mostrarEERR ? '✕ Ocultar' : '👁️ Mostrar'}</button></div>
           {mostrarEERR && (
-            <>
-              <div className="overflow-x-auto animate-in zoom-in-95 duration-200">
-                <table className="w-full text-left border-collapse text-[10px] sm:text-xs min-w-[700px]">
-                  <thead>
-                    <tr className="bg-purple-50 text-purple-600 font-bold uppercase text-[9px] sm:text-[10px]">
-                      <th className="p-2 sm:p-3 border-r border-purple-100"></th>
-                      <th className="p-2 sm:p-3 text-right border-r border-purple-100">EERR Enero-26</th>
-                      <th className="p-2 sm:p-3 text-right border-r border-purple-100">%</th>
-                      <th className="p-2 sm:p-3 text-right bg-green-50 border-r border-green-200">Propuesta</th>
-                      <th className="p-2 sm:p-3 text-right bg-green-50 border-r border-green-200">%</th>
-                      <th className="p-2 sm:p-3 text-right bg-blue-50 border-r border-blue-200">EERR Total</th>
-                      <th className="p-2 sm:p-3 text-right bg-blue-50">%</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr className="border-b border-purple-50 hover:bg-purple-50/30">
-                      <td className="p-2 sm:p-3 font-bold text-slate-700">Ingreso</td>
-                      <td className="p-2 sm:p-3 text-right font-mono border-r border-purple-100">{format(tolerantGet(dataSheets.eerrBase, 'Ingreso'))}</td>
-                      <td className="p-2 sm:p-3 text-right font-bold border-r border-purple-100">100%</td>
-                      <td className="p-2 sm:p-3 text-right font-mono bg-green-50 border-r border-green-200 text-green-700 font-bold">{format(propuesta.ventasTotales)}</td>
-                      <td className="p-2 sm:p-3 text-right font-bold bg-green-50 border-r border-green-200">100%</td>
-                      <td className="p-2 sm:p-3 text-right font-mono bg-blue-50 border-r border-blue-200 text-blue-700 font-bold">{format(eerr.ingresoTotal)}</td>
-                      <td className="p-2 sm:p-3 text-right font-bold bg-blue-50">100%</td>
-                    </tr>
-                    <tr className="border-b border-purple-50 hover:bg-purple-50/30">
-                      <td className="p-2 sm:p-3 font-bold text-slate-700">Costo de ingresos</td>
-                      <td className="p-2 sm:p-3 text-right font-mono border-r border-purple-100">{format(tolerantGet(dataSheets.eerrBase, 'Costo de ingresos'))}</td>
-                      <td className="p-2 sm:p-3 text-right font-bold border-r border-purple-100">{((tolerantGet(dataSheets.eerrBase, 'Costo de ingresos') / (tolerantGet(dataSheets.eerrBase, 'Ingreso') || 1)) * 100).toFixed(0)}%</td>
-                      <td className="p-2 sm:p-3 text-right font-mono bg-green-50 border-r border-green-200 text-red-600 font-bold">-{format(propuesta.costosTotales)}</td>
-                      <td className="p-2 sm:p-3 text-right font-bold bg-green-50 border-r border-green-200">{propuesta.ventasTotales ? ((propuesta.costosTotales / propuesta.ventasTotales) * 100).toFixed(0) + '%' : '0%'}</td>
-                      <td className="p-2 sm:p-3 text-right font-mono bg-blue-50 border-r border-blue-200 text-red-600 font-bold">-{format(eerr.costoIngresosTotal)}</td>
-                      <td className="p-2 sm:p-3 text-right font-bold bg-blue-50">{eerr.ingresoTotal ? ((eerr.costoIngresosTotal / eerr.ingresoTotal) * 100).toFixed(0) + '%' : '0%'}</td>
-                    </tr>
-                    <tr className="border-b border-purple-50 hover:bg-purple-50/30">
-                      <td className="p-2 sm:p-3 font-bold text-slate-700">Ganancia bruta</td>
-                      <td className="p-2 sm:p-3 text-right font-mono border-r border-purple-100">{format(tolerantGet(dataSheets.eerrBase, 'Ganancia bruta'))}</td>
-                      <td className="p-2 sm:p-3 text-right font-bold border-r border-purple-100">{((tolerantGet(dataSheets.eerrBase, 'Ganancia bruta') / (tolerantGet(dataSheets.eerrBase, 'Ingreso') || 1)) * 100).toFixed(0)}%</td>
-                      <td className="p-2 sm:p-3 text-right font-mono bg-green-50 border-r border-green-200 font-bold">{format(propuesta.ventasTotales - propuesta.costosTotales)}</td>
-                      <td className="p-2 sm:p-3 text-right font-bold bg-green-50 border-r border-green-200">{propuesta.ventasTotales ? (((propuesta.ventasTotales - propuesta.costosTotales) / propuesta.ventasTotales) * 100).toFixed(0) + '%' : '0%'}</td>
-                      <td className="p-2 sm:p-3 text-right font-mono bg-blue-50 border-r border-blue-200 font-bold">{format(eerr.gananciaBrutaTotal)}</td>
-                      <td className="p-2 sm:p-3 text-right font-bold bg-blue-50">{eerr.ingresoTotal ? ((eerr.gananciaBrutaTotal / eerr.ingresoTotal) * 100).toFixed(0) + '%' : '0%'}</td>
-                    </tr>
-                    <tr className="border-b border-purple-50 hover:bg-purple-50/30">
-                      <td className="p-2 sm:p-3 font-bold text-slate-700 pl-4 sm:pl-6">Menos gasto de operación</td>
-                      <td className="p-2 sm:p-3 text-right font-mono text-red-600 border-r border-purple-100">{format(tolerantGet(dataSheets.eerrBase, 'Menos gasto de operación'))}</td>
-                      <td className="p-2 sm:p-3 text-right font-bold border-r border-purple-100">{((tolerantGet(dataSheets.eerrBase, 'Menos gasto de operación') / (tolerantGet(dataSheets.eerrBase, 'Ingreso') || 1)) * 100).toFixed(0)}%</td>
-                      <td className="p-2 sm:p-3 text-right font-mono bg-green-50 border-r border-green-200 text-slate-400">0.00</td>
-                      <td className="p-2 sm:p-3 text-right font-bold bg-green-50 border-r border-green-200">0%</td>
-                      <td className="p-2 sm:p-3 text-right font-mono text-red-600 bg-blue-50 border-r border-blue-200">{format(eerr.gastoOperacionTotal)}</td>
-                      <td className="p-2 sm:p-3 text-right font-bold bg-blue-50">{eerr.ingresoTotal ? ((eerr.gastoOperacionTotal / eerr.ingresoTotal) * 100).toFixed(0) + '%' : '0%'}</td>
-                    </tr>
-                    <tr className="border-b border-purple-50 hover:bg-purple-50/30">
-                      <td className="p-2 sm:p-3 font-bold text-slate-700">Ingreso de operación (o pérdida)</td>
-                      <td className="p-2 sm:p-3 text-right font-mono text-purple-700 border-r border-purple-100">{format(tolerantGet(dataSheets.eerrBase, 'Ingreso de operación'))}</td>
-                      <td className="p-2 sm:p-3 text-right font-bold border-r border-purple-100">{((tolerantGet(dataSheets.eerrBase, 'Ingreso de operación') / (tolerantGet(dataSheets.eerrBase, 'Ingreso') || 1)) * 100).toFixed(0)}%</td>
-                      <td className="p-2 sm:p-3 text-right font-mono font-bold text-green-700 bg-green-50 border-r border-green-200">{format(eerr.ingresoOperacionTotal)}</td>
-                      <td className="p-2 sm:p-3 text-right font-bold bg-green-50 border-r border-green-200">{formatPct((eerr.ingresoOperacionTotal / eerr.ingresoTotal) * 100)}</td>
-                      <td className="p-2 sm:p-3 text-right font-mono font-bold text-blue-700 bg-blue-50 border-r border-blue-200">{format(eerr.ingresoOperacionTotal)}</td>
-                      <td className="p-2 sm:p-3 text-right font-bold bg-blue-50">{formatPct((eerr.ingresoOperacionTotal / eerr.ingresoTotal) * 100)}</td>
-                    </tr>
-                    <tr className="border-b border-purple-50 hover:bg-purple-50/30">
-                      <td className="p-2 sm:p-3 font-bold text-slate-700">Más otros ingresos</td>
-                      <td className="p-2 sm:p-3 text-right font-mono text-purple-700 border-r border-purple-100">{format(tolerantGet(dataSheets.eerrBase, 'Más otros ingresos'))}</td>
-                      <td className="p-2 sm:p-3 text-right font-bold border-r border-purple-100">{((tolerantGet(dataSheets.eerrBase, 'Más otros ingresos') / (tolerantGet(dataSheets.eerrBase, 'Ingreso') || 1)) * 100).toFixed(0)}%</td>
-                      <td className="p-2 sm:p-3 text-right font-mono bg-green-50 border-r border-green-200 text-slate-400">0.00</td>
-                      <td className="p-2 sm:p-3 text-right font-bold bg-green-50 border-r border-green-200">0%</td>
-                      <td className="p-2 sm:p-3 text-right font-mono text-purple-700 bg-blue-50 border-r border-blue-200">{format(eerr.otrosIngresosTotal)}</td>
-                      <td className="p-2 sm:p-3 text-right font-bold bg-blue-50">{formatPct((eerr.otrosIngresosTotal / eerr.ingresoTotal) * 100)}</td>
-                    </tr>
-                    <tr className="border-b border-purple-50 hover:bg-purple-50/30">
-                      <td className="p-2 sm:p-3 font-bold text-slate-700">Menos gastos de otro tipo</td>
-                      <td className="p-2 sm:p-3 text-right font-mono text-red-600 border-r border-purple-100">{format(tolerantGet(dataSheets.eerrBase, 'Menos gastos de otro tipo'))}</td>
-                      <td className="p-2 sm:p-3 text-right font-bold border-r border-purple-100">{((tolerantGet(dataSheets.eerrBase, 'Menos gastos de otro tipo') / (tolerantGet(dataSheets.eerrBase, 'Ingreso') || 1)) * 100).toFixed(0)}%</td>
-                      <td className="p-2 sm:p-3 text-right font-mono bg-green-50 border-r border-green-200 text-slate-400">0.00</td>
-                      <td className="p-2 sm:p-3 text-right font-bold bg-green-50 border-r border-green-200">0%</td>
-                      <td className="p-2 sm:p-3 text-right font-mono text-red-600 bg-blue-50 border-r border-blue-200">{format(eerr.otrosGastosTotal)}</td>
-                      <td className="p-2 sm:p-3 text-right font-bold bg-blue-50">{formatPct((eerr.otrosGastosTotal / eerr.ingresoTotal) * 100)}</td>
-                    </tr>
-                    <tr className="bg-gradient-to-r from-purple-100 to-pink-100 border-t-2 sm:border-t-4 border-purple-400">
-                      <td className="p-3 sm:p-4 font-black text-slate-900 text-xs sm:text-sm">Ganancia neta</td>
-                      <td className="p-3 sm:p-4 text-right font-mono font-black text-purple-700 border-r border-purple-200 text-[10px] sm:text-xs">{format(tolerantGet(dataSheets.eerrBase, 'Ganancia neta'))}</td>
-                      <td className="p-3 sm:p-4 text-right font-black border-r border-purple-200">{formatPct((tolerantGet(dataSheets.eerrBase, 'Ganancia neta') / (tolerantGet(dataSheets.eerrBase, 'Ingreso') || 1)) * 100)}</td>
-                      <td className="p-3 sm:p-4 text-right font-mono font-black text-green-700 bg-green-100 border-r border-green-300 text-[10px] sm:text-xs">{format(propuesta.margenBruto)}</td>
-                      <td className="p-3 sm:p-4 text-right font-black bg-green-100 border-r border-green-300">{formatPct(propuesta.margenBrutoPct)}</td>
-                      <td className="p-3 sm:p-4 text-right font-mono font-black text-blue-700 bg-blue-100 border-r border-blue-300 text-[10px] sm:text-xs">{format(eerr.gananciaNetaTotal)}</td>
-                      <td className="p-3 sm:p-4 text-right font-black bg-blue-100">{formatPct(eerr.margenNetoPct)}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-[10px] sm:text-xs min-w-[700px]">
+                <thead>
+                  <tr className="bg-purple-50 text-purple-600 font-bold uppercase text-[9px] sm:text-[10px]">
+                    <th className="p-2 sm:p-3 border-r border-purple-100"></th><th className="p-2 sm:p-3 text-right border-r border-purple-100">EERR Dic-25</th><th className="p-2 sm:p-3 text-right border-r border-purple-100">%</th>
+                    <th className="p-2 sm:p-3 text-right bg-green-50 border-r border-green-200">Propuesta</th><th className="p-2 sm:p-3 text-right bg-green-50 border-r border-green-200">%</th>
+                    <th className="p-2 sm:p-3 text-right bg-blue-50 border-r border-blue-200">EERR Total</th><th className="p-2 sm:p-3 text-right bg-blue-50">%</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <EERRRow label="Ingreso" base={eerr.ingresoBase} prop={propuesta.ventasTotales} tot={eerr.ingresoTotal} refBase={eerr.ingresoBase} refProp={propuesta.ventasTotales} refTot={eerr.ingresoTotal} cProp="text-green-700" cTot="text-blue-700" />
+                  <EERRRow label="Costo de ingresos" base={eerr.costoIngresoBase} prop={propuesta.costosTotales} tot={eerr.costoIngresosTotal} refBase={eerr.ingresoBase} refProp={propuesta.ventasTotales} refTot={eerr.ingresoTotal} isNegProp={true} isNegTot={true} cProp="text-red-600" cTot="text-red-600" />
+                  <EERRRow label="Ganancia bruta" base={eerr.gananciaBrutaBase} prop={propuesta.margenBruto} tot={eerr.gananciaBrutaTotal} refBase={eerr.ingresoBase} refProp={propuesta.ventasTotales} refTot={eerr.ingresoTotal} />
+                  <EERRRow label="Menos gasto de operación" base={eerr.gastoOperacionBase} prop={0} tot={eerr.gastoOperacionTotal} refBase={eerr.ingresoBase} refProp={propuesta.ventasTotales} refTot={eerr.ingresoTotal} indent={true} isNegTot={true} cProp="text-slate-400" cTot="text-red-600" />
+                  <EERRRow label="Ingreso de operación" base={eerr.ingresoOperacionBase || (eerr.gananciaBrutaBase - eerr.gastoOperacionBase)} prop={eerr.ingresoOperacionTotal - (eerr.gananciaBrutaBase - eerr.gastoOperacionBase)} tot={eerr.ingresoOperacionTotal} refBase={eerr.ingresoBase} refProp={eerr.ingresoTotal} refTot={eerr.ingresoTotal} cProp="text-green-700" cTot="text-blue-700" />
+                  <EERRRow label="Más otros ingresos" base={eerr.otrosIngresosBase} prop={0} tot={eerr.otrosIngresosTotal} refBase={eerr.ingresoBase} refProp={propuesta.ventasTotales} refTot={eerr.ingresoTotal} cProp="text-slate-400" />
+                  <EERRRow label="Menos gastos de otro tipo" base={eerr.otrosGastosBase} prop={0} tot={eerr.otrosGastosTotal} refBase={eerr.ingresoBase} refProp={propuesta.ventasTotales} refTot={eerr.ingresoTotal} isNegTot={true} cProp="text-slate-400" cTot="text-red-600" />
+                  <EERRRow label="Ganancia neta" base={eerr.gananciaNetaBase} prop={propuesta.margenBruto} tot={eerr.gananciaNetaTotal} refBase={eerr.ingresoBase} refProp={propuesta.ventasTotales} refTot={eerr.ingresoTotal} isTotalRow={true} />
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
         )}
@@ -1170,20 +525,13 @@ function App() {
         {tienePermiso('objetivos') && (
         <div className="mb-6">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
-            <h2 className="text-base sm:text-lg font-black text-slate-700 uppercase">🎯 Objetivos 2026 - Tracking de Ventas</h2>
-            
-            <button 
-              onClick={guardarTracking} 
-              className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-4 sm:px-5 py-2 rounded-lg text-xs font-black hover:shadow-lg transition flex items-center gap-2 print:hidden w-full sm:w-auto justify-center"
-            >
-              💾 Guardar Avance
-            </button>
+            <h2 className="text-base sm:text-lg font-black text-slate-700 uppercase">🎯 Tracking de Ventas</h2>
+            <button onClick={() => syncNube({ID: Date.now(), Fecha: new Date().toLocaleString('es-AR'), LineasTotal: JSON.stringify(lineasVentaTotal), LineasReno: JSON.stringify(lineasRenovacion), LineasIncr: JSON.stringify(lineasIncremental)}, 'TrackingObjetivos', '✅ Objetivos guardados')} className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-4 sm:px-5 py-2 rounded-lg text-xs font-black hover:shadow-lg transition flex items-center gap-2 print:hidden w-full sm:w-auto justify-center">💾 Guardar Avance</button>
           </div>
-          
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
-            {renderVelocimetro("Objetivo Ventas Total 2026", objVentasTotal, lineasVentaTotal, setLineasVentaTotal, "total", "#7c3aed")}
-            {renderVelocimetro("Objetivo Renovación 2026", objRenovacion, lineasRenovacion, setLineasRenovacion, "renovacion", "#ec4899")}
-            {renderVelocimetro("Objetivo Ventas Incremental 2026", objIncremental, lineasIncremental, setLineasIncremental, "incremental", "#3b82f6")}
+            {renderVelocimetro("Ventas Total 2026", objVentasTotal, lineasVentaTotal, setLineasVentaTotal, "total", "#7c3aed")}
+            {renderVelocimetro("Renovación 2026", objRenovacion, lineasRenovacion, setLineasRenovacion, "renovacion", "#ec4899")}
+            {renderVelocimetro("Ventas Incremental 2026", objIncremental, lineasIncremental, setLineasIncremental, "incremental", "#3b82f6")}
           </div>
         </div>
         )}
