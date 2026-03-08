@@ -811,3 +811,147 @@ function App() {
                   </div>
                   <p className="text-[10px] text-slate-400 font-bold mb-3">{item.fecha}</p>
                   <div className="space-y-1 mb-4">
+                      {item.eerr && (
+                        <>
+                          <div className="flex justify-between text-xs">
+                            <span className="text-slate-500">Ingreso propuesta:</span>
+                            <span className="font-bold text-green-600">{format(item.eerr.propuesta?.ventasTotales || 0)}</span>
+                          </div>
+                          <div className="flex justify-between text-xs">
+                            <span className="text-slate-500">Ganancia neta:</span>
+                            <span className={`font-bold ${(item.eerr.gananciaNetaTotal||0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>{format(item.eerr.gananciaNetaTotal || 0)}</span>
+                          </div>
+                          <div className="flex justify-between text-xs">
+                            <span className="text-slate-500">Margen neto:</span>
+                            <span className="font-bold text-purple-600">{(item.eerr.margenNetoPct || 0).toFixed(1)}%</span>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                    <button onClick={() => cargarEscenarioDesdeHistorial(item)} className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white py-2 rounded-lg text-xs font-black hover:shadow-lg transition uppercase">
+                      Cargar Escenario
+                    </button>
+                  </div>
+                ))}
+            </div>
+          </div>
+        )}
+
+        {/* KPIs EERR */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          {[
+            { label: 'Ingreso Total', value: format(eerr.ingresoTotal), sub: `Base: ${format(eerr.ingresoBase)}`, color: 'blue' },
+            { label: 'Ganancia Bruta', value: format(eerr.gananciaBrutaTotal), sub: `${eerr.margenBrutoPct.toFixed(1)}% margen`, color: 'green' },
+            { label: 'Ingreso Operación', value: format(eerr.ingresoOperacionTotal), sub: `${eerr.margenOperacionPct.toFixed(1)}% margen`, color: 'purple' },
+            { label: 'Ganancia Neta', value: format(eerr.gananciaNetaTotal), sub: `${eerr.margenNetoPct.toFixed(1)}% margen`, color: eerr.gananciaNetaTotal >= 0 ? 'green' : 'red' }
+          ].map((kpi, i) => (
+            <div key={i} className="bg-white rounded-xl shadow-sm border border-purple-100 p-5">
+              <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">{kpi.label}</p>
+              <p className={`text-xl font-black ${kpi.color === 'green' ? 'text-green-600' : kpi.color === 'red' ? 'text-red-600' : kpi.color === 'blue' ? 'text-blue-600' : 'text-purple-600'}`}>{kpi.value}</p>
+              <p className="text-[10px] text-slate-400 mt-1">{kpi.sub}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* EERR DETALLE */}
+        {tienePermiso('eerr') && (
+          <div className="bg-white rounded-xl shadow-sm border border-purple-100 overflow-hidden mb-6">
+            <div className="p-4 border-b border-purple-50 flex justify-between items-center bg-gradient-to-r from-purple-50 to-pink-50">
+              <h2 className="font-bold text-slate-700 text-sm">📊 Estado de Resultados Proyectado</h2>
+              <button onClick={() => setMostrarEERR(!mostrarEERR)} className="text-xs text-purple-500 font-bold">{mostrarEERR ? 'Ocultar' : 'Mostrar'}</button>
+            </div>
+            {mostrarEERR && (
+              <table className="w-full text-sm border-collapse">
+                <thead>
+                  <tr className="text-[10px] font-bold text-purple-400 uppercase bg-purple-50/30">
+                    <th className="p-4 text-left">Concepto</th>
+                    <th className="p-4 text-right">Base (Dic-25)</th>
+                    <th className="p-4 text-right">Propuesta</th>
+                    <th className="p-4 text-right">Total Proyectado</th>
+                    <th className="p-4 text-right">% Ingreso</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[
+                    { label: 'Ingreso', base: eerr.ingresoBase, prop: propuesta.ventasTotales, total: eerr.ingresoTotal, pct: 100 },
+                    { label: 'Costo de ingresos', base: eerr.costoIngresoBase, prop: propuesta.costosTotales, total: eerr.costoIngresosTotal, pct: eerr.ingresoTotal > 0 ? (eerr.costoIngresosTotal/eerr.ingresoTotal)*100 : 0, neg: true },
+                    { label: 'Ganancia bruta', base: eerr.gananciaBrutaBase, prop: propuesta.margenBruto, total: eerr.gananciaBrutaTotal, pct: eerr.margenBrutoPct, bold: true },
+                    { label: 'Gastos operativos', base: eerr.gastoOperacionBase, prop: 0, total: eerr.gastoOperacionTotal, pct: eerr.ingresoTotal > 0 ? (eerr.gastoOperacionTotal/eerr.ingresoTotal)*100 : 0, neg: true },
+                    { label: 'Ingreso operación', base: 0, prop: 0, total: eerr.ingresoOperacionTotal, pct: eerr.margenOperacionPct, bold: true },
+                    { label: 'Otros ingresos', base: eerr.otrosIngresosBase, prop: 0, total: eerr.otrosIngresosTotal, pct: eerr.ingresoTotal > 0 ? (eerr.otrosIngresosTotal/eerr.ingresoTotal)*100 : 0 },
+                    { label: 'Ganancia neta', base: eerr.gananciaNetaBase, prop: eerr.desvioGananciaNeta, total: eerr.gananciaNetaTotal, pct: eerr.margenNetoPct, bold: true, highlight: true }
+                  ].map((row, i) => (
+                    <tr key={i} className={`border-t border-purple-50 ${row.highlight ? 'bg-purple-50' : ''}`}>
+                      <td className={`p-4 ${row.bold ? 'font-black text-slate-800' : 'text-slate-600'}`}>{row.label}</td>
+                      <td className="p-4 text-right text-slate-400 font-mono text-xs">{format(row.base)}</td>
+                      <td className={`p-4 text-right font-mono text-xs font-bold ${row.prop >= 0 ? 'text-green-600' : 'text-red-600'}`}>{row.prop !== 0 ? (row.prop >= 0 ? '+' : '') + format(row.prop) : '-'}</td>
+                      <td className={`p-4 text-right font-mono text-xs font-bold ${row.neg ? 'text-red-600' : row.total >= 0 ? 'text-slate-800' : 'text-red-600'}`}>{format(row.total)}</td>
+                      <td className="p-4 text-right text-xs font-bold text-purple-500">{row.pct.toFixed(1)}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
+
+        {/* APORTE POR CLIENTE */}
+        {tienePermiso('simulacion') && (
+          <div className="bg-white rounded-xl shadow-sm border border-purple-100 overflow-hidden mb-6">
+            <div className="p-4 border-b border-purple-50 flex justify-between items-center bg-gradient-to-r from-purple-50 to-pink-50">
+              <h2 className="font-bold text-slate-700 text-sm">🏢 Aporte por Cliente (Propuesta)</h2>
+              <button onClick={() => setMostrarAporte(!mostrarAporte)} className="text-xs text-purple-500 font-bold">{mostrarAporte ? 'Ocultar' : 'Mostrar'}</button>
+            </div>
+            {mostrarAporte && (
+              <table className="w-full text-sm border-collapse">
+                <thead>
+                  <tr className="text-[10px] font-bold text-purple-400 uppercase bg-purple-50/30">
+                    <th className="p-4 text-left">Cliente</th>
+                    <th className="p-4 text-right">Ventas</th>
+                    <th className="p-4 text-right">Costos</th>
+                    <th className="p-4 text-right">Resultado</th>
+                    <th className="p-4 text-right">Margen</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(propuesta.porCliente).map(([cliente, data], i) => {
+                    const res = data.ventas - data.costos;
+                    const mgn = data.ventas > 0 ? (res / data.ventas) * 100 : 0;
+                    return (
+                      <tr key={i} className="border-t border-purple-50 hover:bg-purple-50/30">
+                        <td className="p-4 font-bold text-slate-700">{cliente}</td>
+                        <td className="p-4 text-right text-blue-600 font-bold">{format(data.ventas)}</td>
+                        <td className="p-4 text-right text-red-500 font-mono text-xs">-{format(data.costos)}</td>
+                        <td className="p-4 text-right font-bold text-green-600">{format(res)}</td>
+                        <td className="p-4 text-right">
+                          <span className={`text-[10px] font-black px-2 py-1 rounded ${mgn >= margenObjetivo ? 'bg-green-100 text-green-700' : mgn >= 15 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>
+                            {mgn.toFixed(1)}%
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
+
+        {/* OBJETIVOS */}
+        {tienePermiso('objetivos') && (
+          <div className="mb-6">
+            <h2 className="font-bold text-slate-700 text-sm mb-4">🎯 Objetivos de Ventas 2026</h2>
+            <div className="flex gap-4">
+              {renderVelocimetro('Ventas Totales', objVentasTotal, lineasVentaTotal, setLineasVentaTotal, 'total', '#7c3aed')}
+              {renderVelocimetro('Renovación', objRenovacion, lineasRenovacion, setLineasRenovacion, 'renovacion', '#2563eb')}
+              {renderVelocimetro('Incremental', objIncremental, lineasIncremental, setLineasIncremental, 'incremental', '#db2777')}
+            </div>
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
+}
+
+export default App;
