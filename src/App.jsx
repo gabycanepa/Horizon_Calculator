@@ -79,7 +79,7 @@ function LoginScreen({ usuarios, onLogin }) {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 via-purple-700 to-pink-600 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl p-10 w-full max-w-sm">
+      <div className="bg-white rounded-2xl shadow-2xl p-8 sm:p-10 w-full max-w-sm">
         <h1 className="text-2xl font-black text-center bg-gradient-to-r from-purple-600 to-pink-500 bg-clip-text text-transparent uppercase mb-1">
           Horizon Finance Engine
         </h1>
@@ -124,20 +124,20 @@ function LoginScreen({ usuarios, onLogin }) {
 function ModalValoresServicios({ datos, onClose }) {
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden" onClick={e => e.stopPropagation()}>
-        <div className="flex justify-between items-center p-4 bg-gradient-to-r from-purple-600 to-pink-500 text-white">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex justify-between items-center p-4 bg-gradient-to-r from-purple-600 to-pink-500 text-white shrink-0">
           <h2 className="font-black text-sm uppercase">🔍 Valores de Servicios Actuales</h2>
           <button onClick={onClose} className="text-white/80 hover:text-white font-black text-lg print:hidden">✕</button>
         </div>
-        <div className="overflow-auto max-h-[calc(80vh-60px)]">
+        <div className="overflow-auto p-2">
           {datos.length === 0 ? (
             <p className="text-center text-slate-400 py-10 text-sm italic">Sin datos disponibles</p>
           ) : (
-            <table className="w-full text-xs border-collapse">
-              <thead className="sticky top-0 bg-purple-50">
+            <table className="w-full text-xs border-collapse min-w-[600px]">
+              <thead className="sticky top-0 bg-purple-50 shadow-sm">
                 <tr>
                   {Object.keys(datos[0]).map(h => (
-                    <th key={h} className="p-3 text-left font-bold text-purple-600 uppercase border-b border-purple-100 whitespace-nowrap">{h}</th>
+                    <th key={h} className="p-3 text-left font-bold text-purple-600 uppercase border-b border-purple-100 whitespace-nowrap bg-purple-50">{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -626,7 +626,6 @@ function App() {
     setTimeout(() => setIsLoadingFromCloud(false), 200);
   };
 
-  // La nueva función Descargar PDF nativa
   const descargarPDF = () => {
     window.print();
   };
@@ -652,10 +651,10 @@ function App() {
     };
 
     return (
-      <div className="bg-white rounded-xl shadow-lg border border-purple-200 p-6 flex-1">
-        <h3 className="text-sm font-black text-center mb-2 uppercase" style={{ color: color }}>{titulo}</h3>
+      <div className="bg-white rounded-xl shadow-lg border border-purple-200 p-4 sm:p-6 flex-1 w-full overflow-hidden">
+        <h3 className="text-xs sm:text-sm font-black text-center mb-2 uppercase truncate" style={{ color: color }}>{titulo}</h3>
         <div className="relative w-full flex justify-center mb-4">
-          <svg viewBox="0 0 200 120" className="w-full max-w-xs">
+          <svg viewBox="0 0 200 120" className="w-full max-w-[200px] sm:max-w-xs">
             <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#f1f5f9" strokeWidth="20" strokeLinecap="round" />
             
             {pctCumplimiento < 100 && (
@@ -695,25 +694,25 @@ function App() {
           </svg>
         </div>
         <div className="text-center mb-4">
-          <p className="text-4xl font-black" style={{ color: getColor() }}>{pctCumplimiento.toFixed(1)}%</p>
+          <p className="text-3xl sm:text-4xl font-black" style={{ color: getColor() }}>{pctCumplimiento.toFixed(1)}%</p>
           {pctCumplimiento < 100 && (
             <p className="text-[10px] font-bold text-slate-500 uppercase mt-1">Cumplimiento</p>
           )}
         </div>
-        <div className="space-y-3 bg-gradient-to-br from-purple-50 to-pink-50 p-4 rounded-lg">
+        <div className="space-y-3 bg-gradient-to-br from-purple-50 to-pink-50 p-3 sm:p-4 rounded-lg">
           <div>
             <label className="text-[10px] font-bold text-purple-600 uppercase block mb-1">Objetivo 2026</label>
-            <div className="w-full bg-white border border-purple-200 rounded px-3 py-2 text-sm font-bold text-purple-700">{formatNum(objetivo)}</div>
+            <div className="w-full bg-white border border-purple-200 rounded px-2 sm:px-3 py-2 text-xs sm:text-sm font-bold text-purple-700 truncate">{formatNum(objetivo)}</div>
           </div>
           <div>
             <div className="flex justify-between items-center mb-2">
               <label className="text-[10px] font-bold text-blue-600 uppercase">Ventas por Cliente</label>
               <button onClick={() => agregarLineaVenta(tipo)} className="text-blue-600 hover:text-blue-800 font-black text-lg leading-none print:hidden">+</button>
             </div>
-            <div className="space-y-2 max-h-48 overflow-y-auto">
+            <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
               {lineas.map((linea) => (
-                <div key={linea.id} className="flex gap-2 items-center">
-                  <select value={linea.cliente} onChange={(e) => actualizarLineaVenta(tipo, linea.id, 'cliente', e.target.value)} className="flex-1 bg-white border border-blue-200 rounded px-2 py-1 text-xs font-medium text-slate-700 focus:outline-none">
+                <div key={linea.id} className="flex gap-1 sm:gap-2 items-center">
+                  <select value={linea.cliente} onChange={(e) => actualizarLineaVenta(tipo, linea.id, 'cliente', e.target.value)} className="flex-1 min-w-[80px] bg-white border border-blue-200 rounded px-1 sm:px-2 py-1 text-[10px] sm:text-xs font-medium text-slate-700 focus:outline-none truncate">
                     {dataSheets.clientes && dataSheets.clientes.length > 0 ? (
                       dataSheets.clientes.map(c => <option key={c} value={c}>{c}</option>)
                     ) : (
@@ -724,23 +723,23 @@ function App() {
                       const raw = e.target.value.replace(/\./g, '').replace(/\s/g, '');
                       const num = raw === '' ? '' : parseFloat(raw) || 0;
                       actualizarLineaVenta(tipo, linea.id, 'monto', num);
-                    }} className="w-32 bg-white border-2 border-blue-400 rounded px-2 py-1 text-xs font-bold text-blue-700 focus:outline-none" placeholder="0" />
-                  {lineas.length > 1 && <button onClick={() => eliminarLineaVenta(tipo, linea.id)} className="text-slate-400 hover:text-red-500 text-sm font-bold print:hidden">✕</button>}
+                    }} className="w-20 sm:w-28 bg-white border-2 border-blue-400 rounded px-1 sm:px-2 py-1 text-[10px] sm:text-xs font-bold text-blue-700 focus:outline-none" placeholder="0" />
+                  {lineas.length > 1 && <button onClick={() => eliminarLineaVenta(tipo, linea.id)} className="text-slate-400 hover:text-red-500 text-sm font-bold print:hidden px-1">✕</button>}
                 </div>
               ))}
             </div>
           </div>
           <div className="pt-2 border-t-2 border-purple-300">
-            <div className="flex justify-between text-xs mb-1"><span className="text-slate-500 font-bold uppercase">Total Real:</span><span className="font-black text-blue-700">{format(calcularTotalLineas(lineas))}</span></div>
-            <p className="text-[10px] font-bold text-red-500 uppercase mt-1">Restan: {format(objetivo - totalReal)}</p>
+            <div className="flex justify-between text-[10px] sm:text-xs mb-1"><span className="text-slate-500 font-bold uppercase">Total:</span><span className="font-black text-blue-700 truncate">{format(calcularTotalLineas(lineas))}</span></div>
+            <p className="text-[10px] font-bold text-red-500 uppercase mt-1 truncate">Restan: {format(objetivo - totalReal)}</p>
           </div>
         </div>
       </div>
     );
   };
 
-  if (dataSheets.loading) return <div className="p-20 text-center font-black text-purple-600 animate-pulse">SINCRONIZANDO CON HORIZON CLOUD...</div>;
-  if (dataSheets.error) return <div className="p-20 text-center font-black text-red-600">{dataSheets.error}</div>;
+  if (dataSheets.loading) return <div className="p-10 sm:p-20 text-center font-black text-purple-600 animate-pulse text-sm sm:text-base">SINCRONIZANDO CON HORIZON CLOUD...</div>;
+  if (dataSheets.error) return <div className="p-10 sm:p-20 text-center font-black text-red-600 text-sm sm:text-base">{dataSheets.error}</div>;
 
   // LOGIN GATE
   if (!usuarioActual) {
@@ -751,7 +750,7 @@ function App() {
   const propuesta = eerr.propuesta;
 
   return (
-    <div className="p-8 bg-gradient-to-br from-slate-50 to-purple-50 min-h-screen font-sans text-slate-900">
+    <div className="p-4 sm:p-8 bg-gradient-to-br from-slate-50 to-purple-50 min-h-screen font-sans text-slate-900 overflow-x-hidden">
       
       {/* Estilos globales inyectados específicamente para la hora de imprimir */}
       <style>{`
@@ -763,7 +762,7 @@ function App() {
             background-color: #f8fafc !important; 
           }
           /* Desactivar scroll interior para que se impriman todas las filas hacia abajo */
-          .overflow-x-auto, .overflow-y-auto, .overflow-auto, .max-h-48, .max-h-[80vh] { 
+          .overflow-x-auto, .overflow-y-auto, .overflow-auto, .max-h-48, .max-h-[80vh], .max-h-[90vh] { 
             overflow: visible !important; 
             max-height: none !important; 
           }
@@ -780,23 +779,23 @@ function App() {
       )}
 
       <div className="max-w-7xl mx-auto">
-        <div className="flex justify-between items-center mb-8">
-          <div>
-            <h1 className="text-3xl font-black tracking-tight bg-gradient-to-r from-purple-600 via-pink-500 to-blue-500 bg-clip-text text-transparent uppercase">Horizon Finance Engine 2026</h1>
-            <p className="text-slate-500 text-sm mt-1">Estado de Resultados Proyectado (Base Dic-25 + Propuesta)</p>
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-8">
+          <div className="w-full lg:w-auto">
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight bg-gradient-to-r from-purple-600 via-pink-500 to-blue-500 bg-clip-text text-transparent uppercase break-words">Horizon Finance Engine 2026</h1>
+            <p className="text-slate-500 text-xs sm:text-sm mt-1">Estado de Resultados Proyectado (Base Dic-25 + Propuesta)</p>
           </div>
           
-          <div className="flex gap-3 items-center">
+          <div className="flex flex-wrap gap-2 sm:gap-3 items-center w-full lg:w-auto">
             {/* Lupa Valores Servicios */}
             {tienePermiso('busqueda') && (
               <button
                 onClick={() => setMostrarModalValores(true)}
                 title="Ver Valores de Servicios"
-                className="bg-white border border-purple-200 rounded-lg px-3 py-2 text-purple-600 hover:bg-purple-50 hover:border-purple-400 transition shadow-sm text-lg print:hidden"
+                className="bg-white border border-purple-200 rounded-lg px-3 py-2 text-purple-600 hover:bg-purple-50 hover:border-purple-400 transition shadow-sm text-lg print:hidden shrink-0"
               >🔍</button>
             )}
 
-            <div className="bg-white px-4 py-2 rounded-lg shadow-sm border border-purple-100">
+            <div className="bg-white px-3 sm:px-4 py-2 rounded-lg shadow-sm border border-purple-100 flex-1 min-w-[120px]">
               <span className="text-[10px] font-bold text-purple-400 block uppercase">Gastos Op.</span>
               <input 
                 type="text" 
@@ -806,25 +805,31 @@ function App() {
                   const num = rawValue === '' ? 0 : parseFloat(rawValue) || 0;
                   setGastosOperativos(num);
                 }} 
-                className="w-32 font-bold text-red-600 focus:outline-none text-xs bg-transparent" 
+                className="w-full font-bold text-red-600 focus:outline-none text-xs sm:text-sm bg-transparent" 
               />
             </div>
-            <div className="bg-white px-4 py-2 rounded-lg shadow-sm border border-blue-100">
+            <div className="bg-white px-3 sm:px-4 py-2 rounded-lg shadow-sm border border-blue-100 flex-1 min-w-[80px]">
               <span className="text-[10px] font-bold text-blue-400 block uppercase">Indirectos</span>
-              <input type="number" value={pctIndirectos} onChange={e => setPctIndirectos(cleanNum(e.target.value))} className="w-16 font-bold text-blue-600 focus:outline-none" />%
+              <div className="flex items-center">
+                <input type="number" value={pctIndirectos} onChange={e => setPctIndirectos(cleanNum(e.target.value))} className="w-full font-bold text-blue-600 focus:outline-none text-xs sm:text-sm" />%
+              </div>
             </div>
-            <div className="bg-white px-4 py-2 rounded-lg shadow-sm border border-pink-100">
+            <div className="bg-white px-3 sm:px-4 py-2 rounded-lg shadow-sm border border-pink-100 flex-1 min-w-[80px]">
               <span className="text-[10px] font-bold text-pink-400 block uppercase">Costo Lab.</span>
-              <input type="number" value={pctCostoLaboral} onChange={e => setPctCostoLaboral(cleanNum(e.target.value))} className="w-16 font-bold text-pink-600 focus:outline-none" />%
+              <div className="flex items-center">
+                <input type="number" value={pctCostoLaboral} onChange={e => setPctCostoLaboral(cleanNum(e.target.value))} className="w-full font-bold text-pink-600 focus:outline-none text-xs sm:text-sm" />%
+              </div>
             </div>
-            <div className="bg-white px-4 py-2 rounded-lg shadow-sm border border-purple-100">
+            <div className="bg-white px-3 sm:px-4 py-2 rounded-lg shadow-sm border border-purple-100 flex-1 min-w-[80px]">
               <span className="text-[10px] font-bold text-purple-400 block uppercase">Margen Obj.</span>
-              <input type="number" value={margenObjetivo} onChange={e => setMargenObjetivo(cleanNum(e.target.value))} className="w-16 font-bold text-purple-600 focus:outline-none" />%
+              <div className="flex items-center">
+                <input type="number" value={margenObjetivo} onChange={e => setMargenObjetivo(cleanNum(e.target.value))} className="w-full font-bold text-purple-600 focus:outline-none text-xs sm:text-sm" />%
+              </div>
             </div>
 
             {/* Usuario logueado */}
-            <div className="bg-purple-100 px-3 py-2 rounded-lg text-xs font-bold text-purple-700 flex items-center gap-2">
-              👤 {usuarioActual.nombre}
+            <div className="bg-purple-100 px-3 py-2 rounded-lg text-[10px] sm:text-xs font-bold text-purple-700 flex items-center gap-2 shrink-0">
+              👤 <span className="max-w-[80px] truncate">{usuarioActual.nombre}</span>
               <button onClick={() => setUsuarioActual(null)} className="text-purple-400 hover:text-red-500 ml-1 print:hidden" title="Cerrar sesión">✕</button>
             </div>
           </div>
@@ -832,37 +837,37 @@ function App() {
 
         {tienePermiso('simulacion') && (
         <div className="bg-white rounded-xl shadow-sm border border-purple-100 overflow-hidden mb-6">
-          <div className="p-4 border-b border-purple-50 flex justify-between items-center bg-gradient-to-r from-purple-50 to-pink-50">
-            <h2 className="font-bold text-slate-700 text-sm">💼 Simulación de Servicios (Propuesta)</h2>
-            <div className="flex gap-2 print:hidden">
-               <button onClick={() => setMostrarHistorial(!mostrarHistorial)} className={`text-xs font-bold px-3 py-1 border rounded-lg transition ${mostrarHistorial ? 'bg-purple-600 text-white border-purple-600' : 'text-slate-600 border-purple-200 hover:text-purple-600'}`}>📋 Historial ({historial.length})</button>
-               <button onClick={guardarEscenario} className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold hover:shadow-lg transition">💾 Guardar Escenario</button>
+          <div className="p-3 sm:p-4 border-b border-purple-50 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-3 bg-gradient-to-r from-purple-50 to-pink-50">
+            <h2 className="font-bold text-slate-700 text-xs sm:text-sm">💼 Simulación de Servicios (Propuesta)</h2>
+            <div className="flex flex-wrap gap-2 print:hidden w-full xl:w-auto">
+               <button onClick={() => setMostrarHistorial(!mostrarHistorial)} className={`text-[10px] sm:text-xs font-bold px-3 py-1.5 border rounded-lg transition shrink-0 ${mostrarHistorial ? 'bg-purple-600 text-white border-purple-600' : 'text-slate-600 border-purple-200 hover:text-purple-600'}`}>📋 Historial ({historial.length})</button>
+               <button onClick={guardarEscenario} className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-3 sm:px-4 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold hover:shadow-lg transition shrink-0">💾 Guardar Escenario</button>
                
-               <button onClick={descargarPDF} className="bg-gradient-to-r from-purple-500 to-pink-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold hover:shadow-lg transition">
+               <button onClick={descargarPDF} className="bg-gradient-to-r from-purple-500 to-pink-600 text-white px-3 sm:px-4 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold hover:shadow-lg transition shrink-0">
                  📄 Descargar PDF
                </button>
 
-               <button onClick={() => { if(window.confirm('¿Limpiar todos los campos?')) setEscenarios([]); }} className="text-slate-400 hover:text-slate-600 text-xs font-bold px-3 py-1">Limpiar</button>
-               <button onClick={agregarFila} disabled={dataSheets.loading} className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold hover:shadow-lg transition disabled:opacity-60">+ Agregar</button>
+               <button onClick={() => { if(window.confirm('¿Limpiar todos los campos?')) setEscenarios([]); }} className="text-slate-400 hover:text-slate-600 text-[10px] sm:text-xs font-bold px-2 sm:px-3 py-1.5 shrink-0">Limpiar</button>
+               <button onClick={agregarFila} disabled={dataSheets.loading} className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-3 sm:px-4 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold hover:shadow-lg transition disabled:opacity-60 shrink-0">+ Agregar</button>
             </div>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+            <table className="w-full text-left border-collapse min-w-[900px]">
               <thead>
                 <tr className="text-[10px] font-bold text-purple-400 uppercase bg-purple-50/30">
-                  <th className="p-4">Cliente</th>
-                  <th className="p-4">Servicio</th>
-                  <th className="p-4 text-center">Cant</th>
-                  <th className="p-4 text-right">Venta Unit</th>
-                  <th className="p-4 text-right">Sueldo Bruto</th>
-                  <th className="p-4 text-right">Costo Directo</th>
-                  <th className="p-4 text-right">Costo Total</th>
-                  <th className="p-4 text-right">Resultado</th>
-                  <th className="p-4 text-center">Margen</th>
-                  <th className="p-4 print:hidden"></th>
+                  <th className="p-3 sm:p-4">Cliente</th>
+                  <th className="p-3 sm:p-4">Servicio</th>
+                  <th className="p-3 sm:p-4 text-center">Cant</th>
+                  <th className="p-3 sm:p-4 text-right">Venta Unit</th>
+                  <th className="p-3 sm:p-4 text-right">Sueldo Bruto</th>
+                  <th className="p-3 sm:p-4 text-right">Costo Directo</th>
+                  <th className="p-3 sm:p-4 text-right">Costo Total</th>
+                  <th className="p-3 sm:p-4 text-right">Resultado</th>
+                  <th className="p-3 sm:p-4 text-center">Margen</th>
+                  <th className="p-3 sm:p-4 print:hidden"></th>
                 </tr>
               </thead>
-              <tbody className="text-sm">
+              <tbody className="text-xs sm:text-sm">
                 {escenarios.map(e => {
                   const p = dataSheets.preciosNuevos && dataSheets.preciosNuevos[e.tipoIdx];
                   const isStaff = p && (p.categoria || '').toLowerCase().includes('staff');
@@ -895,20 +900,20 @@ function App() {
 
                   return (
                     <tr key={e.id} className="border-t border-purple-50 hover:bg-purple-50/30 transition">
-                      <td className="p-4">
-                        <select value={e.cliente} onChange={(ev) => actualizarFila(e.id, 'cliente', ev.target.value)} className="bg-transparent focus:outline-none font-medium">
+                      <td className="p-2 sm:p-4">
+                        <select value={e.cliente} onChange={(ev) => actualizarFila(e.id, 'cliente', ev.target.value)} className="w-full bg-transparent focus:outline-none font-medium truncate">
                           {dataSheets.clientes && dataSheets.clientes.length > 0 ? dataSheets.clientes.map(c => <option key={c} value={c}>{c}</option>) : <option value="">Sin clientes</option>}
                         </select>
                       </td>
-                      <td className="p-4">
-                        <select value={e.tipoIdx} onChange={(ev) => actualizarFila(e.id, 'tipoIdx', ev.target.value)} className="bg-transparent focus:outline-none text-purple-600 font-bold text-xs">
+                      <td className="p-2 sm:p-4">
+                        <select value={e.tipoIdx} onChange={(ev) => actualizarFila(e.id, 'tipoIdx', ev.target.value)} className="w-full bg-transparent focus:outline-none text-purple-600 font-bold text-[10px] sm:text-xs truncate">
                           {dataSheets.preciosNuevos && dataSheets.preciosNuevos.length > 0 ? dataSheets.preciosNuevos.map((p, i) => <option key={i} value={i}>{p.categoria} - {p.tipo}</option>) : <option value={0}>Sin servicios</option>}
                         </select>
                       </td>
-                      <td className="p-4 text-center">
-                        <input type="number" value={e.cantidad} onChange={(ev) => actualizarFila(e.id, 'cantidad', ev.target.value)} className="w-10 text-center bg-purple-50 rounded font-bold" min="0" />
+                      <td className="p-2 sm:p-4 text-center">
+                        <input type="number" value={e.cantidad} onChange={(ev) => actualizarFila(e.id, 'cantidad', ev.target.value)} className="w-10 sm:w-12 text-center bg-purple-50 rounded font-bold" min="0" />
                       </td>
-                      <td className="p-4 text-right">
+                      <td className="p-2 sm:p-4 text-right">
                         <input
                           type="text"
                           value={ventaUnitStr}
@@ -916,10 +921,10 @@ function App() {
                             const val = ev.target.value.replace(/\D/g, '');
                             actualizarFila(e.id, 'ventaUnit', val === '' ? 0 : Number(val));
                           }}
-                          className="w-28 text-right bg-blue-50 text-blue-700 font-bold rounded px-2 border border-blue-200"
+                          className="w-20 sm:w-28 text-right bg-blue-50 text-blue-700 font-bold rounded px-1 sm:px-2 border border-blue-200"
                         />
                       </td>
-                      <td className="p-4 text-right">
+                      <td className="p-2 sm:p-4 text-right">
                         {isStaff ? (
                           <input
                             type="text"
@@ -928,13 +933,13 @@ function App() {
                               const val = ev.target.value.replace(/\D/g, '');
                               actualizarFila(e.id, 'sueldoBruto', val === '' ? 0 : Number(val));
                             }}
-                            className="w-24 text-right bg-pink-50 text-pink-700 font-bold rounded px-2 border border-pink-200"
+                            className="w-20 sm:w-24 text-right bg-pink-50 text-pink-700 font-bold rounded px-1 sm:px-2 border border-pink-200"
                           />
                         ) : (
                           <span className="text-slate-300">-</span>
                         )}
                       </td>
-                      <td className="p-4 text-right">
+                      <td className="p-2 sm:p-4 text-right">
                         {isWorkshop ? (
                           <input 
                             type="text" 
@@ -943,22 +948,22 @@ function App() {
                               const val = ev.target.value.replace(/\D/g, '');
                               actualizarFila(e.id, 'costoDirecto', val === '' ? 0 : Number(val));
                             }} 
-                            className="w-28 text-right bg-orange-50 text-orange-700 font-bold rounded px-2 border border-orange-300" 
+                            className="w-20 sm:w-28 text-right bg-orange-50 text-orange-700 font-bold rounded px-1 sm:px-2 border border-orange-300" 
                             title="Costo directo editable (sin indirectos)" 
                           />
                         ) : (
                           <span className="text-slate-300">-</span>
                         )}
                       </td>
-                      <td className="p-4 text-right font-mono text-red-500 text-xs">-{format(costoTotal)}</td>
-                      <td className="p-4 text-right font-bold text-green-600">{format(res)}</td>
-                      <td className="p-4 text-center">
-                        <span className={`text-[10px] font-black px-2 py-1 rounded ${mgn >= margenObjetivo ? 'bg-green-100 text-green-700' : mgn >= 15 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>
+                      <td className="p-2 sm:p-4 text-right font-mono text-red-500 text-[10px] sm:text-xs">-{format(costoTotal)}</td>
+                      <td className="p-2 sm:p-4 text-right font-bold text-green-600 text-xs sm:text-sm">{format(res)}</td>
+                      <td className="p-2 sm:p-4 text-center">
+                        <span className={`text-[9px] sm:text-[10px] font-black px-1.5 sm:px-2 py-1 rounded ${mgn >= margenObjetivo ? 'bg-green-100 text-green-700' : mgn >= 15 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>
                           {mgn.toFixed(1)}%
                         </span>
                       </td>
-                      <td className="p-4 text-right print:hidden">
-                        <button onClick={() => setEscenarios(prev => prev.filter(x => x.id !== e.id))} className="text-slate-300 hover:text-red-500">✕</button>
+                      <td className="p-2 sm:p-4 text-right print:hidden">
+                        <button onClick={() => setEscenarios(prev => prev.filter(x => x.id !== e.id))} className="text-slate-300 hover:text-red-500 font-bold">✕</button>
                       </td>
                     </tr>
                   );
@@ -971,26 +976,26 @@ function App() {
 
         {mostrarHistorial && (
           <div className="bg-white rounded-xl shadow-sm border border-purple-100 overflow-hidden mb-6">
-            <div className="p-4 border-b border-purple-50 bg-gradient-to-r from-purple-50 to-pink-50 flex justify-between items-center">
-              <h2 className="font-bold text-slate-700 text-sm">📋 Historial de Escenarios Guardados</h2>
-              <button onClick={() => setMostrarHistorial(false)} className="text-slate-400 hover:text-slate-600 text-xs print:hidden">Cerrar</button>
+            <div className="p-3 sm:p-4 border-b border-purple-50 bg-gradient-to-r from-purple-50 to-pink-50 flex justify-between items-center">
+              <h2 className="font-bold text-slate-700 text-xs sm:text-sm">📋 Historial de Escenarios Guardados</h2>
+              <button onClick={() => setMostrarHistorial(false)} className="text-slate-400 hover:text-slate-600 text-[10px] sm:text-xs print:hidden">Cerrar</button>
             </div>
-            <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="p-3 sm:p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
               {historial.length === 0 ? (
-                <div className="col-span-full text-center py-8 text-slate-400 text-sm italic">No hay escenarios guardados en la nube de Horizon.</div>
+                <div className="col-span-full text-center py-8 text-slate-400 text-[10px] sm:text-sm italic">No hay escenarios guardados en la nube de Horizon.</div>
               ) : (
                 historial.map(item => (
-                  <div key={item.id} className="border border-purple-100 rounded-lg p-4 hover:border-purple-400 transition bg-white shadow-sm">
+                  <div key={item.id} className="border border-purple-100 rounded-lg p-3 sm:p-4 hover:border-purple-400 transition bg-white shadow-sm">
                     <div className="flex justify-between items-start mb-2">
-                      <h3 className="font-black text-purple-700 text-sm uppercase truncate pr-2">{item.nombre}</h3>
-                      <button onClick={() => { if(window.confirm('¿Eliminar este escenario?')) setHistorial(prev => prev.filter(h => h.id !== item.id)) }} className="text-slate-300 hover:text-red-500 print:hidden">✕</button>
+                      <h3 className="font-black text-purple-700 text-xs sm:text-sm uppercase truncate pr-2">{item.nombre}</h3>
+                      <button onClick={() => { if(window.confirm('¿Eliminar este escenario?')) setHistorial(prev => prev.filter(h => h.id !== item.id)) }} className="text-slate-300 hover:text-red-500 print:hidden font-bold">✕</button>
                     </div>
-                    <p className="text-[10px] text-slate-400 font-bold mb-3">{item.fecha}</p>
+                    <p className="text-[9px] sm:text-[10px] text-slate-400 font-bold mb-3">{item.fecha}</p>
                     <div className="space-y-1 mb-4">
-                      <div className="flex justify-between text-xs"><span className="text-slate-500">Venta Propuesta:</span><span className="font-bold text-green-600">{format(item.eerr?.propuesta?.ventasTotales || 0)}</span></div>
-                      <div className="flex justify-between text-xs"><span className="text-slate-500">Ganancia Neta:</span><span className="font-bold text-blue-600">{format(item.eerr?.gananciaNetaTotal || 0)}</span></div>
+                      <div className="flex justify-between text-[10px] sm:text-xs"><span className="text-slate-500">Venta Propuesta:</span><span className="font-bold text-green-600">{format(item.eerr?.propuesta?.ventasTotales || 0)}</span></div>
+                      <div className="flex justify-between text-[10px] sm:text-xs"><span className="text-slate-500">Ganancia Neta:</span><span className="font-bold text-blue-600">{format(item.eerr?.gananciaNetaTotal || 0)}</span></div>
                     </div>
-                    <button onClick={() => cargarEscenarioDesdeHistorial(item)} className="w-full bg-purple-50 text-purple-700 py-2 rounded font-black text-[10px] uppercase hover:bg-purple-600 hover:text-white transition print:hidden">Cargar Escenario</button>
+                    <button onClick={() => cargarEscenarioDesdeHistorial(item)} className="w-full bg-purple-50 text-purple-700 py-1.5 sm:py-2 rounded font-black text-[9px] sm:text-[10px] uppercase hover:bg-purple-600 hover:text-white transition print:hidden">Cargar Escenario</button>
                   </div>
                 ))
               )}
@@ -1000,32 +1005,32 @@ function App() {
 
         {tienePermiso('simulacion') && (
         <div className="bg-white rounded-xl shadow-sm border border-blue-100 mb-6 overflow-hidden">
-          <div className="p-4 border-b border-blue-50 flex justify-between items-center bg-gradient-to-r from-blue-50 to-indigo-50">
-            <h2 className="font-bold text-blue-700 text-sm uppercase">Aporte por Cliente (Propuesta)</h2>
+          <div className="p-3 sm:p-4 border-b border-blue-50 flex justify-between items-center bg-gradient-to-r from-blue-50 to-indigo-50">
+            <h2 className="font-bold text-blue-700 text-xs sm:text-sm uppercase">Aporte por Cliente (Propuesta)</h2>
             <button 
               onClick={() => setMostrarAporte(!mostrarAporte)} 
-              className="bg-blue-600/10 hover:bg-blue-600/20 text-blue-700 px-3 py-1 rounded text-[10px] font-black uppercase transition print:hidden"
+              className="bg-blue-600/10 hover:bg-blue-600/20 text-blue-700 px-2 sm:px-3 py-1 rounded text-[9px] sm:text-[10px] font-black uppercase transition print:hidden"
             >
               {mostrarAporte ? '✕ Ocultar' : '👁️ Mostrar'}
             </button>
           </div>
 
           {mostrarAporte && (
-            <div className="p-6 space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+            <div className="p-4 sm:p-6 space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
               {Object.entries(propuesta.porCliente).map(([nombre, datos]) => {
                 const resultado = datos.ventas - datos.costos;
                 const margen = datos.ventas > 0 ? (resultado / datos.ventas) * 100 : 0;
                 return (
                   <div key={nombre} className="group">
                     <div className="flex justify-between items-center mb-1">
-                      <span className="text-sm font-bold text-slate-700">{nombre}</span>
-                      <span className="text-xs font-black text-green-600">{format(resultado)}</span>
+                      <span className="text-xs sm:text-sm font-bold text-slate-700 truncate pr-2">{nombre}</span>
+                      <span className="text-[10px] sm:text-xs font-black text-green-600 shrink-0">{format(resultado)}</span>
                     </div>
-                    <div className="flex justify-between text-[10px] text-slate-400 mb-2">
-                      <span>Venta: {format(datos.ventas)}</span>
-                      <span>Margen: {margen.toFixed(1)}%</span>
+                    <div className="flex justify-between text-[9px] sm:text-[10px] text-slate-400 mb-2">
+                      <span className="truncate">Venta: {format(datos.ventas)}</span>
+                      <span className="shrink-0 pl-2">Margen: {margen.toFixed(1)}%</span>
                     </div>
-                    <div className="w-full bg-slate-100 h-3 rounded-full overflow-hidden relative flex">
+                    <div className="w-full bg-slate-100 h-2 sm:h-3 rounded-full overflow-hidden relative flex">
                       <div 
                         className={`h-full transition-all duration-500 z-10 ${
                           margen >= margenObjetivo 
@@ -1043,7 +1048,7 @@ function App() {
                       )}
                       
                       <div 
-                        className="absolute top-0 h-full border-l-2 border-white/50 z-20"
+                        className="absolute top-0 h-full border-l-[1px] sm:border-l-2 border-white/50 z-20"
                         style={{ left: `${margenObjetivo * 2}%` }}
                       ></div>
                     </div>
@@ -1051,7 +1056,7 @@ function App() {
                 );
               })}
               {Object.keys(propuesta.porCliente).length === 0 && (
-                <p className="text-center text-slate-300 text-xs py-4 italic">Sin datos de simulación</p>
+                <p className="text-center text-slate-300 text-[10px] sm:text-xs py-4 italic">Sin datos de simulación</p>
               )}
             </div>
           )}
@@ -1060,99 +1065,99 @@ function App() {
 
         {tienePermiso('eerr') && (
         <div className="bg-white rounded-xl shadow-lg border border-purple-200 overflow-hidden mb-6">
-          <div className="p-4 border-b border-purple-100 flex justify-between items-center bg-gradient-to-r from-purple-600 to-pink-600 text-white">
-            <h2 className="font-bold text-sm">📊 Estado de Resultados Comparativo</h2>
-            <button onClick={() => setMostrarEERR(!mostrarEERR)} className="bg-white/20 hover:bg-white/40 px-3 py-1 rounded text-[10px] font-black uppercase transition print:hidden">
-              {mostrarEERR ? '✕ Ocultar Panel' : '👁️ Mostrar Panel'}
+          <div className="p-3 sm:p-4 border-b border-purple-100 flex justify-between items-center bg-gradient-to-r from-purple-600 to-pink-600 text-white">
+            <h2 className="font-bold text-xs sm:text-sm">📊 Estado de Resultados Comparativo</h2>
+            <button onClick={() => setMostrarEERR(!mostrarEERR)} className="bg-white/20 hover:bg-white/40 px-2 sm:px-3 py-1 rounded text-[9px] sm:text-[10px] font-black uppercase transition print:hidden">
+              {mostrarEERR ? '✕ Ocultar' : '👁️ Mostrar'}
             </button>
           </div>
           {mostrarEERR && (
             <>
               <div className="overflow-x-auto animate-in zoom-in-95 duration-200">
-                <table className="w-full text-left border-collapse text-xs">
+                <table className="w-full text-left border-collapse text-[10px] sm:text-xs min-w-[700px]">
                   <thead>
-                    <tr className="bg-purple-50 text-purple-600 font-bold uppercase text-[10px]">
-                      <th className="p-3 border-r border-purple-100"></th>
-                      <th className="p-3 text-right border-r border-purple-100">EERR Enero-26</th>
-                      <th className="p-3 text-right border-r border-purple-100">%</th>
-                      <th className="p-3 text-right bg-green-50 border-r border-green-200">Propuesta</th>
-                      <th className="p-3 text-right bg-green-50 border-r border-green-200">%</th>
-                      <th className="p-3 text-right bg-blue-50 border-r border-blue-200">EERR Total</th>
-                      <th className="p-3 text-right bg-blue-50">%</th>
+                    <tr className="bg-purple-50 text-purple-600 font-bold uppercase text-[9px] sm:text-[10px]">
+                      <th className="p-2 sm:p-3 border-r border-purple-100"></th>
+                      <th className="p-2 sm:p-3 text-right border-r border-purple-100">EERR Enero-26</th>
+                      <th className="p-2 sm:p-3 text-right border-r border-purple-100">%</th>
+                      <th className="p-2 sm:p-3 text-right bg-green-50 border-r border-green-200">Propuesta</th>
+                      <th className="p-2 sm:p-3 text-right bg-green-50 border-r border-green-200">%</th>
+                      <th className="p-2 sm:p-3 text-right bg-blue-50 border-r border-blue-200">EERR Total</th>
+                      <th className="p-2 sm:p-3 text-right bg-blue-50">%</th>
                     </tr>
                   </thead>
                   <tbody>
                     <tr className="border-b border-purple-50 hover:bg-purple-50/30">
-                      <td className="p-3 font-bold text-slate-700">Ingreso</td>
-                      <td className="p-3 text-right font-mono border-r border-purple-100">{format(tolerantGet(dataSheets.eerrBase, 'Ingreso'))}</td>
-                      <td className="p-3 text-right font-bold border-r border-purple-100">100%</td>
-                      <td className="p-3 text-right font-mono bg-green-50 border-r border-green-200 text-green-700 font-bold">{format(propuesta.ventasTotales)}</td>
-                      <td className="p-3 text-right font-bold bg-green-50 border-r border-green-200">100%</td>
-                      <td className="p-3 text-right font-mono bg-blue-50 border-r border-blue-200 text-blue-700 font-bold">{format(eerr.ingresoTotal)}</td>
-                      <td className="p-3 text-right font-bold bg-blue-50">100%</td>
+                      <td className="p-2 sm:p-3 font-bold text-slate-700">Ingreso</td>
+                      <td className="p-2 sm:p-3 text-right font-mono border-r border-purple-100">{format(tolerantGet(dataSheets.eerrBase, 'Ingreso'))}</td>
+                      <td className="p-2 sm:p-3 text-right font-bold border-r border-purple-100">100%</td>
+                      <td className="p-2 sm:p-3 text-right font-mono bg-green-50 border-r border-green-200 text-green-700 font-bold">{format(propuesta.ventasTotales)}</td>
+                      <td className="p-2 sm:p-3 text-right font-bold bg-green-50 border-r border-green-200">100%</td>
+                      <td className="p-2 sm:p-3 text-right font-mono bg-blue-50 border-r border-blue-200 text-blue-700 font-bold">{format(eerr.ingresoTotal)}</td>
+                      <td className="p-2 sm:p-3 text-right font-bold bg-blue-50">100%</td>
                     </tr>
                     <tr className="border-b border-purple-50 hover:bg-purple-50/30">
-                      <td className="p-3 font-bold text-slate-700">Costo de ingresos</td>
-                      <td className="p-3 text-right font-mono border-r border-purple-100">{format(tolerantGet(dataSheets.eerrBase, 'Costo de ingresos'))}</td>
-                      <td className="p-3 text-right font-bold border-r border-purple-100">{((tolerantGet(dataSheets.eerrBase, 'Costo de ingresos') / (tolerantGet(dataSheets.eerrBase, 'Ingreso') || 1)) * 100).toFixed(0)}%</td>
-                      <td className="p-3 text-right font-mono bg-green-50 border-r border-green-200 text-red-600 font-bold">-{format(propuesta.costosTotales)}</td>
-                      <td className="p-3 text-right font-bold bg-green-50 border-r border-green-200">{propuesta.ventasTotales ? ((propuesta.costosTotales / propuesta.ventasTotales) * 100).toFixed(0) + '%' : '0%'}</td>
-                      <td className="p-3 text-right font-mono bg-blue-50 border-r border-blue-200 text-red-600 font-bold">-{format(eerr.costoIngresosTotal)}</td>
-                      <td className="p-3 text-right font-bold bg-blue-50">{eerr.ingresoTotal ? ((eerr.costoIngresosTotal / eerr.ingresoTotal) * 100).toFixed(0) + '%' : '0%'}</td>
+                      <td className="p-2 sm:p-3 font-bold text-slate-700">Costo de ingresos</td>
+                      <td className="p-2 sm:p-3 text-right font-mono border-r border-purple-100">{format(tolerantGet(dataSheets.eerrBase, 'Costo de ingresos'))}</td>
+                      <td className="p-2 sm:p-3 text-right font-bold border-r border-purple-100">{((tolerantGet(dataSheets.eerrBase, 'Costo de ingresos') / (tolerantGet(dataSheets.eerrBase, 'Ingreso') || 1)) * 100).toFixed(0)}%</td>
+                      <td className="p-2 sm:p-3 text-right font-mono bg-green-50 border-r border-green-200 text-red-600 font-bold">-{format(propuesta.costosTotales)}</td>
+                      <td className="p-2 sm:p-3 text-right font-bold bg-green-50 border-r border-green-200">{propuesta.ventasTotales ? ((propuesta.costosTotales / propuesta.ventasTotales) * 100).toFixed(0) + '%' : '0%'}</td>
+                      <td className="p-2 sm:p-3 text-right font-mono bg-blue-50 border-r border-blue-200 text-red-600 font-bold">-{format(eerr.costoIngresosTotal)}</td>
+                      <td className="p-2 sm:p-3 text-right font-bold bg-blue-50">{eerr.ingresoTotal ? ((eerr.costoIngresosTotal / eerr.ingresoTotal) * 100).toFixed(0) + '%' : '0%'}</td>
                     </tr>
                     <tr className="border-b border-purple-50 hover:bg-purple-50/30">
-                      <td className="p-3 font-bold text-slate-700">Ganancia bruta</td>
-                      <td className="p-3 text-right font-mono border-r border-purple-100">{format(tolerantGet(dataSheets.eerrBase, 'Ganancia bruta'))}</td>
-                      <td className="p-3 text-right font-bold border-r border-purple-100">{((tolerantGet(dataSheets.eerrBase, 'Ganancia bruta') / (tolerantGet(dataSheets.eerrBase, 'Ingreso') || 1)) * 100).toFixed(0)}%</td>
-                      <td className="p-3 text-right font-mono bg-green-50 border-r border-green-200 font-bold">{format(propuesta.ventasTotales - propuesta.costosTotales)}</td>
-                      <td className="p-3 text-right font-bold bg-green-50 border-r border-green-200">{propuesta.ventasTotales ? (((propuesta.ventasTotales - propuesta.costosTotales) / propuesta.ventasTotales) * 100).toFixed(0) + '%' : '0%'}</td>
-                      <td className="p-3 text-right font-mono bg-blue-50 border-r border-blue-200 font-bold">{format(eerr.gananciaBrutaTotal)}</td>
-                      <td className="p-3 text-right font-bold bg-blue-50">{eerr.ingresoTotal ? ((eerr.gananciaBrutaTotal / eerr.ingresoTotal) * 100).toFixed(0) + '%' : '0%'}</td>
+                      <td className="p-2 sm:p-3 font-bold text-slate-700">Ganancia bruta</td>
+                      <td className="p-2 sm:p-3 text-right font-mono border-r border-purple-100">{format(tolerantGet(dataSheets.eerrBase, 'Ganancia bruta'))}</td>
+                      <td className="p-2 sm:p-3 text-right font-bold border-r border-purple-100">{((tolerantGet(dataSheets.eerrBase, 'Ganancia bruta') / (tolerantGet(dataSheets.eerrBase, 'Ingreso') || 1)) * 100).toFixed(0)}%</td>
+                      <td className="p-2 sm:p-3 text-right font-mono bg-green-50 border-r border-green-200 font-bold">{format(propuesta.ventasTotales - propuesta.costosTotales)}</td>
+                      <td className="p-2 sm:p-3 text-right font-bold bg-green-50 border-r border-green-200">{propuesta.ventasTotales ? (((propuesta.ventasTotales - propuesta.costosTotales) / propuesta.ventasTotales) * 100).toFixed(0) + '%' : '0%'}</td>
+                      <td className="p-2 sm:p-3 text-right font-mono bg-blue-50 border-r border-blue-200 font-bold">{format(eerr.gananciaBrutaTotal)}</td>
+                      <td className="p-2 sm:p-3 text-right font-bold bg-blue-50">{eerr.ingresoTotal ? ((eerr.gananciaBrutaTotal / eerr.ingresoTotal) * 100).toFixed(0) + '%' : '0%'}</td>
                     </tr>
                     <tr className="border-b border-purple-50 hover:bg-purple-50/30">
-                      <td className="p-3 font-bold text-slate-700 pl-6">Menos gasto de operación</td>
-                      <td className="p-3 text-right font-mono text-red-600 border-r border-purple-100">{format(tolerantGet(dataSheets.eerrBase, 'Menos gasto de operación'))}</td>
-                      <td className="p-3 text-right font-bold border-r border-purple-100">{((tolerantGet(dataSheets.eerrBase, 'Menos gasto de operación') / (tolerantGet(dataSheets.eerrBase, 'Ingreso') || 1)) * 100).toFixed(0)}%</td>
-                      <td className="p-3 text-right font-mono bg-green-50 border-r border-green-200 text-slate-400">0.00</td>
-                      <td className="p-3 text-right font-bold bg-green-50 border-r border-green-200">0%</td>
-                      <td className="p-3 text-right font-mono text-red-600 bg-blue-50 border-r border-blue-200">{format(eerr.gastoOperacionTotal)}</td>
-                      <td className="p-3 text-right font-bold bg-blue-50">{eerr.ingresoTotal ? ((eerr.gastoOperacionTotal / eerr.ingresoTotal) * 100).toFixed(0) + '%' : '0%'}</td>
+                      <td className="p-2 sm:p-3 font-bold text-slate-700 pl-4 sm:pl-6">Menos gasto de operación</td>
+                      <td className="p-2 sm:p-3 text-right font-mono text-red-600 border-r border-purple-100">{format(tolerantGet(dataSheets.eerrBase, 'Menos gasto de operación'))}</td>
+                      <td className="p-2 sm:p-3 text-right font-bold border-r border-purple-100">{((tolerantGet(dataSheets.eerrBase, 'Menos gasto de operación') / (tolerantGet(dataSheets.eerrBase, 'Ingreso') || 1)) * 100).toFixed(0)}%</td>
+                      <td className="p-2 sm:p-3 text-right font-mono bg-green-50 border-r border-green-200 text-slate-400">0.00</td>
+                      <td className="p-2 sm:p-3 text-right font-bold bg-green-50 border-r border-green-200">0%</td>
+                      <td className="p-2 sm:p-3 text-right font-mono text-red-600 bg-blue-50 border-r border-blue-200">{format(eerr.gastoOperacionTotal)}</td>
+                      <td className="p-2 sm:p-3 text-right font-bold bg-blue-50">{eerr.ingresoTotal ? ((eerr.gastoOperacionTotal / eerr.ingresoTotal) * 100).toFixed(0) + '%' : '0%'}</td>
                     </tr>
                     <tr className="border-b border-purple-50 hover:bg-purple-50/30">
-                      <td className="p-3 font-bold text-slate-700">Ingreso de operación (o pérdida)</td>
-                      <td className="p-3 text-right font-mono text-purple-700 border-r border-purple-100">{format(tolerantGet(dataSheets.eerrBase, 'Ingreso de operación'))}</td>
-                      <td className="p-3 text-right font-bold border-r border-purple-100">{((tolerantGet(dataSheets.eerrBase, 'Ingreso de operación') / (tolerantGet(dataSheets.eerrBase, 'Ingreso') || 1)) * 100).toFixed(0)}%</td>
-                      <td className="p-3 text-right font-mono font-bold text-green-700 bg-green-50 border-r border-green-200">{format(eerr.ingresoOperacionTotal)}</td>
-                      <td className="p-3 text-right font-bold bg-green-50 border-r border-green-200">{formatPct((eerr.ingresoOperacionTotal / eerr.ingresoTotal) * 100)}</td>
-                      <td className="p-3 text-right font-mono font-bold text-blue-700 bg-blue-50 border-r border-blue-200">{format(eerr.ingresoOperacionTotal)}</td>
-                      <td className="p-3 text-right font-bold bg-blue-50">{formatPct((eerr.ingresoOperacionTotal / eerr.ingresoTotal) * 100)}</td>
+                      <td className="p-2 sm:p-3 font-bold text-slate-700">Ingreso de operación (o pérdida)</td>
+                      <td className="p-2 sm:p-3 text-right font-mono text-purple-700 border-r border-purple-100">{format(tolerantGet(dataSheets.eerrBase, 'Ingreso de operación'))}</td>
+                      <td className="p-2 sm:p-3 text-right font-bold border-r border-purple-100">{((tolerantGet(dataSheets.eerrBase, 'Ingreso de operación') / (tolerantGet(dataSheets.eerrBase, 'Ingreso') || 1)) * 100).toFixed(0)}%</td>
+                      <td className="p-2 sm:p-3 text-right font-mono font-bold text-green-700 bg-green-50 border-r border-green-200">{format(eerr.ingresoOperacionTotal)}</td>
+                      <td className="p-2 sm:p-3 text-right font-bold bg-green-50 border-r border-green-200">{formatPct((eerr.ingresoOperacionTotal / eerr.ingresoTotal) * 100)}</td>
+                      <td className="p-2 sm:p-3 text-right font-mono font-bold text-blue-700 bg-blue-50 border-r border-blue-200">{format(eerr.ingresoOperacionTotal)}</td>
+                      <td className="p-2 sm:p-3 text-right font-bold bg-blue-50">{formatPct((eerr.ingresoOperacionTotal / eerr.ingresoTotal) * 100)}</td>
                     </tr>
                     <tr className="border-b border-purple-50 hover:bg-purple-50/30">
-                      <td className="p-3 font-bold text-slate-700">Más otros ingresos</td>
-                      <td className="p-3 text-right font-mono text-purple-700 border-r border-purple-100">{format(tolerantGet(dataSheets.eerrBase, 'Más otros ingresos'))}</td>
-                      <td className="p-3 text-right font-bold border-r border-purple-100">{((tolerantGet(dataSheets.eerrBase, 'Más otros ingresos') / (tolerantGet(dataSheets.eerrBase, 'Ingreso') || 1)) * 100).toFixed(0)}%</td>
-                      <td className="p-3 text-right font-mono bg-green-50 border-r border-green-200 text-slate-400">0.00</td>
-                      <td className="p-3 text-right font-bold bg-green-50 border-r border-green-200">0%</td>
-                      <td className="p-3 text-right font-mono text-purple-700 bg-blue-50 border-r border-blue-200">{format(eerr.otrosIngresosTotal)}</td>
-                      <td className="p-3 text-right font-bold bg-blue-50">{formatPct((eerr.otrosIngresosTotal / eerr.ingresoTotal) * 100)}</td>
+                      <td className="p-2 sm:p-3 font-bold text-slate-700">Más otros ingresos</td>
+                      <td className="p-2 sm:p-3 text-right font-mono text-purple-700 border-r border-purple-100">{format(tolerantGet(dataSheets.eerrBase, 'Más otros ingresos'))}</td>
+                      <td className="p-2 sm:p-3 text-right font-bold border-r border-purple-100">{((tolerantGet(dataSheets.eerrBase, 'Más otros ingresos') / (tolerantGet(dataSheets.eerrBase, 'Ingreso') || 1)) * 100).toFixed(0)}%</td>
+                      <td className="p-2 sm:p-3 text-right font-mono bg-green-50 border-r border-green-200 text-slate-400">0.00</td>
+                      <td className="p-2 sm:p-3 text-right font-bold bg-green-50 border-r border-green-200">0%</td>
+                      <td className="p-2 sm:p-3 text-right font-mono text-purple-700 bg-blue-50 border-r border-blue-200">{format(eerr.otrosIngresosTotal)}</td>
+                      <td className="p-2 sm:p-3 text-right font-bold bg-blue-50">{formatPct((eerr.otrosIngresosTotal / eerr.ingresoTotal) * 100)}</td>
                     </tr>
                     <tr className="border-b border-purple-50 hover:bg-purple-50/30">
-                      <td className="p-3 font-bold text-slate-700">Menos gastos de otro tipo</td>
-                      <td className="p-3 text-right font-mono text-red-600 border-r border-purple-100">{format(tolerantGet(dataSheets.eerrBase, 'Menos gastos de otro tipo'))}</td>
-                      <td className="p-3 text-right font-bold border-r border-purple-100">{((tolerantGet(dataSheets.eerrBase, 'Menos gastos de otro tipo') / (tolerantGet(dataSheets.eerrBase, 'Ingreso') || 1)) * 100).toFixed(0)}%</td>
-                      <td className="p-3 text-right font-mono bg-green-50 border-r border-green-200 text-slate-400">0.00</td>
-                      <td className="p-3 text-right font-bold bg-green-50 border-r border-green-200">0%</td>
-                      <td className="p-3 text-right font-mono text-red-600 bg-blue-50 border-r border-blue-200">{format(eerr.otrosGastosTotal)}</td>
-                      <td className="p-3 text-right font-bold bg-blue-50">{formatPct((eerr.otrosGastosTotal / eerr.ingresoTotal) * 100)}</td>
+                      <td className="p-2 sm:p-3 font-bold text-slate-700">Menos gastos de otro tipo</td>
+                      <td className="p-2 sm:p-3 text-right font-mono text-red-600 border-r border-purple-100">{format(tolerantGet(dataSheets.eerrBase, 'Menos gastos de otro tipo'))}</td>
+                      <td className="p-2 sm:p-3 text-right font-bold border-r border-purple-100">{((tolerantGet(dataSheets.eerrBase, 'Menos gastos de otro tipo') / (tolerantGet(dataSheets.eerrBase, 'Ingreso') || 1)) * 100).toFixed(0)}%</td>
+                      <td className="p-2 sm:p-3 text-right font-mono bg-green-50 border-r border-green-200 text-slate-400">0.00</td>
+                      <td className="p-2 sm:p-3 text-right font-bold bg-green-50 border-r border-green-200">0%</td>
+                      <td className="p-2 sm:p-3 text-right font-mono text-red-600 bg-blue-50 border-r border-blue-200">{format(eerr.otrosGastosTotal)}</td>
+                      <td className="p-2 sm:p-3 text-right font-bold bg-blue-50">{formatPct((eerr.otrosGastosTotal / eerr.ingresoTotal) * 100)}</td>
                     </tr>
-                    <tr className="bg-gradient-to-r from-purple-100 to-pink-100 border-t-4 border-purple-400">
-                      <td className="p-4 font-black text-slate-900 text-sm">Ganancia neta</td>
-                      <td className="p-4 text-right font-mono font-black text-purple-700 border-r border-purple-200 text-sm">{format(tolerantGet(dataSheets.eerrBase, 'Ganancia neta'))}</td>
-                      <td className="p-4 text-right font-black border-r border-purple-200">{formatPct((tolerantGet(dataSheets.eerrBase, 'Ganancia neta') / (tolerantGet(dataSheets.eerrBase, 'Ingreso') || 1)) * 100)}</td>
-                      <td className="p-4 text-right font-mono font-black text-green-700 bg-green-100 border-r border-green-300 text-sm">{format(propuesta.margenBruto)}</td>
-                      <td className="p-4 text-right font-black bg-green-100 border-r border-green-300">{formatPct(propuesta.margenBrutoPct)}</td>
-                      <td className="p-4 text-right font-mono font-black text-blue-700 bg-blue-100 border-r border-blue-300 text-sm">{format(eerr.gananciaNetaTotal)}</td>
-                      <td className="p-4 text-right font-black bg-blue-100">{formatPct(eerr.margenNetoPct)}</td>
+                    <tr className="bg-gradient-to-r from-purple-100 to-pink-100 border-t-2 sm:border-t-4 border-purple-400">
+                      <td className="p-3 sm:p-4 font-black text-slate-900 text-xs sm:text-sm">Ganancia neta</td>
+                      <td className="p-3 sm:p-4 text-right font-mono font-black text-purple-700 border-r border-purple-200 text-[10px] sm:text-xs">{format(tolerantGet(dataSheets.eerrBase, 'Ganancia neta'))}</td>
+                      <td className="p-3 sm:p-4 text-right font-black border-r border-purple-200">{formatPct((tolerantGet(dataSheets.eerrBase, 'Ganancia neta') / (tolerantGet(dataSheets.eerrBase, 'Ingreso') || 1)) * 100)}</td>
+                      <td className="p-3 sm:p-4 text-right font-mono font-black text-green-700 bg-green-100 border-r border-green-300 text-[10px] sm:text-xs">{format(propuesta.margenBruto)}</td>
+                      <td className="p-3 sm:p-4 text-right font-black bg-green-100 border-r border-green-300">{formatPct(propuesta.margenBrutoPct)}</td>
+                      <td className="p-3 sm:p-4 text-right font-mono font-black text-blue-700 bg-blue-100 border-r border-blue-300 text-[10px] sm:text-xs">{format(eerr.gananciaNetaTotal)}</td>
+                      <td className="p-3 sm:p-4 text-right font-black bg-blue-100">{formatPct(eerr.margenNetoPct)}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -1164,18 +1169,18 @@ function App() {
 
         {tienePermiso('objetivos') && (
         <div className="mb-6">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-black text-slate-700 uppercase">🎯 Objetivos 2026 - Tracking de Ventas</h2>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
+            <h2 className="text-base sm:text-lg font-black text-slate-700 uppercase">🎯 Objetivos 2026 - Tracking de Ventas</h2>
             
             <button 
               onClick={guardarTracking} 
-              className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-5 py-2 rounded-lg text-xs font-black hover:shadow-lg transition flex items-center gap-2 print:hidden"
+              className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-4 sm:px-5 py-2 rounded-lg text-xs font-black hover:shadow-lg transition flex items-center gap-2 print:hidden w-full sm:w-auto justify-center"
             >
               💾 Guardar Avance
             </button>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
             {renderVelocimetro("Objetivo Ventas Total 2026", objVentasTotal, lineasVentaTotal, setLineasVentaTotal, "total", "#7c3aed")}
             {renderVelocimetro("Objetivo Renovación 2026", objRenovacion, lineasRenovacion, setLineasRenovacion, "renovacion", "#ec4899")}
             {renderVelocimetro("Objetivo Ventas Incremental 2026", objIncremental, lineasIncremental, setLineasIncremental, "incremental", "#3b82f6")}
