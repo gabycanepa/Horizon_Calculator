@@ -782,7 +782,7 @@ function App() {
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-8">
           <div className="w-full lg:w-auto">
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight bg-gradient-to-r from-purple-600 via-pink-500 to-blue-500 bg-clip-text text-transparent uppercase break-words">Horizon Finance Engine 2026</h1>
-            <p className="text-slate-500 text-xs sm:text-sm mt-1">Estado de Resultados Proyectado (Base Dic-25 + Propuesta)</p>
+            <p className="text-slate-500 text-xs sm:text-sm mt-1">Resultados Proyectados</p>
           </div>
           
           <div className="flex flex-wrap gap-2 sm:gap-3 items-center w-full lg:w-auto">
