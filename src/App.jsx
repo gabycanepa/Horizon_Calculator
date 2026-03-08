@@ -1042,7 +1042,164 @@ function App() {
                     <p className="text-[10px] text-slate-400 font-bold mb-3">{item.fecha}</p>
                     <div className="space-y-1 mb-4">
                       <div className="flex justify-between text-xs"><span className="text-slate-500">Venta Propuesta:</span><span className="font-bold text-green-600">{format(item.eerr?.propuesta?.ventasTotales || 0)}</span></div>
-                     <tr className="bg-gradient-to-r from-purple-100 to-pink-100 border-t-4 border-purple-400">
+                      <div className="flex justify-between text-xs"><span className="text-slate-500">Ganancia Neta:</span><span className="font-bold text-blue-600">{format(item.eerr?.gananciaNetaTotal || 0)}</span></div>
+                    </div>
+                    <button onClick={() => cargarEscenarioDesdeHistorial(item)} className="w-full bg-purple-50 text-purple-700 py-2 rounded font-black text-[10px] uppercase hover:bg-purple-600 hover:text-white transition">Cargar Escenario</button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+
+        {tienePermiso('simulacion') && (
+        <div className="bg-white rounded-xl shadow-sm border border-blue-100 mb-6 overflow-hidden">
+          <div className="p-4 border-b border-blue-50 flex justify-between items-center bg-gradient-to-r from-blue-50 to-indigo-50">
+            <h2 className="font-bold text-blue-700 text-sm uppercase">Aporte por Cliente (Propuesta)</h2>
+            <button 
+              onClick={() => setMostrarAporte(!mostrarAporte)} 
+              className="bg-blue-600/10 hover:bg-blue-600/20 text-blue-700 px-3 py-1 rounded text-[10px] font-black uppercase transition"
+            >
+              {mostrarAporte ? '✕ Ocultar' : '👁️ Mostrar'}
+            </button>
+          </div>
+
+          {mostrarAporte && (
+            <div className="p-6 space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+              {Object.entries(propuesta.porCliente).map(([nombre, datos]) => {
+                const resultado = datos.ventas - datos.costos;
+                const margen = datos.ventas > 0 ? (resultado / datos.ventas) * 100 : 0;
+                return (
+                  <div key={nombre} className="group">
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="text-sm font-bold text-slate-700">{nombre}</span>
+                      <span className="text-xs font-black text-green-600">{format(resultado)}</span>
+                    </div>
+                    <div className="flex justify-between text-[10px] text-slate-400 mb-2">
+                      <span>Venta: {format(datos.ventas)}</span>
+                      <span>Margen: {margen.toFixed(1)}%</span>
+                    </div>
+                    <div className="w-full bg-slate-100 h-3 rounded-full overflow-hidden relative flex">
+                      <div 
+                        className={`h-full transition-all duration-500 z-10 ${
+                          margen >= margenObjetivo 
+                            ? 'bg-gradient-to-r from-green-400 to-emerald-500' 
+                            : 'bg-gradient-to-r from-orange-400 to-orange-500'
+                        }`}
+                        style={{ width: `${Math.min(100, Math.max(0, margen * 2))}%` }}
+                      ></div>
+
+                      {margen < margenObjetivo && (
+                        <div 
+                          className="h-full bg-red-500/80 transition-all duration-500 animate-pulse"
+                          style={{ width: `${(margenObjetivo - margen) * 2}%` }}
+                        ></div>
+                      )}
+                      
+                      <div 
+                        className="absolute top-0 h-full border-l-2 border-white/50 z-20"
+                        style={{ left: `${margenObjetivo * 2}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                );
+              })}
+              {Object.keys(propuesta.porCliente).length === 0 && (
+                <p className="text-center text-slate-300 text-xs py-4 italic">Sin datos de simulación</p>
+              )}
+            </div>
+          )}
+        </div>
+        )}
+
+        {tienePermiso('eerr') && (
+        <div className="bg-white rounded-xl shadow-lg border border-purple-200 overflow-hidden mb-6">
+          <div className="p-4 border-b border-purple-100 flex justify-between items-center bg-gradient-to-r from-purple-600 to-pink-600 text-white">
+            <h2 className="font-bold text-sm">📊 Estado de Resultados Comparativo</h2>
+            <button onClick={() => setMostrarEERR(!mostrarEERR)} className="bg-white/20 hover:bg-white/40 px-3 py-1 rounded text-[10px] font-black uppercase transition">
+              {mostrarEERR ? '✕ Ocultar Panel' : '👁️ Mostrar Panel'}
+            </button>
+          </div>
+          {mostrarEERR && (
+            <>
+              <div className="overflow-x-auto animate-in zoom-in-95 duration-200">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-purple-50 text-purple-600 font-bold uppercase text-[10px]">
+                      <th className="p-3 border-r border-purple-100"></th>
+                      <th className="p-3 text-right border-r border-purple-100">EERR Enero-26</th>
+                      <th className="p-3 text-right border-r border-purple-100">%</th>
+                      <th className="p-3 text-right bg-green-50 border-r border-green-200">Propuesta</th>
+                      <th className="p-3 text-right bg-green-50 border-r border-green-200">%</th>
+                      <th className="p-3 text-right bg-blue-50 border-r border-blue-200">EERR Total</th>
+                      <th className="p-3 text-right bg-blue-50">%</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr className="border-b border-purple-50 hover:bg-purple-50/30">
+                      <td className="p-3 font-bold text-slate-700">Ingreso</td>
+                      <td className="p-3 text-right font-mono border-r border-purple-100">{format(tolerantGet(dataSheets.eerrBase, 'Ingreso'))}</td>
+                      <td className="p-3 text-right font-bold border-r border-purple-100">100%</td>
+                      <td className="p-3 text-right font-mono bg-green-50 border-r border-green-200 text-green-700 font-bold">{format(propuesta.ventasTotales)}</td>
+                      <td className="p-3 text-right font-bold bg-green-50 border-r border-green-200">100%</td>
+                      <td className="p-3 text-right font-mono bg-blue-50 border-r border-blue-200 text-blue-700 font-bold">{format(eerr.ingresoTotal)}</td>
+                      <td className="p-3 text-right font-bold bg-blue-50">100%</td>
+                    </tr>
+                    <tr className="border-b border-purple-50 hover:bg-purple-50/30">
+                      <td className="p-3 font-bold text-slate-700">Costo de ingresos</td>
+                      <td className="p-3 text-right font-mono border-r border-purple-100">{format(tolerantGet(dataSheets.eerrBase, 'Costo de ingresos'))}</td>
+                      <td className="p-3 text-right font-bold border-r border-purple-100">{((tolerantGet(dataSheets.eerrBase, 'Costo de ingresos') / (tolerantGet(dataSheets.eerrBase, 'Ingreso') || 1)) * 100).toFixed(0)}%</td>
+                      <td className="p-3 text-right font-mono bg-green-50 border-r border-green-200 text-red-600 font-bold">-{format(propuesta.costosTotales)}</td>
+                      <td className="p-3 text-right font-bold bg-green-50 border-r border-green-200">{propuesta.ventasTotales ? ((propuesta.costosTotales / propuesta.ventasTotales) * 100).toFixed(0) + '%' : '0%'}</td>
+                      <td className="p-3 text-right font-mono bg-blue-50 border-r border-blue-200 text-red-600 font-bold">-{format(eerr.costoIngresosTotal)}</td>
+                      <td className="p-3 text-right font-bold bg-blue-50">{eerr.ingresoTotal ? ((eerr.costoIngresosTotal / eerr.ingresoTotal) * 100).toFixed(0) + '%' : '0%'}</td>
+                    </tr>
+                    <tr className="border-b border-purple-50 hover:bg-purple-50/30">
+                      <td className="p-3 font-bold text-slate-700">Ganancia bruta</td>
+                      <td className="p-3 text-right font-mono border-r border-purple-100">{format(tolerantGet(dataSheets.eerrBase, 'Ganancia bruta'))}</td>
+                      <td className="p-3 text-right font-bold border-r border-purple-100">{((tolerantGet(dataSheets.eerrBase, 'Ganancia bruta') / (tolerantGet(dataSheets.eerrBase, 'Ingreso') || 1)) * 100).toFixed(0)}%</td>
+                      <td className="p-3 text-right font-mono bg-green-50 border-r border-green-200 font-bold">{format(propuesta.ventasTotales - propuesta.costosTotales)}</td>
+                      <td className="p-3 text-right font-bold bg-green-50 border-r border-green-200">{propuesta.ventasTotales ? (((propuesta.ventasTotales - propuesta.costosTotales) / propuesta.ventasTotales) * 100).toFixed(0) + '%' : '0%'}</td>
+                      <td className="p-3 text-right font-mono bg-blue-50 border-r border-blue-200 font-bold">{format(eerr.gananciaBrutaTotal)}</td>
+                      <td className="p-3 text-right font-bold bg-blue-50">{eerr.ingresoTotal ? ((eerr.gananciaBrutaTotal / eerr.ingresoTotal) * 100).toFixed(0) + '%' : '0%'}</td>
+                    </tr>
+                    <tr className="border-b border-purple-50 hover:bg-purple-50/30">
+                      <td className="p-3 font-bold text-slate-700 pl-6">Menos gasto de operación</td>
+                      <td className="p-3 text-right font-mono text-red-600 border-r border-purple-100">{format(tolerantGet(dataSheets.eerrBase, 'Menos gasto de operación'))}</td>
+                      <td className="p-3 text-right font-bold border-r border-purple-100">{((tolerantGet(dataSheets.eerrBase, 'Menos gasto de operación') / (tolerantGet(dataSheets.eerrBase, 'Ingreso') || 1)) * 100).toFixed(0)}%</td>
+                      <td className="p-3 text-right font-mono bg-green-50 border-r border-green-200 text-slate-400">0.00</td>
+                      <td className="p-3 text-right font-bold bg-green-50 border-r border-green-200">0%</td>
+                      <td className="p-3 text-right font-mono text-red-600 bg-blue-50 border-r border-blue-200">{format(eerr.gastoOperacionTotal)}</td>
+                      <td className="p-3 text-right font-bold bg-blue-50">{eerr.ingresoTotal ? ((eerr.gastoOperacionTotal / eerr.ingresoTotal) * 100).toFixed(0) + '%' : '0%'}</td>
+                    </tr>
+                    <tr className="border-b border-purple-50 hover:bg-purple-50/30">
+                      <td className="p-3 font-bold text-slate-700">Ingreso de operación (o pérdida)</td>
+                      <td className="p-3 text-right font-mono text-purple-700 border-r border-purple-100">{format(tolerantGet(dataSheets.eerrBase, 'Ingreso de operación'))}</td>
+                      <td className="p-3 text-right font-bold border-r border-purple-100">{((tolerantGet(dataSheets.eerrBase, 'Ingreso de operación') / (tolerantGet(dataSheets.eerrBase, 'Ingreso') || 1)) * 100).toFixed(0)}%</td>
+                      <td className="p-3 text-right font-mono font-bold text-green-700 bg-green-50 border-r border-green-200">{format(eerr.ingresoOperacionTotal)}</td>
+                      <td className="p-3 text-right font-bold bg-green-50 border-r border-green-200">{formatPct((eerr.ingresoOperacionTotal / eerr.ingresoTotal) * 100)}</td>
+                      <td className="p-3 text-right font-mono font-bold text-blue-700 bg-blue-50 border-r border-blue-200">{format(eerr.ingresoOperacionTotal)}</td>
+                      <td className="p-3 text-right font-bold bg-blue-50">{formatPct((eerr.ingresoOperacionTotal / eerr.ingresoTotal) * 100)}</td>
+                    </tr>
+                    <tr className="border-b border-purple-50 hover:bg-purple-50/30">
+                      <td className="p-3 font-bold text-slate-700">Más otros ingresos</td>
+                      <td className="p-3 text-right font-mono text-purple-700 border-r border-purple-100">{format(tolerantGet(dataSheets.eerrBase, 'Más otros ingresos'))}</td>
+                      <td className="p-3 text-right font-bold border-r border-purple-100">{((tolerantGet(dataSheets.eerrBase, 'Más otros ingresos') / (tolerantGet(dataSheets.eerrBase, 'Ingreso') || 1)) * 100).toFixed(0)}%</td>
+                      <td className="p-3 text-right font-mono bg-green-50 border-r border-green-200 text-slate-400">0.00</td>
+                      <td className="p-3 text-right font-bold bg-green-50 border-r border-green-200">0%</td>
+                      <td className="p-3 text-right font-mono text-purple-700 bg-blue-50 border-r border-blue-200">{format(eerr.otrosIngresosTotal)}</td>
+                      <td className="p-3 text-right font-bold bg-blue-50">{formatPct((eerr.otrosIngresosTotal / eerr.ingresoTotal) * 100)}</td>
+                    </tr>
+                    <tr className="border-b border-purple-50 hover:bg-purple-50/30">
+                      <td className="p-3 font-bold text-slate-700">Menos gastos de otro tipo</td>
+                      <td className="p-3 text-right font-mono text-red-600 border-r border-purple-100">{format(tolerantGet(dataSheets.eerrBase, 'Menos gastos de otro tipo'))}</td>
+                      <td className="p-3 text-right font-bold border-r border-purple-100">{((tolerantGet(dataSheets.eerrBase, 'Menos gastos de otro tipo') / (tolerantGet(dataSheets.eerrBase, 'Ingreso') || 1)) * 100).toFixed(0)}%</td>
+                      <td className="p-3 text-right font-mono bg-green-50 border-r border-green-200 text-slate-400">0.00</td>
+                      <td className="p-3 text-right font-bold bg-green-50 border-r border-green-200">0%</td>
+                      <td className="p-3 text-right font-mono text-red-600 bg-blue-50 border-r border-blue-200">{format(eerr.otrosGastosTotal)}</td>
+                      <td className="p-3 text-right font-bold bg-blue-50">{formatPct((eerr.otrosGastosTotal / eerr.ingresoTotal) * 100)}</td>
+                    </tr>
+                    <tr className="bg-gradient-to-r from-purple-100 to-pink-100 border-t-4 border-purple-400">
                       <td className="p-4 font-black text-slate-900 text-sm">Ganancia neta</td>
                       <td className="p-4 text-right font-mono font-black text-purple-700 border-r border-purple-200 text-sm">{format(tolerantGet(dataSheets.eerrBase, 'Ganancia neta'))}</td>
                       <td className="p-4 text-right font-black border-r border-purple-200">{formatPct((tolerantGet(dataSheets.eerrBase, 'Ganancia neta') / (tolerantGet(dataSheets.eerrBase, 'Ingreso') || 1)) * 100)}</td>
@@ -1053,6 +1210,18 @@ function App() {
                     </tr>
                   </tbody>
                 </table>
+              </div>
+
+              <div className="bg-purple-100 rounded-xl shadow-lg border border-purple-400 p-6 mt-6">
+                <div className="flex justify-between items-center">
+                  <div className="text-purple-900 font-black uppercase text-sm">DESVÍO VS BASE DIC-25</div>
+                  <div className="text-right font-black text-lg text-purple-900">MARGEN NETO TOTAL <br /> <span className="text-3xl">{eerr.margenNetoPct ? eerr.margenNetoPct.toFixed(1) : '0.0'}%</span></div>
+                </div>
+                <div className="mt-4 flex gap-6 text-sm font-bold">
+                  <div className="text-green-700">Ingreso: +{format(desvioVsBase.ingreso)}</div>
+                  <div className="text-red-600">Costo: +{format(desvioVsBase.costo)}</div>
+                  <div className="text-green-700">Ganancia Neta: +{format(desvioVsBase.gananciaNeta)}</div>
+                </div>
               </div>
             </>
           )}
