@@ -1211,7 +1211,7 @@ function App() {
                   </tbody>
                 </table>
               </div>
-
+   )}
               
         {tienePermiso('objetivos') && (
         <div className="mb-6">
