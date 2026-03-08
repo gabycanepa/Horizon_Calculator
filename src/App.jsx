@@ -127,7 +127,7 @@ function ModalValoresServicios({ datos, onClose }) {
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="flex justify-between items-center p-4 bg-gradient-to-r from-purple-600 to-pink-500 text-white">
           <h2 className="font-black text-sm uppercase">🔍 Valores de Servicios Actuales</h2>
-          <button onClick={onClose} className="text-white/80 hover:text-white font-black text-lg">✕</button>
+          <button onClick={onClose} className="text-white/80 hover:text-white font-black text-lg print:hidden">✕</button>
         </div>
         <div className="overflow-auto max-h-[calc(80vh-60px)]">
           {datos.length === 0 ? (
@@ -582,7 +582,6 @@ function App() {
     }
   };
 
-  // Función exclusiva para guardar Objetivos en la nueva pestaña "TrackingObjetivos"
   const guardarTracking = async () => {
     const timestamp = new Date().toLocaleString('es-AR');
     const payload = {
@@ -596,7 +595,7 @@ function App() {
     try {
       const params = new URLSearchParams();
       params.append('payload', JSON.stringify(payload));
-      params.append('sheet', 'TrackingObjetivos'); // Apunta a la nueva pestaña
+      params.append('sheet', 'TrackingObjetivos');
 
       await fetch(SCRIPT_URL, {
         method: 'POST',
@@ -627,146 +626,9 @@ function App() {
     setTimeout(() => setIsLoadingFromCloud(false), 200);
   };
 
+  // La nueva función Descargar PDF nativa
   const descargarPDF = () => {
-    const eerr = calcularEERRTotal();
-    const propuesta = eerr.propuesta;
-    const timestamp = new Date().toLocaleString('es-AR');
-    const nombreUsuario = usuarioActual ? usuarioActual.nombre : 'Usuario';
-    
-    let html = `<!DOCTYPE html>  
-<html lang="es">  
-<head>  
-  <meta charset="UTF-8">  
-  <title>Horizon - Proyección ${timestamp}</title>  
-  <style>  
-    body { font-family: Arial, sans-serif; padding: 40px; max-width: 900px; margin: auto; }  
-    h1 { color: #7c3aed; border-bottom: 3px solid #a78bfa; padding-bottom: 10px; }  
-    .header { color: #64748b; font-size: 14px; margin-bottom: 30px; }  
-    .section { background: #f5f3ff; padding: 20px; border-radius: 8px; margin: 20px 0; }  
-    table { width: 100%; border-collapse: collapse; margin: 15px 0; }  
-    th { background: #e9d5ff; padding: 10px; text-align: left; border: 1px solid #cbd5e1; font-size: 12px; }  
-    td { padding: 10px; border: 1px solid #e2e8f0; font-size: 12px; }  
-    .right { text-align: right; }  
-    .bold { font-weight: bold; }  
-    .green { color: #16a34a; }  
-    .red { color: #dc2626; }  
-    .footer { margin-top: 30px; padding: 20px; background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%); color: white; border-radius: 8px; text-align: center; }  
-    @media print {
-      body { padding: 0; }
-      .section { break-inside: avoid; }
-    }
-  </style>  
-</head>  
-<body>  
-  <h1>HORIZON - Estado de Resultados Proyectado 2026</h1>  
-  <p class="header">Generado: ${timestamp} | Usuario: ${nombreUsuario}</p>  
-  `;
-
-    // CONDICIÓN EERR (Resumen Financiero)
-    if (tienePermiso('eerr')) {
-      html += `
-  <div class="section">  
-    <h3>Resumen Financiero</h3>  
-    <table>  
-      <tr><td class="bold">Ingreso Base (Dic-25):</td><td class="right">${format(dataSheets.eerrBase['Ingreso'] || 0)}</td></tr>  
-      <tr><td class="bold">Ingreso Propuesta:</td><td class="right green">${format(propuesta.ventasTotales)}</td></tr>  
-      <tr><td class="bold">Ingreso Total:</td><td class="right bold">${format(eerr.ingresoTotal)}</td></tr>  
-      <tr><td class="bold">Costo Total:</td><td class="right red">-${format(eerr.costoIngresosTotal)}</td></tr>  
-      <tr><td class="bold">Ganancia Bruta:</td><td class="right green bold">${format(eerr.gananciaBrutaTotal)} (${eerr.margenBrutoPct.toFixed(1)}%)</td></tr>  
-      <tr><td class="bold">Gastos Operativos:</td><td class="right red">-${format(gastosOperativos)}</td></tr>  
-      <tr><td class="bold">Ganancia Neta:</td><td class="right bold ${eerr.gananciaNetaTotal >= 0 ? 'green' : 'red'}">${format(eerr.gananciaNetaTotal)} (${eerr.margenNetoPct.toFixed(1)}%)</td></tr>  
-    </table>  
-  </div>`;
-    }
-  
-    // CONDICIÓN SIMULACIÓN
-    if (tienePermiso('simulacion')) {
-      html += `
-  <h3>Detalle de Servicios Propuestos</h3>  
-  <table>  
-    <thead>  
-      <tr>  
-        <th>Cliente</th>  
-        <th>Servicio</th>  
-        <th>Cant</th>  
-        <th>Venta Unit</th>  
-        <th>Sueldo Bruto</th>  
-        <th>Costo Directo</th>
-        <th>Costo Total</th>  
-        <th>Resultado</th>  
-        <th>Margen %</th>  
-      </tr>  
-    </thead>  
-    <tbody>`;
-
-      escenarios.forEach(e => {
-        const p = dataSheets.preciosNuevos[e.tipoIdx];
-        if (!p) return;
-        const isStaff = p.categoria === 'Staff Augmentation';
-        const isWorkshop = (p.categoria || '').toLowerCase().includes('workshop') ||
-                           (p.tipo || '').toLowerCase().includes('workshop') ||
-                           (p.tipo || '').toLowerCase().includes('worshop');
-        let costoTotal = 0;
-        if (isStaff) {
-          const sueldo = e.cantidad * e.sueldoBruto;
-          costoTotal = sueldo + (sueldo * pctCostoLaboral/100) + (sueldo * pctIndirectos/100);
-        } else if (isWorkshop) {
-          costoTotal = e.cantidad * e.costoDirecto;
-        } else {
-          const base = e.cantidad * p.costoFijo;
-          costoTotal = base + (base * pctIndirectos/100);
-        }
-        const venta = e.cantidad * e.ventaUnit;
-        const res = venta - costoTotal;
-        const mgn = venta > 0 ? (res / venta) * 100 : 0;
-
-        html += `  
-      <tr>  
-        <td>${e.cliente}</td>  
-        <td>${p.categoria} - ${p.tipo}</td>  
-        <td class="right">${e.cantidad}</td>  
-        <td class="right">${format(e.ventaUnit)}</td>  
-        <td class="right">${isStaff ? format(e.sueldoBruto) : '-'}</td>  
-        <td class="right">${isWorkshop ? format(e.costoDirecto) : '-'}</td>  
-        <td class="right red">-${format(costoTotal)}</td>  
-        <td class="right green bold">${format(res)}</td>  
-        <td class="right bold">${mgn.toFixed(1)}%</td>  
-      </tr>`;
-      });
-      html += `</tbody></table>`;
-    }
-
-    html += `
-  <div class="section">  
-    <h3>Configuración Utilizada</h3>  
-    <p><strong>Indirectos:</strong> ${pctIndirectos}% | <strong>Costo Laboral:</strong> ${pctCostoLaboral}% | <strong>Margen Objetivo:</strong> ${margenObjetivo}%</p>  
-  </div>`;
-
-    // CONDICIÓN EERR (Ganancia proyectada footer)
-    if (tienePermiso('eerr')) {
-      html += `
-  <div class="footer">  
-    <h2>Ganancia Neta Proyectada: ${format(eerr.gananciaNetaTotal)}</h2>  
-    <p>Margen Neto: ${eerr.margenNetoPct.toFixed(1)}% | Desvío vs Dic-25: ${eerr.desvioGananciaNeta >= 0 ? '+' : ''}${format(eerr.desvioGananciaNeta)}</p>  
-  </div>`;
-    }
-
-    html += `</body></html>`;
-
-    // Truco: Abrir ventana de impresión nativa en lugar de bajar un HTML
-    const iframe = document.createElement('iframe');
-    iframe.style.display = 'none';
-    document.body.appendChild(iframe);
-    iframe.contentWindow.document.open();
-    iframe.contentWindow.document.write(html);
-    iframe.contentWindow.document.close();
-
-    // Esperar a que renderice y llamar a imprimir
-    setTimeout(() => {
-      iframe.contentWindow.focus();
-      iframe.contentWindow.print();
-      setTimeout(() => document.body.removeChild(iframe), 1000);
-    }, 250);
+    window.print();
   };
 
   const format = (n) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n);
@@ -846,7 +708,7 @@ function App() {
           <div>
             <div className="flex justify-between items-center mb-2">
               <label className="text-[10px] font-bold text-blue-600 uppercase">Ventas por Cliente</label>
-              <button onClick={() => agregarLineaVenta(tipo)} className="text-blue-600 hover:text-blue-800 font-black text-lg leading-none">+</button>
+              <button onClick={() => agregarLineaVenta(tipo)} className="text-blue-600 hover:text-blue-800 font-black text-lg leading-none print:hidden">+</button>
             </div>
             <div className="space-y-2 max-h-48 overflow-y-auto">
               {lineas.map((linea) => (
@@ -863,7 +725,7 @@ function App() {
                       const num = raw === '' ? '' : parseFloat(raw) || 0;
                       actualizarLineaVenta(tipo, linea.id, 'monto', num);
                     }} className="w-32 bg-white border-2 border-blue-400 rounded px-2 py-1 text-xs font-bold text-blue-700 focus:outline-none" placeholder="0" />
-                  {lineas.length > 1 && <button onClick={() => eliminarLineaVenta(tipo, linea.id)} className="text-slate-400 hover:text-red-500 text-sm font-bold">✕</button>}
+                  {lineas.length > 1 && <button onClick={() => eliminarLineaVenta(tipo, linea.id)} className="text-slate-400 hover:text-red-500 text-sm font-bold print:hidden">✕</button>}
                 </div>
               ))}
             </div>
@@ -891,6 +753,28 @@ function App() {
   return (
     <div className="p-8 bg-gradient-to-br from-slate-50 to-purple-50 min-h-screen font-sans text-slate-900">
       
+      {/* Estilos globales inyectados específicamente para la hora de imprimir */}
+      <style>{`
+        @media print {
+          @page { size: landscape; margin: 10mm; }
+          body { 
+            -webkit-print-color-adjust: exact !important; 
+            print-color-adjust: exact !important; 
+            background-color: #f8fafc !important; 
+          }
+          /* Desactivar scroll interior para que se impriman todas las filas hacia abajo */
+          .overflow-x-auto, .overflow-y-auto, .overflow-auto, .max-h-48, .max-h-[80vh] { 
+            overflow: visible !important; 
+            max-height: none !important; 
+          }
+          /* Opcional: reducir sombras que en impresión pueden verse raras */
+          .shadow-sm, .shadow-lg, .shadow-2xl { 
+            box-shadow: none !important; 
+            border: 1px solid #e2e8f0; 
+          }
+        }
+      `}</style>
+
       {mostrarModalValores && (
         <ModalValoresServicios datos={dataSheets.valoresServicios} onClose={() => setMostrarModalValores(false)} />
       )}
@@ -908,7 +792,7 @@ function App() {
               <button
                 onClick={() => setMostrarModalValores(true)}
                 title="Ver Valores de Servicios"
-                className="bg-white border border-purple-200 rounded-lg px-3 py-2 text-purple-600 hover:bg-purple-50 hover:border-purple-400 transition shadow-sm text-lg"
+                className="bg-white border border-purple-200 rounded-lg px-3 py-2 text-purple-600 hover:bg-purple-50 hover:border-purple-400 transition shadow-sm text-lg print:hidden"
               >🔍</button>
             )}
 
@@ -941,7 +825,7 @@ function App() {
             {/* Usuario logueado */}
             <div className="bg-purple-100 px-3 py-2 rounded-lg text-xs font-bold text-purple-700 flex items-center gap-2">
               👤 {usuarioActual.nombre}
-              <button onClick={() => setUsuarioActual(null)} className="text-purple-400 hover:text-red-500 ml-1" title="Cerrar sesión">✕</button>
+              <button onClick={() => setUsuarioActual(null)} className="text-purple-400 hover:text-red-500 ml-1 print:hidden" title="Cerrar sesión">✕</button>
             </div>
           </div>
         </div>
@@ -950,7 +834,7 @@ function App() {
         <div className="bg-white rounded-xl shadow-sm border border-purple-100 overflow-hidden mb-6">
           <div className="p-4 border-b border-purple-50 flex justify-between items-center bg-gradient-to-r from-purple-50 to-pink-50">
             <h2 className="font-bold text-slate-700 text-sm">💼 Simulación de Servicios (Propuesta)</h2>
-            <div className="flex gap-2">
+            <div className="flex gap-2 print:hidden">
                <button onClick={() => setMostrarHistorial(!mostrarHistorial)} className={`text-xs font-bold px-3 py-1 border rounded-lg transition ${mostrarHistorial ? 'bg-purple-600 text-white border-purple-600' : 'text-slate-600 border-purple-200 hover:text-purple-600'}`}>📋 Historial ({historial.length})</button>
                <button onClick={guardarEscenario} className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold hover:shadow-lg transition">💾 Guardar Escenario</button>
                
@@ -975,7 +859,7 @@ function App() {
                   <th className="p-4 text-right">Costo Total</th>
                   <th className="p-4 text-right">Resultado</th>
                   <th className="p-4 text-center">Margen</th>
-                  <th className="p-4"></th>
+                  <th className="p-4 print:hidden"></th>
                 </tr>
               </thead>
               <tbody className="text-sm">
@@ -1073,7 +957,7 @@ function App() {
                           {mgn.toFixed(1)}%
                         </span>
                       </td>
-                      <td className="p-4 text-right">
+                      <td className="p-4 text-right print:hidden">
                         <button onClick={() => setEscenarios(prev => prev.filter(x => x.id !== e.id))} className="text-slate-300 hover:text-red-500">✕</button>
                       </td>
                     </tr>
@@ -1089,7 +973,7 @@ function App() {
           <div className="bg-white rounded-xl shadow-sm border border-purple-100 overflow-hidden mb-6">
             <div className="p-4 border-b border-purple-50 bg-gradient-to-r from-purple-50 to-pink-50 flex justify-between items-center">
               <h2 className="font-bold text-slate-700 text-sm">📋 Historial de Escenarios Guardados</h2>
-              <button onClick={() => setMostrarHistorial(false)} className="text-slate-400 hover:text-slate-600 text-xs">Cerrar</button>
+              <button onClick={() => setMostrarHistorial(false)} className="text-slate-400 hover:text-slate-600 text-xs print:hidden">Cerrar</button>
             </div>
             <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {historial.length === 0 ? (
@@ -1099,14 +983,14 @@ function App() {
                   <div key={item.id} className="border border-purple-100 rounded-lg p-4 hover:border-purple-400 transition bg-white shadow-sm">
                     <div className="flex justify-between items-start mb-2">
                       <h3 className="font-black text-purple-700 text-sm uppercase truncate pr-2">{item.nombre}</h3>
-                      <button onClick={() => { if(window.confirm('¿Eliminar este escenario?')) setHistorial(prev => prev.filter(h => h.id !== item.id)) }} className="text-slate-300 hover:text-red-500">✕</button>
+                      <button onClick={() => { if(window.confirm('¿Eliminar este escenario?')) setHistorial(prev => prev.filter(h => h.id !== item.id)) }} className="text-slate-300 hover:text-red-500 print:hidden">✕</button>
                     </div>
                     <p className="text-[10px] text-slate-400 font-bold mb-3">{item.fecha}</p>
                     <div className="space-y-1 mb-4">
                       <div className="flex justify-between text-xs"><span className="text-slate-500">Venta Propuesta:</span><span className="font-bold text-green-600">{format(item.eerr?.propuesta?.ventasTotales || 0)}</span></div>
                       <div className="flex justify-between text-xs"><span className="text-slate-500">Ganancia Neta:</span><span className="font-bold text-blue-600">{format(item.eerr?.gananciaNetaTotal || 0)}</span></div>
                     </div>
-                    <button onClick={() => cargarEscenarioDesdeHistorial(item)} className="w-full bg-purple-50 text-purple-700 py-2 rounded font-black text-[10px] uppercase hover:bg-purple-600 hover:text-white transition">Cargar Escenario</button>
+                    <button onClick={() => cargarEscenarioDesdeHistorial(item)} className="w-full bg-purple-50 text-purple-700 py-2 rounded font-black text-[10px] uppercase hover:bg-purple-600 hover:text-white transition print:hidden">Cargar Escenario</button>
                   </div>
                 ))
               )}
@@ -1120,7 +1004,7 @@ function App() {
             <h2 className="font-bold text-blue-700 text-sm uppercase">Aporte por Cliente (Propuesta)</h2>
             <button 
               onClick={() => setMostrarAporte(!mostrarAporte)} 
-              className="bg-blue-600/10 hover:bg-blue-600/20 text-blue-700 px-3 py-1 rounded text-[10px] font-black uppercase transition"
+              className="bg-blue-600/10 hover:bg-blue-600/20 text-blue-700 px-3 py-1 rounded text-[10px] font-black uppercase transition print:hidden"
             >
               {mostrarAporte ? '✕ Ocultar' : '👁️ Mostrar'}
             </button>
@@ -1178,7 +1062,7 @@ function App() {
         <div className="bg-white rounded-xl shadow-lg border border-purple-200 overflow-hidden mb-6">
           <div className="p-4 border-b border-purple-100 flex justify-between items-center bg-gradient-to-r from-purple-600 to-pink-600 text-white">
             <h2 className="font-bold text-sm">📊 Estado de Resultados Comparativo</h2>
-            <button onClick={() => setMostrarEERR(!mostrarEERR)} className="bg-white/20 hover:bg-white/40 px-3 py-1 rounded text-[10px] font-black uppercase transition">
+            <button onClick={() => setMostrarEERR(!mostrarEERR)} className="bg-white/20 hover:bg-white/40 px-3 py-1 rounded text-[10px] font-black uppercase transition print:hidden">
               {mostrarEERR ? '✕ Ocultar Panel' : '👁️ Mostrar Panel'}
             </button>
           </div>
@@ -1285,7 +1169,7 @@ function App() {
             
             <button 
               onClick={guardarTracking} 
-              className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-5 py-2 rounded-lg text-xs font-black hover:shadow-lg transition flex items-center gap-2"
+              className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-5 py-2 rounded-lg text-xs font-black hover:shadow-lg transition flex items-center gap-2 print:hidden"
             >
               💾 Guardar Avance
             </button>
