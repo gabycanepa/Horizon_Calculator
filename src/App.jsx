@@ -645,12 +645,14 @@ function App() {
             <p className="text-slate-500 text-sm mt-1">Estado de Resultados Proyectado (Base Dic-25 + Propuesta)</p>
           </div>
           <div className="flex gap-3 items-center">
-            {/* Lupa Valores Servicios */}
-            <button
-              onClick={() => setMostrarModalValores(true)}
-              title="Ver Valores de Servicios"
-              className="bg-white border border-purple-200 rounded-lg px-3 py-2 text-purple-600 hover:bg-purple-50 hover:border-purple-400 transition shadow-sm text-lg"
-            >🔍</button>
+           {/* Lupa Valores Servicios */}
+            {tienePermiso('busqueda') && (
+              <button
+                onClick={() => setMostrarModalValores(true)}
+                title="Ver Valores de Servicios"
+                className="bg-white border border-purple-200 rounded-lg px-3 py-2 text-purple-600 hover:bg-purple-50 hover:border-purple-400 transition shadow-sm text-lg"
+              >🔍</button>
+            )}
 
             <div className="bg-white px-4 py-2 rounded-lg shadow-sm border border-purple-100">
               <span className="text-[10px] font-bold text-purple-400 block uppercase">Gastos Op.</span>
