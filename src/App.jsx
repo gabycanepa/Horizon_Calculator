@@ -203,11 +203,19 @@ function App() {
           valor: cleanNum(p['Valor (ARS)'] ?? p['Valor'] ?? Object.values(p)[2]), sueldoSugerido: cleanNum(p['Sueldo Sugerido (ARS)'] ?? p['Sueldo Sugerido'] ?? Object.values(p)[3]), costoFijo: cleanNum(p['Costo Fijo (ARS)'] ?? p['Costo Fijo'] ?? Object.values(p)[4])
         }));
 
+        const clientesProcesados = clientes.map(c => c['Cliente'] ?? c['cliente'] ?? c['Name'] ?? Object.values(c)[0] ?? '').filter(Boolean);
+        const usuariosProcesados = usuarios.map(u => ({ nombre: u['Nombre'] ?? u['nombre'] ?? Object.values(u)[0] ?? '', password: u['Password'] ?? u['password'] ?? Object.values(u)[1] ?? '', modulos: u['Modulos'] ?? u['modulos'] ?? u['Módulos'] ?? Object.values(u)[2] ?? 'todos' })).filter(u => u.nombre);
+
         setDataSheets({
-          preciosNuevos: preciosProcesados, clientes: clientes.map(c => c['Cliente'] ?? c['cliente'] ?? c['Name'] ?? Object.values(c)[0] ?? '').filter(Boolean),
-          config: configObj, eerrBase: eerrObj, eerrBaseNorm: eerrNorm,
-          usuarios: usuarios.map(u => ({ nombre: u['Nombre'] ?? u['nombre'] ?? Object.values(u)[0] ?? '', password: u['Password'] ?? u['password'] ?? Object.values(u)[1] ?? '', modulos: u['Modulos'] ?? u['modulos'] ?? u['Módulos'] ?? Object.values(u)[2] ?? 'todos' })).filter(u => u.nombre),
-          valoresServicios: valoresServ, loading: false, error: null
+          preciosNuevos: preciosProcesados, 
+          clientes: clientesProcesados,
+          config: configObj, 
+          eerrBase: eerrObj, 
+          eerrBaseNorm: eerrNorm,
+          usuarios: usuariosProcesados,
+          valoresServicios: valoresServ, 
+          loading: false, 
+          error: null
         });
 
         setPctIndirectos(configObj['% Indirectos'] ?? configObj['Indirectos'] ?? 37);
@@ -245,7 +253,7 @@ function App() {
           }
         } catch(e) {}
 
-        if (preciosProcesados.length > 0 && escenarios.length === 0) setEscenarios([{ id: Date.now(), cliente: clientes[0] || 'Nuevo Cliente', tipoIdx: 0, cantidad: 1, sueldoBruto: preciosProcesados[0].sueldoSugerido || 0, ventaUnit: preciosProcesados[0].valor || 0, costoDirecto: preciosProcesados[0].costoFijo || 0 }]);
+        if (preciosProcesados.length > 0 && escenarios.length === 0) setEscenarios([{ id: Date.now(), cliente: clientesProcesados[0] || 'Nuevo Cliente', tipoIdx: 0, cantidad: 1, sueldoBruto: preciosProcesados[0].sueldoSugerido || 0, ventaUnit: preciosProcesados[0].valor || 0, costoDirecto: preciosProcesados[0].costoFijo || 0 }]);
         setIsReady(true);
       } catch (err) {
         setDataSheets(p => ({ ...p, loading: false, error: 'Error cargando datos.' })); setIsReady(true);
