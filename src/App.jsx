@@ -1212,22 +1212,7 @@ function App() {
                 </table>
               </div>
 
-              <div className="bg-purple-100 rounded-xl shadow-lg border border-purple-400 p-6 mt-6">
-                <div className="flex justify-between items-center">
-                  <div className="text-purple-900 font-black uppercase text-sm">DESVÍO VS BASE DIC-25</div>
-                  <div className="text-right font-black text-lg text-purple-900">MARGEN NETO TOTAL <br /> <span className="text-3xl">{eerr.margenNetoPct ? eerr.margenNetoPct.toFixed(1) : '0.0'}%</span></div>
-                </div>
-                <div className="mt-4 flex gap-6 text-sm font-bold">
-                  <div className="text-green-700">Ingreso: +{format(desvioVsBase.ingreso)}</div>
-                  <div className="text-red-600">Costo: +{format(desvioVsBase.costo)}</div>
-                  <div className="text-green-700">Ganancia Neta: +{format(desvioVsBase.gananciaNeta)}</div>
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-        )}
-
+              
         {tienePermiso('objetivos') && (
         <div className="mb-6">
           <h2 className="text-lg font-black text-slate-700 uppercase mb-4">🎯 Objetivos 2026 - Tracking de Ventas</h2>
