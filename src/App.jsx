@@ -51,7 +51,7 @@ const fetchSheet = async (sheetName) => {
 
 // ─── SUBCOMPONENTES UI ──────────────────────────────────────────────────────
 const HeaderMetric = ({ label, value, onChange, isCurrency, borderClass, labelClass, inputClass }) => (
-  <div className={`bg-white px-3 sm:px-4 py-2 rounded-lg shadow-sm border ${borderClass} flex-1 min-w-[80px]`}>
+  <div className={`bg-white px-3 sm:px-4 py-2 rounded-lg shadow-sm border ${borderClass} min-w-[80px]`}>
     <span className={`text-[10px] font-bold ${labelClass} block uppercase`}>{label}</span>
     <div className="flex items-center">
       {isCurrency ? (
