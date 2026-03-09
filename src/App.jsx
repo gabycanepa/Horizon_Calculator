@@ -64,11 +64,11 @@ const HeaderMetric = ({ label, value, onChange, isCurrency, borderClass, labelCl
             onChange(raw === '' ? 0 : parseFloat(raw) || 0);
           }} 
           // AJUSTE: Subimos el ancho del input a w-20 para que entre el número
-          className={`w-20 font-bold ${inputClass} focus:outline-none text-xs sm:text-sm bg-transparent`} 
+          className={`w-30 font-bold ${inputClass} focus:outline-none text-xs sm:text-sm bg-transparent`} 
         />
       ) : (
         // AJUSTE: Subimos el ancho del input a w-10 para que entre el porcentaje
-        <><input type="number" value={value} onChange={e => onChange(cleanNum(e.target.value))} className={`w-10 font-bold ${inputClass} focus:outline-none text-xs sm:text-sm bg-transparent`} />%</>
+        <><input type="number" value={value} onChange={e => onChange(cleanNum(e.target.value))} className={`w-15 font-bold ${inputClass} focus:outline-none text-xs sm:text-sm bg-transparent`} />%</>
       )}
     </div>
   </div>
