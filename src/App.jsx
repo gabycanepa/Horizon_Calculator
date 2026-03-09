@@ -51,7 +51,6 @@ const fetchSheet = async (sheetName) => {
 
 // ─── SUBCOMPONENTES UI ──────────────────────────────────────────────────────
 const HeaderMetric = ({ label, value, onChange, isCurrency, borderClass, labelClass, inputClass }) => (
-  // AJUSTE: Se restauró el min-w-[80px] y se ajustó el padding para que respire mejor
   <div className={`bg-white px-3 sm:px-4 py-2 rounded-lg shadow-sm border ${borderClass} flex-1 min-w-[80px]`}>
     <span className={`text-[10px] font-bold ${labelClass} block uppercase`}>{label}</span>
     <div className="flex items-center">
@@ -63,7 +62,6 @@ const HeaderMetric = ({ label, value, onChange, isCurrency, borderClass, labelCl
             const raw = e.target.value.replace(/\./g, '').replace(/\s/g, '');
             onChange(raw === '' ? 0 : parseFloat(raw) || 0);
           }} 
-          // AJUSTE: Restaurado el tamaño de fuente un poquito más grande
           className={`w-full font-bold ${inputClass} focus:outline-none text-xs sm:text-sm bg-transparent`} 
         />
       ) : (
@@ -467,7 +465,7 @@ function App() {
               {isRefreshing ? '⏳ Recargando...' : '🔄 Refrescar'}
             </button>
 
-            {<HeaderMetric label="Gastos Op." value={gastosOperativos} onChange={setGastosOperativos} isCurrency={true} borderClass="border-purple-100" labelClass="text-purple-400" inputClass="text-red-600" />}
+            {/* <HeaderMetric label="Gastos Op." value={gastosOperativos} onChange={setGastosOperativos} isCurrency={true} borderClass="border-purple-100" labelClass="text-purple-400" inputClass="text-red-600" /> */}
             <HeaderMetric label="Indirectos" value={pctIndirectos} onChange={setPctIndirectos} isCurrency={false} borderClass="border-blue-100" labelClass="text-blue-400" inputClass="text-blue-600" />
             <HeaderMetric label="Costo Lab." value={pctCostoLaboral} onChange={setPctCostoLaboral} isCurrency={false} borderClass="border-pink-100" labelClass="text-pink-400" inputClass="text-pink-600" />
             <HeaderMetric label="Margen Obj." value={margenObjetivo} onChange={setMargenObjetivo} isCurrency={false} borderClass="border-purple-100" labelClass="text-purple-400" inputClass="text-purple-600" />
@@ -492,7 +490,6 @@ function App() {
           <div className="p-3 sm:p-4 border-b border-purple-50 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-3 bg-gradient-to-r from-purple-50 to-pink-50">
             <h2 className="font-bold text-slate-700 text-xs sm:text-sm">💼 Simulación de Servicios</h2>
             
-            {/* AJUSTE: Botones restaurados al diseño "pill" original */}
             <div className="flex flex-wrap gap-2 print:hidden w-full xl:w-auto">
                <button onClick={() => setMostrarHistorial(!mostrarHistorial)} className={`text-[10px] sm:text-xs font-bold px-3 py-1.5 border rounded-lg transition shrink-0 ${mostrarHistorial ? 'bg-purple-600 text-white' : 'text-slate-600 hover:text-purple-600'}`}>📋 Historial ({historial.length})</button>
                <button onClick={guardarEscenario} className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-3 sm:px-4 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold hover:shadow-lg transition shrink-0">💾 Guardar Escenario</button>
