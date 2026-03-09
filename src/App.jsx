@@ -51,9 +51,8 @@ const fetchSheet = async (sheetName) => {
 
 // ─── SUBCOMPONENTES UI ──────────────────────────────────────────────────────
 const HeaderMetric = ({ label, value, onChange, isCurrency, borderClass, labelClass, inputClass }) => (
-  // El secreto está acá: flex-1 (se acomodan solos), min-w-[110px] (no se aprietan), max-w-[140px] (no se estiran de más)
-  <div className={`bg-white px-3 py-2 rounded-lg shadow-sm border ${borderClass} flex-1 min-w-[110px] max-w-[140px]`}>
-    <span className={`text-[10px] font-bold ${labelClass} block uppercase truncate`}>{label}</span>
+  <div className={`bg-white px-3 sm:px-4 py-2 rounded-lg shadow-sm border ${borderClass} flex-1 min-w-[80px]`}>
+    <span className={`text-[10px] font-bold ${labelClass} block uppercase`}>{label}</span>
     <div className="flex items-center">
       {isCurrency ? (
         <input 
@@ -63,7 +62,6 @@ const HeaderMetric = ({ label, value, onChange, isCurrency, borderClass, labelCl
             const raw = e.target.value.replace(/\./g, '').replace(/\s/g, '');
             onChange(raw === '' ? 0 : parseFloat(raw) || 0);
           }} 
-          // Volvemos a w-full para que el input respete el tamaño del cuadrito
           className={`w-full font-bold ${inputClass} focus:outline-none text-xs sm:text-sm bg-transparent`} 
         />
       ) : (
@@ -197,7 +195,6 @@ function App() {
   const [mostrarHistorial, setMostrarHistorial] = useState(false);
   const [mostrarEERR, setMostrarEERR] = useState(true);
   const [mostrarAporte, setMostrarAporte] = useState(true);
-  const [mostrarGastosOp, setMostrarGastosOp] = useState(false);
 
   const tienePermiso = (modulo) => usuarioActual && ((usuarioActual.modulos || '').toLowerCase().includes('todos') || (usuarioActual.modulos || '').toLowerCase().includes(modulo.toLowerCase()));
 
@@ -468,18 +465,7 @@ function App() {
               {isRefreshing ? '⏳ Recargando...' : '🔄 Refrescar'}
             </button>
 
-            {/* NUEVO BOTON GASTOS OP */}
-            <button 
-              onClick={() => setMostrarGastosOp(!mostrarGastosOp)} 
-              title={mostrarGastosOp ? "Ocultar Gastos OP" : "Mostrar Gastos OP"}
-              className={`bg-white border rounded-lg px-3 py-2 transition shadow-sm text-sm font-bold print:hidden shrink-0 flex items-center justify-center ${mostrarGastosOp ? 'text-purple-600 border-purple-200 bg-purple-50' : 'text-slate-400 border-slate-200'}`}
-            >
-              {mostrarGastosOp ? '👁️' : '👁️‍🗨️'}
-            </button>
-
-            {mostrarGastosOp && (
-              <HeaderMetric label="Gastos Op." value={gastosOperativos} onChange={setGastosOperativos} isCurrency={true} borderClass="border-purple-100" labelClass="text-purple-400" inputClass="text-red-600" />
-            )}
+            {/* <HeaderMetric label="Gastos Op." value={gastosOperativos} onChange={setGastosOperativos} isCurrency={true} borderClass="border-purple-100" labelClass="text-purple-400" inputClass="text-red-600" /> */}
             <HeaderMetric label="Indirectos" value={pctIndirectos} onChange={setPctIndirectos} isCurrency={false} borderClass="border-blue-100" labelClass="text-blue-400" inputClass="text-blue-600" />
             <HeaderMetric label="Costo Lab." value={pctCostoLaboral} onChange={setPctCostoLaboral} isCurrency={false} borderClass="border-pink-100" labelClass="text-pink-400" inputClass="text-pink-600" />
             <HeaderMetric label="Margen Obj." value={margenObjetivo} onChange={setMargenObjetivo} isCurrency={false} borderClass="border-purple-100" labelClass="text-purple-400" inputClass="text-purple-600" />
