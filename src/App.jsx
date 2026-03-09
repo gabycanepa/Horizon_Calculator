@@ -218,12 +218,11 @@ function App() {
           error: null
         });
 
-        // ─── ACÁ ESTÁ EL CAMBIO: USAMOS TU FUNCIÓN tolerantGet ───────────
+        // ACÁ SE TOMAN LOS VALORES DEL EXCEL USANDO EL TOLERANT GET PARA QUE NO FALLE
         setPctIndirectos(tolerantGet(configObj, 'Indirectos') || 37);
         setPctCostoLaboral(tolerantGet(configObj, 'Costo Laboral') || 45);
         setGastosOperativos(tolerantGet(configObj, 'Gastos Operativos') || 46539684.59);
-        setMargenObjetivo(tolerantGet(configObj, 'Margen Objetivo') || 25);
-        // ─────────────────────────────────────────────────────────────────
+        setMargenObjetivo(tolerantGet(configObj, 'Margen Objetivo') || tolerantGet(configObj, 'Margen Objetivo (%)') || 25);
 
         try {
           const dataNube = await (await fetch(`${SCRIPT_URL}?sheet=HistorialCompartido`)).json();
@@ -238,7 +237,8 @@ function App() {
             const ult = hSync[hSync.length - 1];
             if (ult && ult.escenarios.length > 0) {
               setEscenarios(ult.escenarios);
-              if (ult.config) { setPctIndirectos(ult.config.pctIndirectos ?? 37); setPctCostoLaboral(ult.config.pctCostoLaboral ?? 45); setGastosOperativos(ult.config.gastosOperativos ?? 46539684.59); setMargenObjetivo(ult.config.margenObjetivo ?? 25); }
+              // ¡LÍNEA PROBLEMÁTICA ELIMINADA!
+              // Ya no pisamos la configuración maestra con la del último historial al cargar la app.
             }
           }
         } catch(e) {}
