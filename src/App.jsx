@@ -51,7 +51,7 @@ const fetchSheet = async (sheetName) => {
 
 // ─── SUBCOMPONENTES UI ──────────────────────────────────────────────────────
 const HeaderMetric = ({ label, value, onChange, isCurrency, borderClass, labelClass, inputClass }) => (
-  <div className={`bg-white px-3 sm:px-4 py-2 rounded-lg shadow-sm border ${borderClass} flex-1 min-w-[60px]`}>
+  <div className={`bg-white px-2 py-2 rounded-lg shadow-sm border ${borderClass} min-w-[60px]`}>
     <span className={`text-[10px] font-bold ${labelClass} block uppercase`}>{label}</span>
     <div className="flex items-center">
       {isCurrency ? (
@@ -62,10 +62,10 @@ const HeaderMetric = ({ label, value, onChange, isCurrency, borderClass, labelCl
             const raw = e.target.value.replace(/\./g, '').replace(/\s/g, '');
             onChange(raw === '' ? 0 : parseFloat(raw) || 0);
           }} 
-          className={`w-full font-bold ${inputClass} focus:outline-none text-xs sm:text-sm bg-transparent`} 
+          className={`w-16 font-bold ${inputClass} focus:outline-none text-xs bg-transparent`} 
         />
       ) : (
-        <><input type="number" value={value} onChange={e => onChange(cleanNum(e.target.value))} className={`w-full font-bold ${inputClass} focus:outline-none text-xs sm:text-sm bg-transparent`} />%</>
+        <><input type="number" value={value} onChange={e => onChange(cleanNum(e.target.value))} className={`w-8 font-bold ${inputClass} focus:outline-none text-xs bg-transparent`} />%</>
       )}
     </div>
   </div>
