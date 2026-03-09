@@ -164,10 +164,13 @@ function App() {
   const [mostrarModalValores, setMostrarModalValores] = useState(false);
   const [escenarios, setEscenarios] = useState([]);
   const [historial, setHistorial] = useState([]);
-  const [pctIndirectos, setPctIndirectos] = useState(0);
-  const [pctCostoLaboral, setPctCostoLaboral] = useState(0);
-  const [gastosOperativos, setGastosOperativos] = useState(0);
-  const [margenObjetivo, setMargenObjetivo] = useState(0);
+  
+  // Estados de métricas con recuperación de LocalStorage inicial
+  const [pctIndirectos, setPctIndirectos] = useState(() => Number(localStorage.getItem('hzn_pctInd')) || 0);
+  const [pctCostoLaboral, setPctCostoLaboral] = useState(() => Number(localStorage.getItem('hzn_pctLab')) || 0);
+  const [gastosOperativos, setGastosOperativos] = useState(() => Number(localStorage.getItem('hzn_gastosOp')) || 0);
+  const [margenObjetivo, setMargenObjetivo] = useState(() => Number(localStorage.getItem('hzn_margenObj')) || 0);
+
   const [isReady, setIsReady] = useState(false);
   const [isLoadingFromCloud, setIsLoadingFromCloud] = useState(false);
 
@@ -192,7 +195,10 @@ function App() {
         ]);
 
         const configObj = {};
-        cfg.forEach(row => { const k = row['Parámetro'] ?? row['Parametro'] ?? row['Key'] ?? Object.values(row)[0]; if (k) configObj[String(k).trim()] = cleanNum(row['Valor'] ?? row['Value'] ?? Object.values(row)[1]); });
+        cfg.forEach(row => { 
+          const k = row['Parámetro'] ?? row['Parametro'] ?? row['Key'] ?? Object.values(row)[0]; 
+          if (k) configObj[String(k).trim()] = cleanNum(row['Valor'] ?? row['Value'] ?? Object.values(row)[1]); 
+        });
 
         const eerrObj = {}, eerrNorm = {};
         eerr.forEach(row => { const c = row['Concepto'] ?? Object.values(row)[0]; if (c) eerrObj[String(c).trim()] = cleanNum(row['Monto (ARS)'] ?? row['Monto'] ?? Object.values(row)[1]); });
@@ -218,10 +224,11 @@ function App() {
           error: null
         });
 
-        setPctIndirectos(configObj['% Indirectos'] ?? configObj['Indirectos'] ?? 37);
-        setPctCostoLaboral(configObj['% Costo Laboral'] ?? configObj['Costo Laboral'] ?? 45);
-        setGastosOperativos(configObj['Gastos Operativos'] ?? 46539684.59);
-        setMargenObjetivo(configObj['Margen Objetivo (%)'] ?? 25);
+        // RECONEXIÓN A LA BASE: Solo actualizamos si el estado actual es 0 (para no pisar cambios manuales recién hechos)
+        setPctIndirectos(prev => prev || tolerantGet(configObj, '% Indirectos') || tolerantGet(configObj, 'Indirectos') || 37);
+        setPctCostoLaboral(prev => prev || tolerantGet(configObj, '% Costo Laboral') || tolerantGet(configObj, 'Costo Laboral') || 45);
+        setGastosOperativos(prev => prev || tolerantGet(configObj, 'Gastos Operativos') || 46539684.59);
+        setMargenObjetivo(prev => prev || tolerantGet(configObj, 'Margen Objetivo (%)') || 25);
 
         try {
           const dataNube = await (await fetch(`${SCRIPT_URL}?sheet=HistorialCompartido`)).json();
@@ -236,20 +243,14 @@ function App() {
             const ult = hSync[hSync.length - 1];
             if (ult && ult.escenarios.length > 0) {
               setEscenarios(ult.escenarios);
-              if (ult.config) { setPctIndirectos(ult.config.pctIndirectos ?? 37); setPctCostoLaboral(ult.config.pctCostoLaboral ?? 45); setGastosOperativos(ult.config.gastosOperativos ?? 46539684.59); setMargenObjetivo(ult.config.margenObjetivo ?? 25); }
+              // Si cargamos el historial por primera vez, las configuraciones vienen de ahí
+              if (ult.config && !localStorage.getItem('hzn_pctInd')) { 
+                setPctIndirectos(ult.config.pctIndirectos ?? 37); 
+                setPctCostoLaboral(ult.config.pctCostoLaboral ?? 45); 
+                setGastosOperativos(ult.config.gastosOperativos ?? 46539684.59); 
+                setMargenObjetivo(ult.config.margenObjetivo ?? 25); 
+              }
             }
-          }
-        } catch(e) {}
-
-        try {
-          const dTrack = await (await fetch(`${SCRIPT_URL}?sheet=TrackingObjetivos`)).json();
-          if (dTrack && Array.isArray(dTrack) && dTrack.length > 0) {
-            const ult = dTrack[dTrack.length - 1], fk = (obj, k) => Object.keys(obj).find(key => key.toLowerCase() === k.toLowerCase());
-            const parseL = (v) => { try { return typeof v === 'string' && v.trim() ? JSON.parse(v) : (Array.isArray(v) ? v : null); } catch { return null; } };
-            const kT = fk(ult, 'lineastotal') || fk(ult, 'ventastotales'), kR = fk(ult, 'lineasreno') || fk(ult, 'renovacion'), kI = fk(ult, 'lineasincr') || fk(ult, 'incremental');
-            if(kT) { const lt = parseL(ult[kT]); if(lt) setLineasVentaTotal(lt); }
-            if(kR) { const lr = parseL(ult[kR]); if(lr) setLineasRenovacion(lr); }
-            if(kI) { const li = parseL(ult[kI]); if(li) setLineasIncremental(li); }
           }
         } catch(e) {}
 
@@ -335,7 +336,8 @@ function App() {
     if(!window.confirm(`¿Cargar el escenario "${item.nombre}"? Se perderán los cambios actuales.`)) return;
     setIsLoadingFromCloud(true);
     setEscenarios(Array.isArray(item.escenarios) ? item.escenarios : []);
-    const c = item.config || {}; setPctIndirectos(c.pctIndirectos ?? 37); setPctCostoLaboral(c.pctCostoLaboral ?? 45); setGastosOperativos(c.gastosOperativos ?? 46539684.59); setMargenObjetivo(c.margenObjetivo ?? 25);
+    const c = item.config || {}; 
+    setPctIndirectos(c.pctIndirectos ?? 37); setPctCostoLaboral(c.pctCostoLaboral ?? 45); setGastosOperativos(c.gastosOperativos ?? 46539684.59); setMargenObjetivo(c.margenObjetivo ?? 25);
     setMostrarHistorial(false); setTimeout(() => setIsLoadingFromCloud(false), 200);
   };
 
@@ -396,7 +398,7 @@ function App() {
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-8">
           <div className="w-full lg:w-auto">
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight bg-gradient-to-r from-purple-600 via-pink-500 to-blue-500 bg-clip-text text-transparent uppercase break-words">Horizon Finance Engine 2026</h1>
-            <p className="text-slate-500 text-xs sm:text-sm mt-1">Resultados Proyectado </p>
+            <p className="text-slate-500 text-xs sm:text-sm mt-1">Estado de Resultados Proyectado (Base Dic-25 + Propuesta)</p>
           </div>
           <div className="flex flex-wrap gap-2 sm:gap-3 items-center w-full lg:w-auto">
             {tienePermiso('busqueda') && <button onClick={() => setMostrarModalValores(true)} title="Ver Valores" className="bg-white border border-purple-200 rounded-lg px-3 py-2 text-purple-600 hover:bg-purple-50 transition shadow-sm text-lg print:hidden shrink-0">🔍</button>}
@@ -411,6 +413,7 @@ function App() {
           </div>
         </div>
 
+        {/* ... Resto del componente idéntico ... */}
         {tienePermiso('simulacion') && (
         <div className="bg-white rounded-xl shadow-sm border border-purple-100 overflow-hidden mb-6">
           <div className="p-3 sm:p-4 border-b border-purple-50 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-3 bg-gradient-to-r from-purple-50 to-pink-50">
@@ -543,6 +546,7 @@ function App() {
           </div>
         </div>
         )}
+
       </div>
     </div>
   );
