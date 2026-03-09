@@ -467,7 +467,7 @@ function App() {
               {isRefreshing ? '⏳ Recargando...' : '🔄 Refrescar'}
             </button>
 
-            <HeaderMetric label="Gastos Op." value={gastosOperativos} onChange={setGastosOperativos} isCurrency={true} borderClass="border-purple-100" labelClass="text-purple-400" inputClass="text-red-600" />
+            //<HeaderMetric label="Gastos Op." value={gastosOperativos} onChange={setGastosOperativos} isCurrency={true} borderClass="border-purple-100" labelClass="text-purple-400" inputClass="text-red-600" />
             <HeaderMetric label="Indirectos" value={pctIndirectos} onChange={setPctIndirectos} isCurrency={false} borderClass="border-blue-100" labelClass="text-blue-400" inputClass="text-blue-600" />
             <HeaderMetric label="Costo Lab." value={pctCostoLaboral} onChange={setPctCostoLaboral} isCurrency={false} borderClass="border-pink-100" labelClass="text-pink-400" inputClass="text-pink-600" />
             <HeaderMetric label="Margen Obj." value={margenObjetivo} onChange={setMargenObjetivo} isCurrency={false} borderClass="border-purple-100" labelClass="text-purple-400" inputClass="text-purple-600" />
@@ -490,7 +490,7 @@ function App() {
         {tienePermiso('simulacion') && (
         <div className="bg-white rounded-xl shadow-sm border border-purple-100 overflow-hidden mb-6">
           <div className="p-3 sm:p-4 border-b border-purple-50 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-3 bg-gradient-to-r from-purple-50 to-pink-50">
-            <h2 className="font-bold text-slate-700 text-xs sm:text-sm">💼 Simulación de Servicios (Propuesta)</h2>
+            <h2 className="font-bold text-slate-700 text-xs sm:text-sm">💼 Simulación de Servicios</h2>
             
             {/* AJUSTE: Botones restaurados al diseño "pill" original */}
             <div className="flex flex-wrap gap-2 print:hidden w-full xl:w-auto">
@@ -571,7 +571,7 @@ function App() {
 
         {tienePermiso('simulacion') && Object.keys(propuesta.porCliente).length > 0 && (
         <div className="bg-white rounded-xl shadow-sm border border-blue-100 mb-6 overflow-hidden">
-          <div className="p-3 sm:p-4 border-b border-blue-50 flex justify-between items-center bg-gradient-to-r from-blue-50 to-indigo-50"><h2 className="font-bold text-blue-700 text-xs sm:text-sm uppercase tracking-tight">Aporte por Cliente (Propuesta Simulada)</h2><button onClick={() => setMostrarAporte(!mostrarAporte)} className="bg-blue-600/10 hover:bg-blue-600/20 text-blue-700 px-2 sm:px-3 py-1 rounded text-[9px] sm:text-[10px] font-black uppercase transition print:hidden">{mostrarAporte ? '✕' : '👁️'}</button></div>
+          <div className="p-3 sm:p-4 border-b border-blue-50 flex justify-between items-center bg-gradient-to-r from-blue-50 to-indigo-50"><h2 className="font-bold text-blue-700 text-xs sm:text-sm uppercase tracking-tight">Margen por Cliente</h2><button onClick={() => setMostrarAporte(!mostrarAporte)} className="bg-blue-600/10 hover:bg-blue-600/20 text-blue-700 px-2 sm:px-3 py-1 rounded text-[9px] sm:text-[10px] font-black uppercase transition print:hidden">{mostrarAporte ? '✕' : '👁️'}</button></div>
           {mostrarAporte && (
             <div className="p-4 sm:p-6 space-y-4 max-h-[40vh] overflow-y-auto pr-2">
               {Object.entries(propuesta.porCliente).map(([nombre, datos]) => {
