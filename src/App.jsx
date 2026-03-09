@@ -51,8 +51,8 @@ const fetchSheet = async (sheetName) => {
 
 // ─── SUBCOMPONENTES UI ──────────────────────────────────────────────────────
 const HeaderMetric = ({ label, value, onChange, isCurrency, borderClass, labelClass, inputClass }) => (
-  <div className={`bg-white px-3 sm:px-4 py-2 rounded-lg shadow-sm border ${borderClass} flex-1 min-w-[80px]`}>
-    <span className={`text-[10px] font-bold ${labelClass} block uppercase`}>{label}</span>
+  <div className={`bg-white px-3 py-2 rounded-lg shadow-sm border ${borderClass} flex-1 min-w-[110px] max-w-[140px]`}>
+    <span className={`text-[10px] font-bold ${labelClass} block uppercase truncate`}>{label}</span>
     <div className="flex items-center">
       {isCurrency ? (
         <input 
@@ -568,7 +568,12 @@ function App() {
 
         {tienePermiso('simulacion') && Object.keys(propuesta.porCliente).length > 0 && (
         <div className="bg-white rounded-xl shadow-sm border border-blue-100 mb-6 overflow-hidden">
-          <div className="p-3 sm:p-4 border-b border-blue-50 flex justify-between items-center bg-gradient-to-r from-blue-50 to-indigo-50"><h2 className="font-bold text-blue-700 text-xs sm:text-sm uppercase tracking-tight">Margen por Cliente</h2><button onClick={() => setMostrarAporte(!mostrarAporte)} className="bg-blue-600/10 hover:bg-blue-600/20 text-blue-700 px-2 sm:px-3 py-1 rounded text-[9px] sm:text-[10px] font-black uppercase transition print:hidden">{mostrarAporte ? 'Ocultar' : 'Mostrar'}</button></div>
+          <div className="p-3 sm:p-4 border-b border-blue-50 flex justify-between items-center bg-gradient-to-r from-blue-50 to-indigo-50">
+            <h2 className="font-bold text-blue-700 text-xs sm:text-sm uppercase tracking-tight">Margen por Cliente</h2>
+            <button onClick={() => setMostrarAporte(!mostrarAporte)} className="bg-blue-600/10 hover:bg-blue-600/20 text-blue-700 px-2 sm:px-3 py-1 rounded text-[9px] sm:text-[10px] font-black uppercase transition print:hidden">
+              {mostrarAporte ? '✕ Ocultar' : '👁️ Mostrar'}
+            </button>
+          </div>
           {mostrarAporte && (
             <div className="p-4 sm:p-6 space-y-4 max-h-[40vh] overflow-y-auto pr-2">
               {Object.entries(propuesta.porCliente).map(([nombre, datos]) => {
@@ -592,7 +597,12 @@ function App() {
 
         {tienePermiso('eerr') && (
         <div className="bg-white rounded-xl shadow-lg border border-purple-200 overflow-hidden mb-6">
-          <div className="p-3 sm:p-4 border-b border-purple-100 flex justify-between items-center bg-gradient-to-r from-purple-600 to-pink-600 text-white"><h2 className="font-bold text-xs sm:text-sm">📊 Estado de Resultados Proyectado (Simulación)</h2><button onClick={() => setMostrarEERR(!mostrarEERR)} className="bg-white/20 hover:bg-white/40 px-2 sm:px-3 py-1 rounded text-[9px] sm:text-[10px] font-black uppercase transition print:hidden">{mostrarEERR ? 'Ocultar' : 'Mostrar'}</button></div>
+          <div className="p-3 sm:p-4 border-b border-purple-100 flex justify-between items-center bg-gradient-to-r from-purple-600 to-pink-600 text-white">
+            <h2 className="font-bold text-xs sm:text-sm">📊 Estado de Resultados Proyectado (Simulación)</h2>
+            <button onClick={() => setMostrarEERR(!mostrarEERR)} className="bg-white/20 hover:bg-white/40 px-2 sm:px-3 py-1 rounded text-[9px] sm:text-[10px] font-black uppercase transition print:hidden">
+              {mostrarEERR ? '✕ Ocultar' : '👁️ Mostrar'}
+            </button>
+          </div>
           {mostrarEERR && (
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse text-[10px] sm:text-xs min-w-[700px]">
