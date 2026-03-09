@@ -467,7 +467,7 @@ function App() {
               {isRefreshing ? '⏳ Recargando...' : '🔄 Refrescar'}
             </button>
 
-            //<HeaderMetric label="Gastos Op." value={gastosOperativos} onChange={setGastosOperativos} isCurrency={true} borderClass="border-purple-100" labelClass="text-purple-400" inputClass="text-red-600" />
+            {<HeaderMetric label="Gastos Op." value={gastosOperativos} onChange={setGastosOperativos} isCurrency={true} borderClass="border-purple-100" labelClass="text-purple-400" inputClass="text-red-600" />}
             <HeaderMetric label="Indirectos" value={pctIndirectos} onChange={setPctIndirectos} isCurrency={false} borderClass="border-blue-100" labelClass="text-blue-400" inputClass="text-blue-600" />
             <HeaderMetric label="Costo Lab." value={pctCostoLaboral} onChange={setPctCostoLaboral} isCurrency={false} borderClass="border-pink-100" labelClass="text-pink-400" inputClass="text-pink-600" />
             <HeaderMetric label="Margen Obj." value={margenObjetivo} onChange={setMargenObjetivo} isCurrency={false} borderClass="border-purple-100" labelClass="text-purple-400" inputClass="text-purple-600" />
