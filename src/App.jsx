@@ -197,6 +197,7 @@ function App() {
   const [mostrarHistorial, setMostrarHistorial] = useState(false);
   const [mostrarEERR, setMostrarEERR] = useState(true);
   const [mostrarAporte, setMostrarAporte] = useState(true);
+  const [mostrarGastosOp, setMostrarGastosOp] = useState(false);
 
   const tienePermiso = (modulo) => usuarioActual && ((usuarioActual.modulos || '').toLowerCase().includes('todos') || (usuarioActual.modulos || '').toLowerCase().includes(modulo.toLowerCase()));
 
@@ -467,7 +468,18 @@ function App() {
               {isRefreshing ? '⏳ Recargando...' : '🔄 Refrescar'}
             </button>
 
-            {/* <HeaderMetric label="Gastos Op." value={gastosOperativos} onChange={setGastosOperativos} isCurrency={true} borderClass="border-purple-100" labelClass="text-purple-400" inputClass="text-red-600" /> */}
+            {/* NUEVO BOTON GASTOS OP */}
+            <button 
+              onClick={() => setMostrarGastosOp(!mostrarGastosOp)} 
+              title={mostrarGastosOp ? "Ocultar Gastos OP" : "Mostrar Gastos OP"}
+              className={`bg-white border rounded-lg px-3 py-2 transition shadow-sm text-sm font-bold print:hidden shrink-0 flex items-center justify-center ${mostrarGastosOp ? 'text-purple-600 border-purple-200 bg-purple-50' : 'text-slate-400 border-slate-200'}`}
+            >
+              {mostrarGastosOp ? '👁️' : '👁️‍🗨️'}
+            </button>
+
+            {mostrarGastosOp && (
+              <HeaderMetric label="Gastos Op." value={gastosOperativos} onChange={setGastosOperativos} isCurrency={true} borderClass="border-purple-100" labelClass="text-purple-400" inputClass="text-red-600" />
+            )}
             <HeaderMetric label="Indirectos" value={pctIndirectos} onChange={setPctIndirectos} isCurrency={false} borderClass="border-blue-100" labelClass="text-blue-400" inputClass="text-blue-600" />
             <HeaderMetric label="Costo Lab." value={pctCostoLaboral} onChange={setPctCostoLaboral} isCurrency={false} borderClass="border-pink-100" labelClass="text-pink-400" inputClass="text-pink-600" />
             <HeaderMetric label="Margen Obj." value={margenObjetivo} onChange={setMargenObjetivo} isCurrency={false} borderClass="border-purple-100" labelClass="text-purple-400" inputClass="text-purple-600" />
@@ -570,7 +582,7 @@ function App() {
 
         {tienePermiso('simulacion') && Object.keys(propuesta.porCliente).length > 0 && (
         <div className="bg-white rounded-xl shadow-sm border border-blue-100 mb-6 overflow-hidden">
-          <div className="p-3 sm:p-4 border-b border-blue-50 flex justify-between items-center bg-gradient-to-r from-blue-50 to-indigo-50"><h2 className="font-bold text-blue-700 text-xs sm:text-sm uppercase tracking-tight">Margen por Cliente</h2><button onClick={() => setMostrarAporte(!mostrarAporte)} className="bg-blue-600/10 hover:bg-blue-600/20 text-blue-700 px-2 sm:px-3 py-1 rounded text-[9px] sm:text-[10px] font-black uppercase transition print:hidden">{mostrarAporte ? '✕' : '👁️'}</button></div>
+          <div className="p-3 sm:p-4 border-b border-blue-50 flex justify-between items-center bg-gradient-to-r from-blue-50 to-indigo-50"><h2 className="font-bold text-blue-700 text-xs sm:text-sm uppercase tracking-tight">Margen por Cliente</h2><button onClick={() => setMostrarAporte(!mostrarAporte)} className="bg-blue-600/10 hover:bg-blue-600/20 text-blue-700 px-2 sm:px-3 py-1 rounded text-[9px] sm:text-[10px] font-black uppercase transition print:hidden">{mostrarAporte ? 'Ocultar' : 'Mostrar'}</button></div>
           {mostrarAporte && (
             <div className="p-4 sm:p-6 space-y-4 max-h-[40vh] overflow-y-auto pr-2">
               {Object.entries(propuesta.porCliente).map(([nombre, datos]) => {
@@ -594,7 +606,7 @@ function App() {
 
         {tienePermiso('eerr') && (
         <div className="bg-white rounded-xl shadow-lg border border-purple-200 overflow-hidden mb-6">
-          <div className="p-3 sm:p-4 border-b border-purple-100 flex justify-between items-center bg-gradient-to-r from-purple-600 to-pink-600 text-white"><h2 className="font-bold text-xs sm:text-sm">📊 Estado de Resultados Proyectado (Simulación)</h2><button onClick={() => setMostrarEERR(!mostrarEERR)} className="bg-white/20 hover:bg-white/40 px-2 sm:px-3 py-1 rounded text-[9px] sm:text-[10px] font-black uppercase transition print:hidden">{mostrarEERR ? '✕' : '👁️'}</button></div>
+          <div className="p-3 sm:p-4 border-b border-purple-100 flex justify-between items-center bg-gradient-to-r from-purple-600 to-pink-600 text-white"><h2 className="font-bold text-xs sm:text-sm">📊 Estado de Resultados Proyectado (Simulación)</h2><button onClick={() => setMostrarEERR(!mostrarEERR)} className="bg-white/20 hover:bg-white/40 px-2 sm:px-3 py-1 rounded text-[9px] sm:text-[10px] font-black uppercase transition print:hidden">{mostrarEERR ? 'Ocultar' : 'Mostrar'}</button></div>
           {mostrarEERR && (
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse text-[10px] sm:text-xs min-w-[700px]">
