@@ -25,12 +25,18 @@ const tolerantGet = (mapObj, key) => {
   return found ? mapObj[found] : (mapObj[key] || 0);
 };
 
+const tolerantGetString = (mapObj, key) => {
+  if (!mapObj) return '';
+  const nk = normalizeKey(key);
+  const found = Object.keys(mapObj).find(k => normalizeKey(k) === nk);
+  return found ? mapObj[found] : (mapObj[key] || '');
+};
+
 const format = (n) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n);
 const formatNum = (n) => new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 }).format(n);
 const formatPct = (n) => `${Number(n).toFixed(0)}%`;
 
 const fetchSheet = async (sheetName) => {
-  // ¡CORREGIDO! Acá estaba el error (tqx=out:csv) que rompía el login
   const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
   const text = await (await fetch(url)).text();
   const lines = text.split('\n').filter(l => l.trim() !== '');
@@ -169,9 +175,10 @@ function App() {
   const [pctCostoLaboral, setPctCostoLaboral] = useState(0);
   const [gastosOperativos, setGastosOperativos] = useState(0);
   const [margenObjetivo, setMargenObjetivo] = useState(0);
+  const [eerrTitulo, setEerrTitulo] = useState('EERR Base'); // NUEVO ESTADO PARA EL TITULO
   const [isReady, setIsReady] = useState(false);
   const [isLoadingFromCloud, setIsLoadingFromCloud] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false); 
 
   const [objVentasTotal] = useState(2195176117);
   const [lineasVentaTotal, setLineasVentaTotal] = useState(() => { try { return JSON.parse(localStorage.getItem('hzn_lineasVenta')) || [{ id: 1, cliente: '', monto: '' }]; } catch(e){ return [{ id:1, cliente:'', monto:'' }]; }});
@@ -194,7 +201,15 @@ function App() {
       ]);
 
       const configObj = {};
-      cfg.forEach(row => { const k = row['Parámetro'] ?? row['Parametro'] ?? row['Key'] ?? Object.values(row)[0]; if (k) configObj[String(k).trim()] = cleanNum(row['Valor'] ?? row['Value'] ?? Object.values(row)[1]); });
+      cfg.forEach(row => { 
+        const k = row['Parámetro'] ?? row['Parametro'] ?? row['Key'] ?? Object.values(row)[0]; 
+        if (k) {
+          const keyStr = String(k).trim();
+          const val = row['Valor'] ?? row['Value'] ?? Object.values(row)[1];
+          // Evitamos aplicar cleanNum si la fila es el Titulo para que no borre el texto
+          configObj[keyStr] = keyStr.toLowerCase() === 'titulo' ? val : cleanNum(val);
+        }
+      });
 
       const eerrObj = {}, eerrNorm = {};
       eerr.forEach(row => { const c = row['Concepto'] ?? Object.values(row)[0]; if (c) eerrObj[String(c).trim()] = cleanNum(row['Monto (ARS)'] ?? row['Monto'] ?? Object.values(row)[1]); });
@@ -224,6 +239,9 @@ function App() {
       setPctCostoLaboral(tolerantGet(configObj, 'Costo Laboral') || 45);
       setGastosOperativos(tolerantGet(configObj, 'Gastos Operativos') || 46539684.59);
       setMargenObjetivo(tolerantGet(configObj, 'Margen Objetivo') || tolerantGet(configObj, 'Margen Objetivo (%)') || 25);
+      
+      // Asignar Titulo dinámico, si no existe usa un default
+      setEerrTitulo(tolerantGetString(configObj, 'Titulo') || 'EERR Base');
 
       try {
         const dataNube = await (await fetch(`${SCRIPT_URL}?sheet=HistorialCompartido`)).json();
@@ -300,44 +318,55 @@ function App() {
   const eliminarLineaVenta = (t, id) => { t === 'total' ? setLinea(setLineasVentaTotal, 'del', id) : t === 'renovacion' ? setLinea(setLineasRenovacion, 'del', id) : setLinea(setLineasIncremental, 'del', id); };
   const calcularTotalLineas = (lineas) => lineas.reduce((sum, l) => sum + (Number(l.monto) || 0), 0);
 
-  // ─── NUEVA LÓGICA DE CÁLCULO DE COSTO ───────────────────────────────────────
+  // ─── LÓGICA DE CÁLCULO DE COSTO Y DESGLOSE PARA EERR ────────────────────────
   const calcularPropuesta = () => {
-    let vTot = 0, cTot = 0, pCli = {};
+    let vTot = 0, cTot = 0, cLabTot = 0, cIndTot = 0, pCli = {};
     escenarios.forEach(e => {
       const p = dataSheets.preciosNuevos[e.tipoIdx]; if (!p) return;
       const isStaff = (p.categoria || '').toLowerCase().includes('staff'), isWks = (p.categoria + p.tipo).toLowerCase().includes('workshop');
       const vFila = (e.cantidad || 0) * (e.ventaUnit || 0);
-      let cFila = 0;
+      let cFila = 0, cLab = 0, cInd = 0;
       
       if (isStaff) { 
-        // 1. Sueldo Bruto x Costo Laboral (Sueldo + %)
-        const costoLab = (e.cantidad * e.sueldoBruto) * (1 + (pctCostoLaboral / 100));
-        // 2. Venta Unitaria x Costo Indirecto (%)
-        const costoInd = (e.cantidad * e.ventaUnit) * (pctIndirectos / 100);
-        // 3. Suma de ambos
-        cFila = costoLab + costoInd;
+        cLab = (e.cantidad * e.sueldoBruto) * (1 + (pctCostoLaboral / 100)); // Costo de Ingresos (Laboral)
+        cInd = (e.cantidad * e.ventaUnit) * (pctIndirectos / 100);          // Gastos de Operación (Indirectos)
       }
       else if (isWks) { 
-        cFila = e.cantidad * e.costoDirecto; 
+        cLab = e.cantidad * e.costoDirecto; // El workshop directo va como costo de ingreso
+        cInd = 0;
       }
       else { 
-        const costoBase = e.cantidad * (p.costoFijo || 0); 
-        const costoInd = (e.cantidad * e.ventaUnit) * (pctIndirectos / 100);
-        cFila = costoBase + costoInd; 
+        cLab = e.cantidad * (p.costoFijo || 0); // Costo base
+        cInd = (e.cantidad * e.ventaUnit) * (pctIndirectos / 100); 
       }
       
-      vTot += vFila; cTot += cFila;
+      cFila = cLab + cInd;
+      vTot += vFila; 
+      cTot += cFila;
+      cLabTot += cLab;
+      cIndTot += cInd;
+
       if (!pCli[e.cliente]) pCli[e.cliente] = { ventas: 0, costos: 0 };
       pCli[e.cliente].ventas += vFila; pCli[e.cliente].costos += cFila;
     });
-    return { ventasTotales: vTot, costosTotales: cTot, margenBruto: vTot - cTot, margenBrutoPct: vTot > 0 ? ((vTot - cTot) / vTot) * 100 : 0, porCliente: pCli };
+    // Agregamos costosLaborales y costosIndirectos al retorno para usarlos en el EERR
+    return { ventasTotales: vTot, costosTotales: cTot, costosLaborales: cLabTot, costosIndirectos: cIndTot, margenBruto: vTot - cLabTot, margenBrutoPct: vTot > 0 ? ((vTot - cLabTot) / vTot) * 100 : 0, porCliente: pCli };
   };
 
   const calcularEERRTotal = () => {
     const prop = calcularPropuesta(), e = dataSheets.eerrBase ?? {}, n = dataSheets.eerrBaseNorm ?? {};
     const tg = (k) => tolerantGet(e, k) || tolerantGet(n, normalizeKey(k)) || 0;
+    
     const iB = tg('Ingreso'), ciB = tg('Costo de ingresos'), opB = tg('Menos gasto de operación'), oiB = tg('Más otros ingresos'), ogB = tg('Menos gastos de otro tipo'), gnB = tg('Ganancia neta');
-    const iT = iB + prop.ventasTotales, ciT = ciB + prop.costosTotales, gbT = iT - ciT, opT = gastosOperativos || opB, ioT = gbT - opT, gnT = ioT + oiB - ogB;
+    
+    // SUMAS CORRECTAS PARA EL TOTAL EERR
+    const iT = iB + prop.ventasTotales;
+    const ciT = ciB + prop.costosLaborales; // Total = Base + Laborales (Propuesta)
+    const gbT = iT - ciT;
+    const opT = (gastosOperativos || opB) + prop.costosIndirectos; // Total = Base/Op + Indirectos (Propuesta)
+    const ioT = gbT - opT;
+    const gnT = ioT + oiB - ogB;
+    
     return { ingresoBase: iB, costoIngresoBase: ciB, gananciaBrutaBase: iB - ciB, gastoOperacionBase: opB, otrosIngresosBase: oiB, otrosGastosBase: ogB, gananciaNetaBase: gnB, ingresoTotal: iT, costoIngresosTotal: ciT, gananciaBrutaTotal: gbT, gastoOperacionTotal: opT, ingresoOperacionTotal: ioT, otrosIngresosTotal: oiB, otrosGastosTotal: ogB, gananciaNetaTotal: gnT, margenBrutoPct: iT > 0 ? (gbT / iT) * 100 : 0, margenOperacionPct: iT > 0 ? (ioT / iT) * 100 : 0, margenNetoPct: iT > 0 ? (gnT / iT) * 100 : 0, desvioGananciaNeta: gnT - gnB, propuesta: prop };
   };
 
@@ -483,8 +512,6 @@ function App() {
                   const p = dataSheets.preciosNuevos[e.tipoIdx];
                   const isStaff = p && (p.categoria || '').toLowerCase().includes('staff'), isWks = p && (p.categoria + p.tipo).toLowerCase().includes('workshop');
                   let cTot = 0;
-                  
-                  // LÓGICA DE COSTO APLICADA EN LA TABLA
                   if (p) { 
                     if(isStaff) { 
                       const costoLab = (e.cantidad * e.sueldoBruto) * (1 + (pctCostoLaboral / 100));
@@ -498,7 +525,6 @@ function App() {
                       cTot = costoBase + costoInd;
                     } 
                   }
-                  
                   const res = (e.cantidad * e.ventaUnit) - cTot, mgn = e.ventaUnit ? (res / (e.cantidad * e.ventaUnit)) * 100 : 0;
                   return (
                     <tr key={e.id} className="border-t border-purple-50 hover:bg-purple-50/30 transition">
@@ -569,20 +595,33 @@ function App() {
               <table className="w-full text-left border-collapse text-[10px] sm:text-xs min-w-[700px]">
                 <thead>
                   <tr className="bg-purple-50 text-purple-600 font-bold uppercase text-[9px] sm:text-[10px]">
-                    <th className="p-2 sm:p-3 border-r border-purple-100"></th><th className="p-2 sm:p-3 text-right border-r border-purple-100">EERR Enero-26</th><th className="p-2 sm:p-3 text-right border-r border-purple-100">%</th>
+                    <th className="p-2 sm:p-3 border-r border-purple-100"></th>
+                    {/* ACA VA EL TITULO DINAMICO */}
+                    <th className="p-2 sm:p-3 text-right border-r border-purple-100">{eerrTitulo}</th>
+                    <th className="p-2 sm:p-3 text-right border-r border-purple-100">%</th>
                     <th className="p-2 sm:p-3 text-right bg-green-50 border-r border-green-200">Propuesta</th><th className="p-2 sm:p-3 text-right bg-green-50 border-r border-green-200">%</th>
                     <th className="p-2 sm:p-3 text-right bg-blue-50 border-r border-blue-200">EERR Total</th><th className="p-2 sm:p-3 text-right bg-blue-50">%</th>
                   </tr>
                 </thead>
                 <tbody>
                   <EERRRow label="Ingreso" base={eerr.ingresoBase} prop={propuesta.ventasTotales} tot={eerr.ingresoTotal} refBase={eerr.ingresoBase} refProp={propuesta.ventasTotales} refTot={eerr.ingresoTotal} cProp="text-green-700" cTot="text-blue-700" />
-                  <EERRRow label="Costo de ingresos" base={eerr.costoIngresoBase} prop={propuesta.costosTotales} tot={eerr.costoIngresosTotal} refBase={eerr.ingresoBase} refProp={propuesta.ventasTotales} refTot={eerr.ingresoTotal} isNegProp={true} isNegTot={true} cProp="text-red-600" cTot="text-red-600" />
+                  
+                  {/* Costo de ingresos ahora usa solo costosLaborales */}
+                  <EERRRow label="Costo de ingresos" base={eerr.costoIngresoBase} prop={propuesta.costosLaborales} tot={eerr.costoIngresosTotal} refBase={eerr.ingresoBase} refProp={propuesta.ventasTotales} refTot={eerr.ingresoTotal} isNegProp={true} isNegTot={true} cProp="text-red-600" cTot="text-red-600" />
+                  
                   <EERRRow label="Ganancia bruta" base={eerr.gananciaBrutaBase} prop={propuesta.margenBruto} tot={eerr.gananciaBrutaTotal} refBase={eerr.ingresoBase} refProp={propuesta.ventasTotales} refTot={eerr.ingresoTotal} />
-                  <EERRRow label="Menos gasto de operación" base={eerr.gastoOperacionBase} prop={0} tot={eerr.gastoOperacionTotal} refBase={eerr.ingresoBase} refProp={propuesta.ventasTotales} refTot={eerr.ingresoTotal} indent={true} isNegTot={true} cProp="text-slate-400" cTot="text-red-600" />
-                  <EERRRow label="Ingreso de operación (o pérdida)" base={eerr.ingresoOperacionBase || (eerr.gananciaBrutaBase - eerr.gastoOperacionBase)} prop={eerr.ingresoOperacionTotal - (eerr.gananciaBrutaBase - eerr.gastoOperacionBase)} tot={eerr.ingresoOperacionTotal} refBase={eerr.ingresoBase} refProp={eerr.ingresoTotal} refTot={eerr.ingresoTotal} cProp="text-green-700" cTot="text-blue-700" />
+                  
+                  {/* Gastos de operacion ahora usa solo costosIndirectos */}
+                  <EERRRow label="Menos gasto de operación" base={eerr.gastoOperacionBase} prop={propuesta.costosIndirectos} tot={eerr.gastoOperacionTotal} refBase={eerr.ingresoBase} refProp={propuesta.ventasTotales} refTot={eerr.ingresoTotal} indent={true} isNegProp={true} isNegTot={true} cProp="text-red-600" cTot="text-red-600" />
+                  
+                  {/* Ingreso de operacion (o perdida) usa el total de la simulacion */}
+                  <EERRRow label="Ingreso de operación (o pérdida)" base={eerr.ingresoOperacionBase || (eerr.gananciaBrutaBase - eerr.gastoOperacionBase)} prop={propuesta.ventasTotales - propuesta.costosTotales} tot={eerr.ingresoOperacionTotal} refBase={eerr.ingresoBase} refProp={propuesta.ventasTotales} refTot={eerr.ingresoTotal} cProp="text-green-700" cTot="text-blue-700" />
+                  
                   <EERRRow label="Más otros ingresos" base={eerr.otrosIngresosBase} prop={0} tot={eerr.otrosIngresosTotal} refBase={eerr.ingresoBase} refProp={propuesta.ventasTotales} refTot={eerr.ingresoTotal} cProp="text-slate-400" />
                   <EERRRow label="Menos gastos de otro tipo" base={eerr.otrosGastosBase} prop={0} tot={eerr.otrosGastosTotal} refBase={eerr.ingresoBase} refProp={propuesta.ventasTotales} refTot={eerr.ingresoTotal} isNegTot={true} cProp="text-slate-400" cTot="text-red-600" />
-                  <EERRRow label="Ganancia neta" base={eerr.gananciaNetaBase} prop={propuesta.margenBruto} tot={eerr.gananciaNetaTotal} refBase={eerr.ingresoBase} refProp={propuesta.ventasTotales} refTot={eerr.ingresoTotal} isTotalRow={true} />
+                  
+                  {/* Ganancia neta propaga el mismo resultado porque no agregamos info de otros gastos a la propuesta */}
+                  <EERRRow label="Ganancia neta" base={eerr.gananciaNetaBase} prop={propuesta.ventasTotales - propuesta.costosTotales} tot={eerr.gananciaNetaTotal} refBase={eerr.ingresoBase} refProp={propuesta.ventasTotales} refTot={eerr.ingresoTotal} isTotalRow={true} />
                 </tbody>
               </table>
             </div>
