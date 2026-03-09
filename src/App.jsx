@@ -51,16 +51,26 @@ const fetchSheet = async (sheetName) => {
 
 // ─── SUBCOMPONENTES UI ──────────────────────────────────────────────────────
 const HeaderMetric = ({ label, value, onChange, isCurrency, borderClass, labelClass, inputClass }) => (
-  <div className={`bg-white px-3 sm:px-4 py-2 rounded-lg shadow-sm border ${borderClass} flex-1 min-w-[80px]`}>
-    <span className={`text-[10px] font-bold ${labelClass} block uppercase`}>{label}</span>
+  // AJUSTE UI: Reducido padding (px-2 py-1) y ancho mínimo (min-w-[70px])
+  <div className={`bg-white px-2 py-1 rounded-lg shadow-sm border ${borderClass} flex-1 min-w-[70px] sm:min-w-[80px]`}>
+    <span className={`text-[10px] font-bold ${labelClass} block uppercase truncate`}>{label}</span>
     <div className="flex items-center">
       {isCurrency ? (
-        <input type="text" value={value === 0 ? '' : formatNum(value)} onChange={e => {
-          const raw = e.target.value.replace(/\./g, '').replace(/\s/g, '');
-          onChange(raw === '' ? 0 : parseFloat(raw) || 0);
-        }} className={`w-full font-bold ${inputClass} focus:outline-none text-xs sm:text-sm bg-transparent`} />
+        <input 
+          type="text" 
+          // AJUSTE UI: Permitir mostrar '0' explícitamente
+          value={formatNum(value)} 
+          onChange={e => {
+            const raw = e.target.value.replace(/\./g, '').replace(/\s/g, '');
+            // AJUSTE LOGICA: Permitir valor cero
+            onChange(raw === '' ? 0 : parseFloat(raw) || 0);
+          }} 
+          // AJUSTE UI: Reducido tamaño de fuente (text-[11px] sm:text-xs)
+          className={`w-full font-bold ${inputClass} focus:outline-none text-[11px] sm:text-xs bg-transparent p-0`} 
+        />
       ) : (
-        <><input type="number" value={value} onChange={e => onChange(cleanNum(e.target.value))} className={`w-full font-bold ${inputClass} focus:outline-none text-xs sm:text-sm`} />%</>
+        // AJUSTE UI: Reducido tamaño de fuente (text-[11px] sm:text-xs)
+        <><input type="number" value={value} onChange={e => onChange(cleanNum(e.target.value))} className={`w-10 sm:w-12 font-bold ${inputClass} focus:outline-none text-[11px] sm:text-xs p-0 bg-transparent`} />%</>
       )}
     </div>
   </div>
@@ -175,7 +185,7 @@ function App() {
   const [pctCostoLaboral, setPctCostoLaboral] = useState(0);
   const [gastosOperativos, setGastosOperativos] = useState(0);
   const [margenObjetivo, setMargenObjetivo] = useState(0);
-  const [eerrTitulo, setEerrTitulo] = useState('EERR Base'); // NUEVO ESTADO PARA EL TITULO
+  const [eerrTitulo, setEerrTitulo] = useState('EERR Base'); 
   const [isReady, setIsReady] = useState(false);
   const [isLoadingFromCloud, setIsLoadingFromCloud] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false); 
@@ -206,7 +216,6 @@ function App() {
         if (k) {
           const keyStr = String(k).trim();
           const val = row['Valor'] ?? row['Value'] ?? Object.values(row)[1];
-          // Evitamos aplicar cleanNum si la fila es el Titulo para que no borre el texto
           configObj[keyStr] = keyStr.toLowerCase() === 'titulo' ? val : cleanNum(val);
         }
       });
@@ -237,10 +246,8 @@ function App() {
 
       setPctIndirectos(tolerantGet(configObj, 'Indirectos') || 37);
       setPctCostoLaboral(tolerantGet(configObj, 'Costo Laboral') || 45);
-      setGastosOperativos(tolerantGet(configObj, 'Gastos Operativos') || 46539684.59);
+      setGastosOperativos(tolerantGet(configObj, 'Gastos Operativos') || 0); // AJUSTE: Cargar valor por defecto (0 o nulo)
       setMargenObjetivo(tolerantGet(configObj, 'Margen Objetivo') || tolerantGet(configObj, 'Margen Objetivo (%)') || 25);
-      
-      // Asignar Titulo dinámico, si no existe usa un default
       setEerrTitulo(tolerantGetString(configObj, 'Titulo') || 'EERR Base');
 
       try {
@@ -318,7 +325,6 @@ function App() {
   const eliminarLineaVenta = (t, id) => { t === 'total' ? setLinea(setLineasVentaTotal, 'del', id) : t === 'renovacion' ? setLinea(setLineasRenovacion, 'del', id) : setLinea(setLineasIncremental, 'del', id); };
   const calcularTotalLineas = (lineas) => lineas.reduce((sum, l) => sum + (Number(l.monto) || 0), 0);
 
-  // ─── LÓGICA DE CÁLCULO DE COSTO Y DESGLOSE PARA EERR ────────────────────────
   const calcularPropuesta = () => {
     let vTot = 0, cTot = 0, cLabTot = 0, cIndTot = 0, pCli = {};
     escenarios.forEach(e => {
@@ -328,15 +334,15 @@ function App() {
       let cFila = 0, cLab = 0, cInd = 0;
       
       if (isStaff) { 
-        cLab = (e.cantidad * e.sueldoBruto) * (1 + (pctCostoLaboral / 100)); // Costo de Ingresos (Laboral)
-        cInd = (e.cantidad * e.ventaUnit) * (pctIndirectos / 100);          // Gastos de Operación (Indirectos)
+        cLab = (e.cantidad * e.sueldoBruto) * (1 + (pctCostoLaboral / 100)); 
+        cInd = (e.cantidad * e.ventaUnit) * (pctIndirectos / 100);          
       }
       else if (isWks) { 
-        cLab = e.cantidad * e.costoDirecto; // El workshop directo va como costo de ingreso
+        cLab = e.cantidad * e.costoDirecto; 
         cInd = 0;
       }
       else { 
-        cLab = e.cantidad * (p.costoFijo || 0); // Costo base
+        cLab = e.cantidad * (p.costoFijo || 0); 
         cInd = (e.cantidad * e.ventaUnit) * (pctIndirectos / 100); 
       }
       
@@ -349,7 +355,6 @@ function App() {
       if (!pCli[e.cliente]) pCli[e.cliente] = { ventas: 0, costos: 0 };
       pCli[e.cliente].ventas += vFila; pCli[e.cliente].costos += cFila;
     });
-    // Agregamos costosLaborales y costosIndirectos al retorno para usarlos en el EERR
     return { ventasTotales: vTot, costosTotales: cTot, costosLaborales: cLabTot, costosIndirectos: cIndTot, margenBruto: vTot - cLabTot, margenBrutoPct: vTot > 0 ? ((vTot - cLabTot) / vTot) * 100 : 0, porCliente: pCli };
   };
 
@@ -359,11 +364,13 @@ function App() {
     
     const iB = tg('Ingreso'), ciB = tg('Costo de ingresos'), opB = tg('Menos gasto de operación'), oiB = tg('Más otros ingresos'), ogB = tg('Menos gastos de otro tipo'), gnB = tg('Ganancia neta');
     
-    // SUMAS CORRECTAS PARA EL TOTAL EERR
     const iT = iB + prop.ventasTotales;
-    const ciT = ciB + prop.costosLaborales; // Total = Base + Laborales (Propuesta)
+    const ciT = ciB + prop.costosLaborales; 
     const gbT = iT - ciT;
-    const opT = (gastosOperativos || opB) + prop.costosIndirectos; // Total = Base/Op + Indirectos (Propuesta)
+
+    // AJUSTE LOGICA EERR TOTAL: Sumar gasto base + indirectos propuesta, ignorando cuadro arriba
+    const opT = opB + prop.costosIndirectos; 
+    
     const ioT = gbT - opT;
     const gnT = ioT + oiB - ogB;
     
@@ -389,7 +396,7 @@ function App() {
     if(!window.confirm(`¿Cargar el escenario "${item.nombre}"? Se perderán los cambios actuales.`)) return;
     setIsLoadingFromCloud(true);
     setEscenarios(Array.isArray(item.escenarios) ? item.escenarios : []);
-    const c = item.config || {}; setPctIndirectos(c.pctIndirectos ?? 37); setPctCostoLaboral(c.pctCostoLaboral ?? 45); setGastosOperativos(c.gastosOperativos ?? 46539684.59); setMargenObjetivo(c.margenObjetivo ?? 25);
+    const c = item.config || {}; setPctIndirectos(c.pctIndirectos ?? 37); setPctCostoLaboral(c.pctCostoLaboral ?? 45); setGastosOperativos(c.gastosOperativos ?? 0); setMargenObjetivo(c.margenObjetivo ?? 25);
     setMostrarHistorial(false); setTimeout(() => setIsLoadingFromCloud(false), 200);
   };
 
@@ -447,21 +454,21 @@ function App() {
       {mostrarModalValores && <ModalValoresServicios datos={dataSheets.valoresServicios} onClose={() => setMostrarModalValores(false)} />}
       
       <div className="max-w-7xl mx-auto">
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-8">
-          <div className="w-full lg:w-auto">
-            <h1 className="text-2xl sm:text-3xl font-black tracking-tight bg-gradient-to-r from-purple-600 via-pink-500 to-blue-500 bg-clip-text text-transparent uppercase break-words">Horizon Finance Engine 2026</h1>
-            <p className="text-slate-500 text-xs sm:text-sm mt-1">Resultados Proyectado </p>
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-8 print:hidden">
+          <div className="w-full lg:w-auto mb-2 sm:mb-0">
+            <h1 className="text-xl sm:text-2xl font-black tracking-tight bg-gradient-to-r from-purple-600 via-pink-500 to-blue-500 bg-clip-text text-transparent uppercase break-words">Horizon Finance Engine 2026</h1>
+            <p className="text-slate-500 text-xs mt-1">Resultados Proyectado </p>
           </div>
-          <div className="flex flex-wrap gap-2 sm:gap-3 items-center w-full lg:w-auto">
-            {tienePermiso('busqueda') && <button onClick={() => setMostrarModalValores(true)} title="Ver Valores" className="bg-white border border-purple-200 rounded-lg px-3 py-2 text-purple-600 hover:bg-purple-50 transition shadow-sm text-lg print:hidden shrink-0">🔍</button>}
+          {/* AJUSTE UI: Contenedor métricas alineado y compacto */}
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap w-full lg:w-auto justify-start sm:justify-end">
+            {tienePermiso('busqueda') && <button onClick={() => setMostrarModalValores(true)} title="Ver Valores" className="bg-white border border-purple-200 rounded-lg px-2 py-1 text-purple-600 hover:bg-purple-50 transition shadow-sm text-sm print:hidden shrink-0">🔍</button>}
             
-            {/* Botón Refrescar */}
             <button 
               onClick={recargarDatosDesdeNube} 
               disabled={isRefreshing}
-              className={`bg-white border border-blue-200 rounded-lg px-3 py-2 text-blue-600 hover:bg-blue-50 transition shadow-sm text-sm font-bold uppercase flex items-center gap-1 print:hidden shrink-0 ${isRefreshing ? 'opacity-50 cursor-not-allowed' : ''}`}
+              className={`bg-white border border-blue-200 rounded-lg px-2 py-1 text-blue-600 hover:bg-blue-50 transition shadow-sm text-[11px] font-bold uppercase flex items-center gap-1 print:hidden shrink-0 ${isRefreshing ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
-              {isRefreshing ? '⏳ Recargando...' : '🔄 Refrescar'}
+              {isRefreshing ? '⏳...' : '🔄'}
             </button>
 
             <HeaderMetric label="Gastos Op." value={gastosOperativos} onChange={setGastosOperativos} isCurrency={true} borderClass="border-purple-100" labelClass="text-purple-400" inputClass="text-red-600" />
@@ -469,18 +476,9 @@ function App() {
             <HeaderMetric label="Costo Lab." value={pctCostoLaboral} onChange={setPctCostoLaboral} isCurrency={false} borderClass="border-pink-100" labelClass="text-pink-400" inputClass="text-pink-600" />
             <HeaderMetric label="Margen Obj." value={margenObjetivo} onChange={setMargenObjetivo} isCurrency={false} borderClass="border-purple-100" labelClass="text-purple-400" inputClass="text-purple-600" />
             
-            {/* Info Usuario con link para Cerrar Sesión */}
-            <div className="bg-purple-100 px-3 py-2 rounded-lg text-[10px] sm:text-xs font-bold text-purple-700 flex flex-col items-center shrink-0 min-w-[100px] border border-purple-200">
-              <div className="flex items-center gap-1">
-                👤 <span className="max-w-[80px] truncate">{usuarioActual.nombre}</span>
-              </div>
-              <button 
-                onClick={() => setUsuarioActual(null)} 
-                className="text-red-500 hover:text-red-700 text-[9px] mt-0.5 uppercase tracking-wider print:hidden font-black"
-                title="Cerrar sesión"
-              >
-                Cerrar Sesión
-              </button>
+            <div className="bg-purple-100 px-2 py-1 rounded-lg text-[9px] font-bold text-purple-700 flex flex-col items-center shrink-0 border border-purple-200">
+              <div className="flex items-center gap-1">👤 <span className="max-w-[60px] truncate">{usuarioActual.nombre}</span></div>
+              <button onClick={() => setUsuarioActual(null)} className="text-red-500 hover:text-red-700 text-[8px] uppercase font-black">Salir</button>
             </div>
           </div>
         </div>
@@ -489,12 +487,12 @@ function App() {
         <div className="bg-white rounded-xl shadow-sm border border-purple-100 overflow-hidden mb-6">
           <div className="p-3 sm:p-4 border-b border-purple-50 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-3 bg-gradient-to-r from-purple-50 to-pink-50">
             <h2 className="font-bold text-slate-700 text-xs sm:text-sm">💼 Simulación de Servicios (Propuesta)</h2>
-            <div className="flex flex-wrap gap-2 print:hidden w-full xl:w-auto">
-               <button onClick={() => setMostrarHistorial(!mostrarHistorial)} className={`text-[10px] sm:text-xs font-bold px-3 py-1.5 border rounded-lg transition shrink-0 ${mostrarHistorial ? 'bg-purple-600 text-white' : 'text-slate-600 hover:text-purple-600'}`}>📋 Historial ({historial.length})</button>
-               <button onClick={guardarEscenario} className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-3 sm:px-4 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold hover:shadow-lg transition shrink-0">💾 Guardar Escenario</button>
-               <button onClick={() => window.print()} className="bg-gradient-to-r from-purple-500 to-pink-600 text-white px-3 sm:px-4 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold hover:shadow-lg transition shrink-0">📄 Descargar PDF</button>
-               <button onClick={() => window.confirm('¿Limpiar todos los campos?') && setEscenarios([])} className="text-slate-400 hover:text-slate-600 text-[10px] sm:text-xs font-bold px-2 sm:px-3 py-1.5 shrink-0">Limpiar</button>
-               <button onClick={agregarFila} className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-3 sm:px-4 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold hover:shadow-lg transition shrink-0">+ Agregar</button>
+            <div className="flex flex-wrap gap-2 print:hidden w-full xl:w-auto justify-start sm:justify-end">
+               <button onClick={() => setMostrarHistorial(!mostrarHistorial)} className={`text-[10px] font-bold px-2 py-1 border rounded-lg transition shrink-0 ${mostrarHistorial ? 'bg-purple-600 text-white' : 'text-slate-600 hover:text-purple-600'}`}>📋 Historial ({historial.length})</button>
+               <button onClick={guardarEscenario} className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold hover:shadow-lg transition shrink-0">💾 Guardar</button>
+               <button onClick={() => window.print()} className="bg-gradient-to-r from-purple-500 to-pink-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold hover:shadow-lg transition shrink-0">📄 PDF</button>
+               <button onClick={() => window.confirm('¿Limpiar simulación?') && setEscenarios([])} className="text-slate-400 hover:text-slate-600 text-[10px] font-bold px-2 py-1 shrink-0">Limpiar</button>
+               <button onClick={agregarFila} className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold hover:shadow-lg transition shrink-0">+ Agregar</button>
             </div>
           </div>
           <div className="overflow-x-auto">
@@ -552,23 +550,25 @@ function App() {
             <div className="p-3 sm:p-4 border-b border-purple-50 bg-gradient-to-r from-purple-50 to-pink-50 flex justify-between items-center"><h2 className="font-bold text-slate-700 text-xs sm:text-sm">📋 Historial de Escenarios Guardados</h2><button onClick={() => setMostrarHistorial(false)} className="text-slate-400 hover:text-slate-600 text-[10px] sm:text-xs print:hidden">Cerrar</button></div>
             <div className="p-3 sm:p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
               {historial.length === 0 ? <div className="col-span-full text-center py-8 text-slate-400 text-[10px] sm:text-sm italic">No hay escenarios guardados en la nube de Horizon.</div> : historial.map(i => (
-                  <div key={i.id} className="border border-purple-100 rounded-lg p-3 sm:p-4 hover:border-purple-400 transition bg-white shadow-sm">
-                    <div className="flex justify-between items-start mb-2"><h3 className="font-black text-purple-700 text-xs sm:text-sm uppercase truncate pr-2">{i.nombre}</h3><button onClick={() => window.confirm('¿Eliminar este escenario?') && setHistorial(p => p.filter(h => h.id !== i.id))} className="text-slate-300 hover:text-red-500 print:hidden font-bold">✕</button></div>
-                    <p className="text-[9px] sm:text-[10px] text-slate-400 font-bold mb-3">{i.fecha}</p>
-                    <div className="space-y-1 mb-4"><div className="flex justify-between text-[10px] sm:text-xs"><span className="text-slate-500">Venta Propuesta:</span><span className="font-bold text-green-600">{format(i.eerr?.propuesta?.ventasTotales||0)}</span></div><div className="flex justify-between text-[10px] sm:text-xs"><span className="text-slate-500">Ganancia Neta:</span><span className="font-bold text-blue-600">{format(i.eerr?.gananciaNetaTotal||0)}</span></div></div>
-                    <button onClick={() => cargarEscenarioDesdeHistorial(i)} className="w-full bg-purple-50 text-purple-700 py-1.5 sm:py-2 rounded font-black text-[9px] sm:text-[10px] uppercase hover:bg-purple-600 hover:text-white transition print:hidden">Cargar Escenario</button>
+                  <div key={i.id} className="border border-purple-100 rounded-lg p-3 sm:p-4 hover:border-purple-400 transition bg-white shadow-sm flex flex-col justify-between">
+                    <div>
+                      <div className="flex justify-between items-start mb-2"><h3 className="font-black text-purple-700 text-xs sm:text-sm uppercase truncate pr-2">{i.nombre}</h3><button onClick={() => window.confirm('¿Eliminar escenario?') && syncNube(i.id, 'EliminarHistorial', 'Escenario eliminado') && setHistorial(p => p.filter(h => h.id !== i.id))} className="text-slate-300 hover:text-red-500 print:hidden font-bold">✕</button></div>
+                      <p className="text-[9px] sm:text-[10px] text-slate-400 font-bold mb-3">{i.fecha}</p>
+                      <div className="space-y-1 mb-4"><div className="flex justify-between text-[10px] sm:text-xs"><span className="text-slate-500">Venta Propuesta:</span><span className="font-bold text-green-600">{format(i.eerr?.propuesta?.ventasTotales||0)}</span></div><div className="flex justify-between text-[10px] sm:text-xs"><span className="text-slate-500">Ganancia Neta:</span><span className="font-bold text-blue-600">{format(i.eerr?.gananciaNetaTotal||0)}</span></div></div>
+                    </div>
+                    <button onClick={() => cargarEscenarioDesdeHistorial(i)} className="w-full bg-purple-50 text-purple-700 py-1.5 sm:py-2 rounded font-black text-[9px] sm:text-[10px] uppercase hover:bg-purple-600 hover:text-white transition print:hidden">Cargar</button>
                   </div>
               ))}
             </div>
           </div>
         )}
 
-        {tienePermiso('simulacion') && (
+        {tienePermiso('simulacion') && Object.keys(propuesta.porCliente).length > 0 && (
         <div className="bg-white rounded-xl shadow-sm border border-blue-100 mb-6 overflow-hidden">
-          <div className="p-3 sm:p-4 border-b border-blue-50 flex justify-between items-center bg-gradient-to-r from-blue-50 to-indigo-50"><h2 className="font-bold text-blue-700 text-xs sm:text-sm uppercase">Aporte por Cliente (Propuesta)</h2><button onClick={() => setMostrarAporte(!mostrarAporte)} className="bg-blue-600/10 hover:bg-blue-600/20 text-blue-700 px-2 sm:px-3 py-1 rounded text-[9px] sm:text-[10px] font-black uppercase transition print:hidden">{mostrarAporte ? '✕ Ocultar' : '👁️ Mostrar'}</button></div>
+          <div className="p-3 sm:p-4 border-b border-blue-50 flex justify-between items-center bg-gradient-to-r from-blue-50 to-indigo-50"><h2 className="font-bold text-blue-700 text-xs sm:text-sm uppercase tracking-tight">Aporte por Cliente (Propuesta Simulada)</h2><button onClick={() => setMostrarAporte(!mostrarAporte)} className="bg-blue-600/10 hover:bg-blue-600/20 text-blue-700 px-2 sm:px-3 py-1 rounded text-[9px] sm:text-[10px] font-black uppercase transition print:hidden">{mostrarAporte ? '✕' : '👁️'}</button></div>
           {mostrarAporte && (
-            <div className="p-4 sm:p-6 space-y-4">
-              {Object.keys(propuesta.porCliente).length === 0 ? <p className="text-center text-slate-300 text-[10px] sm:text-xs py-4 italic">Sin datos de simulación</p> : Object.entries(propuesta.porCliente).map(([nombre, datos]) => {
+            <div className="p-4 sm:p-6 space-y-4 max-h-[40vh] overflow-y-auto pr-2">
+              {Object.entries(propuesta.porCliente).map(([nombre, datos]) => {
                 const res = datos.ventas - datos.costos, mgn = datos.ventas ? (res / datos.ventas) * 100 : 0;
                 return (
                   <div key={nombre} className="group">
@@ -589,38 +589,27 @@ function App() {
 
         {tienePermiso('eerr') && (
         <div className="bg-white rounded-xl shadow-lg border border-purple-200 overflow-hidden mb-6">
-          <div className="p-3 sm:p-4 border-b border-purple-100 flex justify-between items-center bg-gradient-to-r from-purple-600 to-pink-600 text-white"><h2 className="font-bold text-xs sm:text-sm">📊 Estado de Resultados Comparativo</h2><button onClick={() => setMostrarEERR(!mostrarEERR)} className="bg-white/20 hover:bg-white/40 px-2 sm:px-3 py-1 rounded text-[9px] sm:text-[10px] font-black uppercase transition print:hidden">{mostrarEERR ? '✕ Ocultar' : '👁️ Mostrar'}</button></div>
+          <div className="p-3 sm:p-4 border-b border-purple-100 flex justify-between items-center bg-gradient-to-r from-purple-600 to-pink-600 text-white"><h2 className="font-bold text-xs sm:text-sm">📊 Estado de Resultados Proyectado (Simulación)</h2><button onClick={() => setMostrarEERR(!mostrarEERR)} className="bg-white/20 hover:bg-white/40 px-2 sm:px-3 py-1 rounded text-[9px] sm:text-[10px] font-black uppercase transition print:hidden">{mostrarEERR ? '✕' : '👁️'}</button></div>
           {mostrarEERR && (
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse text-[10px] sm:text-xs min-w-[700px]">
                 <thead>
                   <tr className="bg-purple-50 text-purple-600 font-bold uppercase text-[9px] sm:text-[10px]">
-                    <th className="p-2 sm:p-3 border-r border-purple-100"></th>
-                    {/* ACA VA EL TITULO DINAMICO */}
+                    <th className="p-2 sm:p-3 border-r border-purple-100">Concepto</th>
                     <th className="p-2 sm:p-3 text-right border-r border-purple-100">{eerrTitulo}</th>
                     <th className="p-2 sm:p-3 text-right border-r border-purple-100">%</th>
                     <th className="p-2 sm:p-3 text-right bg-green-50 border-r border-green-200">Propuesta</th><th className="p-2 sm:p-3 text-right bg-green-50 border-r border-green-200">%</th>
-                    <th className="p-2 sm:p-3 text-right bg-blue-50 border-r border-blue-200">EERR Total</th><th className="p-2 sm:p-3 text-right bg-blue-50">%</th>
+                    <th className="p-2 sm:p-3 text-right bg-blue-50 border-r border-blue-200">EERR Proyectado</th><th className="p-2 sm:p-3 text-right bg-blue-50">%</th>
                   </tr>
                 </thead>
                 <tbody>
                   <EERRRow label="Ingreso" base={eerr.ingresoBase} prop={propuesta.ventasTotales} tot={eerr.ingresoTotal} refBase={eerr.ingresoBase} refProp={propuesta.ventasTotales} refTot={eerr.ingresoTotal} cProp="text-green-700" cTot="text-blue-700" />
-                  
-                  {/* Costo de ingresos ahora usa solo costosLaborales */}
                   <EERRRow label="Costo de ingresos" base={eerr.costoIngresoBase} prop={propuesta.costosLaborales} tot={eerr.costoIngresosTotal} refBase={eerr.ingresoBase} refProp={propuesta.ventasTotales} refTot={eerr.ingresoTotal} isNegProp={true} isNegTot={true} cProp="text-red-600" cTot="text-red-600" />
-                  
                   <EERRRow label="Ganancia bruta" base={eerr.gananciaBrutaBase} prop={propuesta.margenBruto} tot={eerr.gananciaBrutaTotal} refBase={eerr.ingresoBase} refProp={propuesta.ventasTotales} refTot={eerr.ingresoTotal} />
-                  
-                  {/* Gastos de operacion ahora usa solo costosIndirectos */}
                   <EERRRow label="Menos gasto de operación" base={eerr.gastoOperacionBase} prop={propuesta.costosIndirectos} tot={eerr.gastoOperacionTotal} refBase={eerr.ingresoBase} refProp={propuesta.ventasTotales} refTot={eerr.ingresoTotal} indent={true} isNegProp={true} isNegTot={true} cProp="text-red-600" cTot="text-red-600" />
-                  
-                  {/* Ingreso de operacion (o perdida) usa el total de la simulacion */}
                   <EERRRow label="Ingreso de operación (o pérdida)" base={eerr.ingresoOperacionBase || (eerr.gananciaBrutaBase - eerr.gastoOperacionBase)} prop={propuesta.ventasTotales - propuesta.costosTotales} tot={eerr.ingresoOperacionTotal} refBase={eerr.ingresoBase} refProp={propuesta.ventasTotales} refTot={eerr.ingresoTotal} cProp="text-green-700" cTot="text-blue-700" />
-                  
                   <EERRRow label="Más otros ingresos" base={eerr.otrosIngresosBase} prop={0} tot={eerr.otrosIngresosTotal} refBase={eerr.ingresoBase} refProp={propuesta.ventasTotales} refTot={eerr.ingresoTotal} cProp="text-slate-400" />
                   <EERRRow label="Menos gastos de otro tipo" base={eerr.otrosGastosBase} prop={0} tot={eerr.otrosGastosTotal} refBase={eerr.ingresoBase} refProp={propuesta.ventasTotales} refTot={eerr.ingresoTotal} isNegTot={true} cProp="text-slate-400" cTot="text-red-600" />
-                  
-                  {/* Ganancia neta propaga el mismo resultado porque no agregamos info de otros gastos a la propuesta */}
                   <EERRRow label="Ganancia neta" base={eerr.gananciaNetaBase} prop={propuesta.ventasTotales - propuesta.costosTotales} tot={eerr.gananciaNetaTotal} refBase={eerr.ingresoBase} refProp={propuesta.ventasTotales} refTot={eerr.ingresoTotal} isTotalRow={true} />
                 </tbody>
               </table>
@@ -630,15 +619,15 @@ function App() {
         )}
 
         {tienePermiso('objetivos') && (
-        <div className="mb-6">
+        <div className="mb-6 print:hidden">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
-            <h2 className="text-base sm:text-lg font-black text-slate-700 uppercase">🎯 Objetivos 2026 - Tracking de Ventas</h2>
-            <button onClick={() => syncNube({ID: Date.now(), Fecha: new Date().toLocaleString('es-AR'), LineasTotal: JSON.stringify(lineasVentaTotal), LineasReno: JSON.stringify(lineasRenovacion), LineasIncr: JSON.stringify(lineasIncremental)}, 'TrackingObjetivos', '✅ Objetivos guardados exitosamente en la base de datos.')} className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-4 sm:px-5 py-2 rounded-lg text-xs font-black hover:shadow-lg transition flex items-center gap-2 print:hidden w-full sm:w-auto justify-center">💾 Guardar Avance</button>
+            <h2 className="text-base sm:text-lg font-black text-slate-700 uppercase">🎯 Tracking de Objetivos Anuales 2026</h2>
+            <button onClick={() => syncNube({ID: Date.now(), Fecha: new Date().toLocaleString('es-AR'), LineasTotal: JSON.stringify(lineasVentaTotal), LineasReno: JSON.stringify(lineasRenovacion), LineasIncr: JSON.stringify(lineasIncremental)}, 'TrackingObjetivos', '✅ Objetivos guardados exitosamente.')} className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-4 sm:px-5 py-2 rounded-lg text-xs font-black hover:shadow-lg transition flex items-center gap-2 print:hidden w-full sm:w-auto justify-center">💾 Guardar Avance</button>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
-            {renderVelocimetro("Objetivo Ventas Total 2026", objVentasTotal, lineasVentaTotal, setLineasVentaTotal, "total", "#7c3aed")}
-            {renderVelocimetro("Objetivo Renovación 2026", objRenovacion, lineasRenovacion, setLineasRenovacion, "renovacion", "#ec4899")}
-            {renderVelocimetro("Objetivo Ventas Incremental 2026", objIncremental, lineasIncremental, setLineasIncremental, "incremental", "#3b82f6")}
+            {renderVelocimetro("Ventas Total 2026", objVentasTotal, lineasVentaTotal, setLineasVentaTotal, "total", "#7c3aed")}
+            {renderVelocimetro("Renovación 2026", objRenovacion, lineasRenovacion, setLineasRenovacion, "renovacion", "#ec4899")}
+            {renderVelocimetro("Incremental 2026", objIncremental, lineasIncremental, setLineasIncremental, "incremental", "#3b82f6")}
           </div>
         </div>
         )}
