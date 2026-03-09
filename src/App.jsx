@@ -51,7 +51,8 @@ const fetchSheet = async (sheetName) => {
 
 // ─── SUBCOMPONENTES UI ──────────────────────────────────────────────────────
 const HeaderMetric = ({ label, value, onChange, isCurrency, borderClass, labelClass, inputClass }) => (
-  <div className={`bg-white px-2 py-2 rounded-lg shadow-sm border ${borderClass} min-w-[60px]`}>
+  // AJUSTE: Quitamos flex-1, px-2 para compactar, y le dimos un min-w-[100px] fijo.
+  <div className={`bg-white px-2 py-2 rounded-lg shadow-sm border ${borderClass} flex-col shrink-0 min-w-[100px]`}>
     <span className={`text-[10px] font-bold ${labelClass} block uppercase`}>{label}</span>
     <div className="flex items-center">
       {isCurrency ? (
@@ -62,15 +63,16 @@ const HeaderMetric = ({ label, value, onChange, isCurrency, borderClass, labelCl
             const raw = e.target.value.replace(/\./g, '').replace(/\s/g, '');
             onChange(raw === '' ? 0 : parseFloat(raw) || 0);
           }} 
-          className={`w-16 font-bold ${inputClass} focus:outline-none text-xs bg-transparent`} 
+          // AJUSTE: Subimos el ancho del input a w-20 para que entre el número
+          className={`w-20 font-bold ${inputClass} focus:outline-none text-xs sm:text-sm bg-transparent`} 
         />
       ) : (
-        <><input type="number" value={value} onChange={e => onChange(cleanNum(e.target.value))} className={`w-8 font-bold ${inputClass} focus:outline-none text-xs bg-transparent`} />%</>
+        // AJUSTE: Subimos el ancho del input a w-10 para que entre el porcentaje
+        <><input type="number" value={value} onChange={e => onChange(cleanNum(e.target.value))} className={`w-10 font-bold ${inputClass} focus:outline-none text-xs sm:text-sm bg-transparent`} />%</>
       )}
     </div>
   </div>
 );
-
 const EERRRow = ({ label, base, prop, tot, refBase, refProp, refTot, isNegProp, isNegTot, cProp="", cTot="", indent, isTotalRow }) => {
   const pBase = refBase ? (base / refBase) * 100 : 0;
   const pProp = refProp ? (prop / refProp) * 100 : 0;
