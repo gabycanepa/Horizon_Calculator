@@ -51,26 +51,23 @@ const fetchSheet = async (sheetName) => {
 
 // ─── SUBCOMPONENTES UI ──────────────────────────────────────────────────────
 const HeaderMetric = ({ label, value, onChange, isCurrency, borderClass, labelClass, inputClass }) => (
-  // AJUSTE UI: Reducido padding (px-2 py-1) y ancho mínimo (min-w-[70px])
-  <div className={`bg-white px-2 py-1 rounded-lg shadow-sm border ${borderClass} flex-1 min-w-[70px] sm:min-w-[80px]`}>
-    <span className={`text-[10px] font-bold ${labelClass} block uppercase truncate`}>{label}</span>
+  // AJUSTE: Se restauró el min-w-[80px] y se ajustó el padding para que respire mejor
+  <div className={`bg-white px-3 sm:px-4 py-2 rounded-lg shadow-sm border ${borderClass} flex-1 min-w-[80px]`}>
+    <span className={`text-[10px] font-bold ${labelClass} block uppercase`}>{label}</span>
     <div className="flex items-center">
       {isCurrency ? (
         <input 
           type="text" 
-          // AJUSTE UI: Permitir mostrar '0' explícitamente
           value={formatNum(value)} 
           onChange={e => {
             const raw = e.target.value.replace(/\./g, '').replace(/\s/g, '');
-            // AJUSTE LOGICA: Permitir valor cero
             onChange(raw === '' ? 0 : parseFloat(raw) || 0);
           }} 
-          // AJUSTE UI: Reducido tamaño de fuente (text-[11px] sm:text-xs)
-          className={`w-full font-bold ${inputClass} focus:outline-none text-[11px] sm:text-xs bg-transparent p-0`} 
+          // AJUSTE: Restaurado el tamaño de fuente un poquito más grande
+          className={`w-full font-bold ${inputClass} focus:outline-none text-xs sm:text-sm bg-transparent`} 
         />
       ) : (
-        // AJUSTE UI: Reducido tamaño de fuente (text-[11px] sm:text-xs)
-        <><input type="number" value={value} onChange={e => onChange(cleanNum(e.target.value))} className={`w-10 sm:w-12 font-bold ${inputClass} focus:outline-none text-[11px] sm:text-xs p-0 bg-transparent`} />%</>
+        <><input type="number" value={value} onChange={e => onChange(cleanNum(e.target.value))} className={`w-full font-bold ${inputClass} focus:outline-none text-xs sm:text-sm bg-transparent`} />%</>
       )}
     </div>
   </div>
@@ -185,7 +182,7 @@ function App() {
   const [pctCostoLaboral, setPctCostoLaboral] = useState(0);
   const [gastosOperativos, setGastosOperativos] = useState(0);
   const [margenObjetivo, setMargenObjetivo] = useState(0);
-  const [eerrTitulo, setEerrTitulo] = useState('EERR Base'); 
+  const [eerrTitulo, setEerrTitulo] = useState('EERR Base');
   const [isReady, setIsReady] = useState(false);
   const [isLoadingFromCloud, setIsLoadingFromCloud] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false); 
@@ -246,8 +243,9 @@ function App() {
 
       setPctIndirectos(tolerantGet(configObj, 'Indirectos') || 37);
       setPctCostoLaboral(tolerantGet(configObj, 'Costo Laboral') || 45);
-      setGastosOperativos(tolerantGet(configObj, 'Gastos Operativos') || 0); // AJUSTE: Cargar valor por defecto (0 o nulo)
+      setGastosOperativos(tolerantGet(configObj, 'Gastos Operativos') || 0); 
       setMargenObjetivo(tolerantGet(configObj, 'Margen Objetivo') || tolerantGet(configObj, 'Margen Objetivo (%)') || 25);
+      
       setEerrTitulo(tolerantGetString(configObj, 'Titulo') || 'EERR Base');
 
       try {
@@ -368,7 +366,6 @@ function App() {
     const ciT = ciB + prop.costosLaborales; 
     const gbT = iT - ciT;
 
-    // AJUSTE LOGICA EERR TOTAL: Sumar gasto base + indirectos propuesta, ignorando cuadro arriba
     const opT = opB + prop.costosIndirectos; 
     
     const ioT = gbT - opT;
@@ -454,21 +451,20 @@ function App() {
       {mostrarModalValores && <ModalValoresServicios datos={dataSheets.valoresServicios} onClose={() => setMostrarModalValores(false)} />}
       
       <div className="max-w-7xl mx-auto">
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-8 print:hidden">
-          <div className="w-full lg:w-auto mb-2 sm:mb-0">
-            <h1 className="text-xl sm:text-2xl font-black tracking-tight bg-gradient-to-r from-purple-600 via-pink-500 to-blue-500 bg-clip-text text-transparent uppercase break-words">Horizon Finance Engine 2026</h1>
-            <p className="text-slate-500 text-xs mt-1">Resultados Proyectado </p>
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-8">
+          <div className="w-full lg:w-auto">
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight bg-gradient-to-r from-purple-600 via-pink-500 to-blue-500 bg-clip-text text-transparent uppercase break-words">Horizon Finance Engine 2026</h1>
+            <p className="text-slate-500 text-xs sm:text-sm mt-1">Resultados Proyectado </p>
           </div>
-          {/* AJUSTE UI: Contenedor métricas alineado y compacto */}
-          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap w-full lg:w-auto justify-start sm:justify-end">
-            {tienePermiso('busqueda') && <button onClick={() => setMostrarModalValores(true)} title="Ver Valores" className="bg-white border border-purple-200 rounded-lg px-2 py-1 text-purple-600 hover:bg-purple-50 transition shadow-sm text-sm print:hidden shrink-0">🔍</button>}
+          <div className="flex flex-wrap gap-2 sm:gap-3 items-center w-full lg:w-auto">
+            {tienePermiso('busqueda') && <button onClick={() => setMostrarModalValores(true)} title="Ver Valores" className="bg-white border border-purple-200 rounded-lg px-3 py-2 text-purple-600 hover:bg-purple-50 transition shadow-sm text-lg print:hidden shrink-0">🔍</button>}
             
             <button 
               onClick={recargarDatosDesdeNube} 
               disabled={isRefreshing}
-              className={`bg-white border border-blue-200 rounded-lg px-2 py-1 text-blue-600 hover:bg-blue-50 transition shadow-sm text-[11px] font-bold uppercase flex items-center gap-1 print:hidden shrink-0 ${isRefreshing ? 'opacity-50 cursor-not-allowed' : ''}`}
+              className={`bg-white border border-blue-200 rounded-lg px-3 py-2 text-blue-600 hover:bg-blue-50 transition shadow-sm text-sm font-bold uppercase flex items-center gap-1 print:hidden shrink-0 ${isRefreshing ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
-              {isRefreshing ? '⏳...' : '🔄'}
+              {isRefreshing ? '⏳ Recargando...' : '🔄 Refrescar'}
             </button>
 
             <HeaderMetric label="Gastos Op." value={gastosOperativos} onChange={setGastosOperativos} isCurrency={true} borderClass="border-purple-100" labelClass="text-purple-400" inputClass="text-red-600" />
@@ -476,9 +472,17 @@ function App() {
             <HeaderMetric label="Costo Lab." value={pctCostoLaboral} onChange={setPctCostoLaboral} isCurrency={false} borderClass="border-pink-100" labelClass="text-pink-400" inputClass="text-pink-600" />
             <HeaderMetric label="Margen Obj." value={margenObjetivo} onChange={setMargenObjetivo} isCurrency={false} borderClass="border-purple-100" labelClass="text-purple-400" inputClass="text-purple-600" />
             
-            <div className="bg-purple-100 px-2 py-1 rounded-lg text-[9px] font-bold text-purple-700 flex flex-col items-center shrink-0 border border-purple-200">
-              <div className="flex items-center gap-1">👤 <span className="max-w-[60px] truncate">{usuarioActual.nombre}</span></div>
-              <button onClick={() => setUsuarioActual(null)} className="text-red-500 hover:text-red-700 text-[8px] uppercase font-black">Salir</button>
+            <div className="bg-purple-100 px-3 py-2 rounded-lg text-[10px] sm:text-xs font-bold text-purple-700 flex flex-col items-center shrink-0 min-w-[100px] border border-purple-200">
+              <div className="flex items-center gap-1">
+                👤 <span className="max-w-[80px] truncate">{usuarioActual.nombre}</span>
+              </div>
+              <button 
+                onClick={() => setUsuarioActual(null)} 
+                className="text-red-500 hover:text-red-700 text-[9px] mt-0.5 uppercase tracking-wider print:hidden font-black"
+                title="Cerrar sesión"
+              >
+                Cerrar Sesión
+              </button>
             </div>
           </div>
         </div>
@@ -487,12 +491,14 @@ function App() {
         <div className="bg-white rounded-xl shadow-sm border border-purple-100 overflow-hidden mb-6">
           <div className="p-3 sm:p-4 border-b border-purple-50 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-3 bg-gradient-to-r from-purple-50 to-pink-50">
             <h2 className="font-bold text-slate-700 text-xs sm:text-sm">💼 Simulación de Servicios (Propuesta)</h2>
-            <div className="flex flex-wrap gap-2 print:hidden w-full xl:w-auto justify-start sm:justify-end">
-               <button onClick={() => setMostrarHistorial(!mostrarHistorial)} className={`text-[10px] font-bold px-2 py-1 border rounded-lg transition shrink-0 ${mostrarHistorial ? 'bg-purple-600 text-white' : 'text-slate-600 hover:text-purple-600'}`}>📋 Historial ({historial.length})</button>
-               <button onClick={guardarEscenario} className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold hover:shadow-lg transition shrink-0">💾 Guardar</button>
-               <button onClick={() => window.print()} className="bg-gradient-to-r from-purple-500 to-pink-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold hover:shadow-lg transition shrink-0">📄 PDF</button>
-               <button onClick={() => window.confirm('¿Limpiar simulación?') && setEscenarios([])} className="text-slate-400 hover:text-slate-600 text-[10px] font-bold px-2 py-1 shrink-0">Limpiar</button>
-               <button onClick={agregarFila} className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold hover:shadow-lg transition shrink-0">+ Agregar</button>
+            
+            {/* AJUSTE: Botones restaurados al diseño "pill" original */}
+            <div className="flex flex-wrap gap-2 print:hidden w-full xl:w-auto">
+               <button onClick={() => setMostrarHistorial(!mostrarHistorial)} className={`text-[10px] sm:text-xs font-bold px-3 py-1.5 border rounded-lg transition shrink-0 ${mostrarHistorial ? 'bg-purple-600 text-white' : 'text-slate-600 hover:text-purple-600'}`}>📋 Historial ({historial.length})</button>
+               <button onClick={guardarEscenario} className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-3 sm:px-4 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold hover:shadow-lg transition shrink-0">💾 Guardar Escenario</button>
+               <button onClick={() => window.print()} className="bg-gradient-to-r from-purple-500 to-pink-600 text-white px-3 sm:px-4 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold hover:shadow-lg transition shrink-0">📄 Descargar PDF</button>
+               <button onClick={() => window.confirm('¿Limpiar todos los campos?') && setEscenarios([])} className="text-slate-400 hover:text-slate-600 text-[10px] sm:text-xs font-bold px-2 sm:px-3 py-1.5 shrink-0">Limpiar</button>
+               <button onClick={agregarFila} className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-3 sm:px-4 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold hover:shadow-lg transition shrink-0">+ Agregar</button>
             </div>
           </div>
           <div className="overflow-x-auto">
