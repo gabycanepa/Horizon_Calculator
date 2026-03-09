@@ -170,6 +170,7 @@ function App() {
   const [margenObjetivo, setMargenObjetivo] = useState(0);
   const [isReady, setIsReady] = useState(false);
   const [isLoadingFromCloud, setIsLoadingFromCloud] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false); // Nuevo estado para el botón refrescar
 
   const [objVentasTotal] = useState(2195176117);
   const [lineasVentaTotal, setLineasVentaTotal] = useState(() => { try { return JSON.parse(localStorage.getItem('hzn_lineasVenta')) || [{ id: 1, cliente: '', monto: '' }]; } catch(e){ return [{ id:1, cliente:'', monto:'' }]; }});
@@ -184,85 +185,93 @@ function App() {
 
   const tienePermiso = (modulo) => usuarioActual && ((usuarioActual.modulos || '').toLowerCase().includes('todos') || (usuarioActual.modulos || '').toLowerCase().includes(modulo.toLowerCase()));
 
-  useEffect(() => {
-    const cargarDatos = async () => {
+  // Extraemos la lógica de carga para poder llamarla desde el botón
+  const recargarDatosDesdeNube = async () => {
+    setIsRefreshing(true);
+    try {
+      const [precios, clientes, cfg, eerr, usuarios, valoresServ] = await Promise.all([
+        fetchSheet('PreciosNuevos'), fetchSheet('Clientes'), fetchSheet('Configuracion'), fetchSheet('EERRBase'), fetchSheet('Usuarios'), fetchSheet('Valores_Servicios')
+      ]);
+
+      const configObj = {};
+      cfg.forEach(row => { const k = row['Parámetro'] ?? row['Parametro'] ?? row['Key'] ?? Object.values(row)[0]; if (k) configObj[String(k).trim()] = cleanNum(row['Valor'] ?? row['Value'] ?? Object.values(row)[1]); });
+
+      const eerrObj = {}, eerrNorm = {};
+      eerr.forEach(row => { const c = row['Concepto'] ?? Object.values(row)[0]; if (c) eerrObj[String(c).trim()] = cleanNum(row['Monto (ARS)'] ?? row['Monto'] ?? Object.values(row)[1]); });
+      Object.keys(eerrObj).forEach(k => eerrNorm[normalizeKey(k)] = eerrObj[k]);
+
+      const preciosProcesados = precios.map(p => ({
+        categoria: p['Categoria'] ?? p['Categoría'] ?? Object.values(p)[0] ?? 'Otros', tipo: p['Tipo'] ?? Object.values(p)[1] ?? 'Default',
+        valor: cleanNum(p['Valor (ARS)'] ?? p['Valor'] ?? Object.values(p)[2]), sueldoSugerido: cleanNum(p['Sueldo Sugerido (ARS)'] ?? p['Sueldo Sugerido'] ?? Object.values(p)[3]), costoFijo: cleanNum(p['Costo Fijo (ARS)'] ?? p['Costo Fijo'] ?? Object.values(p)[4])
+      }));
+
+      const clientesProcesados = clientes.map(c => c['Cliente'] ?? c['cliente'] ?? c['Name'] ?? Object.values(c)[0] ?? '').filter(Boolean);
+      const usuariosProcesados = usuarios.map(u => ({ nombre: u['Nombre'] ?? u['nombre'] ?? Object.values(u)[0] ?? '', password: u['Password'] ?? u['password'] ?? Object.values(u)[1] ?? '', modulos: u['Modulos'] ?? u['modulos'] ?? u['Módulos'] ?? Object.values(u)[2] ?? 'todos' })).filter(u => u.nombre);
+
+      setDataSheets({
+        preciosNuevos: preciosProcesados, 
+        clientes: clientesProcesados,
+        config: configObj, 
+        eerrBase: eerrObj, 
+        eerrBaseNorm: eerrNorm,
+        usuarios: usuariosProcesados,
+        valoresServicios: valoresServ, 
+        loading: false, 
+        error: null
+      });
+
+      // Actualizamos solo si no había valores previos, o si forzamos refresco total
+      setPctIndirectos(tolerantGet(configObj, 'Indirectos') || 37);
+      setPctCostoLaboral(tolerantGet(configObj, 'Costo Laboral') || 45);
+      setGastosOperativos(tolerantGet(configObj, 'Gastos Operativos') || 46539684.59);
+      setMargenObjetivo(tolerantGet(configObj, 'Margen Objetivo') || tolerantGet(configObj, 'Margen Objetivo (%)') || 25);
+
       try {
-        const [precios, clientes, cfg, eerr, usuarios, valoresServ] = await Promise.all([
-          fetchSheet('PreciosNuevos'), fetchSheet('Clientes'), fetchSheet('Configuracion'), fetchSheet('EERRBase'), fetchSheet('Usuarios'), fetchSheet('Valores_Servicios')
-        ]);
-
-        const configObj = {};
-        cfg.forEach(row => { const k = row['Parámetro'] ?? row['Parametro'] ?? row['Key'] ?? Object.values(row)[0]; if (k) configObj[String(k).trim()] = cleanNum(row['Valor'] ?? row['Value'] ?? Object.values(row)[1]); });
-
-        const eerrObj = {}, eerrNorm = {};
-        eerr.forEach(row => { const c = row['Concepto'] ?? Object.values(row)[0]; if (c) eerrObj[String(c).trim()] = cleanNum(row['Monto (ARS)'] ?? row['Monto'] ?? Object.values(row)[1]); });
-        Object.keys(eerrObj).forEach(k => eerrNorm[normalizeKey(k)] = eerrObj[k]);
-
-        const preciosProcesados = precios.map(p => ({
-          categoria: p['Categoria'] ?? p['Categoría'] ?? Object.values(p)[0] ?? 'Otros', tipo: p['Tipo'] ?? Object.values(p)[1] ?? 'Default',
-          valor: cleanNum(p['Valor (ARS)'] ?? p['Valor'] ?? Object.values(p)[2]), sueldoSugerido: cleanNum(p['Sueldo Sugerido (ARS)'] ?? p['Sueldo Sugerido'] ?? Object.values(p)[3]), costoFijo: cleanNum(p['Costo Fijo (ARS)'] ?? p['Costo Fijo'] ?? Object.values(p)[4])
-        }));
-
-        const clientesProcesados = clientes.map(c => c['Cliente'] ?? c['cliente'] ?? c['Name'] ?? Object.values(c)[0] ?? '').filter(Boolean);
-        const usuariosProcesados = usuarios.map(u => ({ nombre: u['Nombre'] ?? u['nombre'] ?? Object.values(u)[0] ?? '', password: u['Password'] ?? u['password'] ?? Object.values(u)[1] ?? '', modulos: u['Modulos'] ?? u['modulos'] ?? u['Módulos'] ?? Object.values(u)[2] ?? 'todos' })).filter(u => u.nombre);
-
-        setDataSheets({
-          preciosNuevos: preciosProcesados, 
-          clientes: clientesProcesados,
-          config: configObj, 
-          eerrBase: eerrObj, 
-          eerrBaseNorm: eerrNorm,
-          usuarios: usuariosProcesados,
-          valoresServicios: valoresServ, 
-          loading: false, 
-          error: null
-        });
-
-        // ACÁ SE TOMAN LOS VALORES DEL EXCEL USANDO EL TOLERANT GET PARA QUE NO FALLE
-        setPctIndirectos(tolerantGet(configObj, 'Indirectos') || 37);
-        setPctCostoLaboral(tolerantGet(configObj, 'Costo Laboral') || 45);
-        setGastosOperativos(tolerantGet(configObj, 'Gastos Operativos') || 46539684.59);
-        setMargenObjetivo(tolerantGet(configObj, 'Margen Objetivo') || tolerantGet(configObj, 'Margen Objetivo (%)') || 25);
-
-        try {
-          const dataNube = await (await fetch(`${SCRIPT_URL}?sheet=HistorialCompartido`)).json();
-          if (dataNube && Array.isArray(dataNube)) {
-            const findKey = (obj, k) => Object.keys(obj).find(key => key.toLowerCase() === k.toLowerCase());
-            const hSync = dataNube.map(item => {
-              const dEsc = item[findKey(item, 'DatosEscenario')], conf = item[findKey(item, 'Configuracion')], eerrD = item[findKey(item, 'EERR')];
-              const parseJson = (val, def) => { try { return typeof val === 'string' && val.trim() ? JSON.parse(val) : (typeof val === 'object' && val !== null ? val : def); } catch { return def; } };
-              return { id: item[findKey(item, 'ID')]?.toString().replace(/'/g, "") || Date.now(), nombre: item[findKey(item, 'Nombre')] || "Sin nombre", fecha: item[findKey(item, 'Fecha')] || "", escenarios: parseJson(dEsc, []), config: parseJson(conf, {}), eerr: parseJson(eerrD, {}) };
-            });
-            setHistorial(hSync);
+        const dataNube = await (await fetch(`${SCRIPT_URL}?sheet=HistorialCompartido`)).json();
+        if (dataNube && Array.isArray(dataNube)) {
+          const findKey = (obj, k) => Object.keys(obj).find(key => key.toLowerCase() === k.toLowerCase());
+          const hSync = dataNube.map(item => {
+            const dEsc = item[findKey(item, 'DatosEscenario')], conf = item[findKey(item, 'Configuracion')], eerrD = item[findKey(item, 'EERR')];
+            const parseJson = (val, def) => { try { return typeof val === 'string' && val.trim() ? JSON.parse(val) : (typeof val === 'object' && val !== null ? val : def); } catch { return def; } };
+            return { id: item[findKey(item, 'ID')]?.toString().replace(/'/g, "") || Date.now(), nombre: item[findKey(item, 'Nombre')] || "Sin nombre", fecha: item[findKey(item, 'Fecha')] || "", escenarios: parseJson(dEsc, []), config: parseJson(conf, {}), eerr: parseJson(eerrD, {}) };
+          });
+          setHistorial(hSync);
+          // Si es la carga inicial, cargamos el último escenario
+          if (!isReady) {
             const ult = hSync[hSync.length - 1];
             if (ult && ult.escenarios.length > 0) {
               setEscenarios(ult.escenarios);
-              // ¡LÍNEA PROBLEMÁTICA ELIMINADA!
-              // Ya no pisamos la configuración maestra con la del último historial al cargar la app.
             }
           }
-        } catch(e) {}
+        }
+      } catch(e) {}
 
-        try {
-          const dTrack = await (await fetch(`${SCRIPT_URL}?sheet=TrackingObjetivos`)).json();
-          if (dTrack && Array.isArray(dTrack) && dTrack.length > 0) {
-            const ult = dTrack[dTrack.length - 1], fk = (obj, k) => Object.keys(obj).find(key => key.toLowerCase() === k.toLowerCase());
-            const parseL = (v) => { try { return typeof v === 'string' && v.trim() ? JSON.parse(v) : (Array.isArray(v) ? v : null); } catch { return null; } };
-            const kT = fk(ult, 'lineastotal') || fk(ult, 'ventastotales'), kR = fk(ult, 'lineasreno') || fk(ult, 'renovacion'), kI = fk(ult, 'lineasincr') || fk(ult, 'incremental');
-            if(kT) { const lt = parseL(ult[kT]); if(lt) setLineasVentaTotal(lt); }
-            if(kR) { const lr = parseL(ult[kR]); if(lr) setLineasRenovacion(lr); }
-            if(kI) { const li = parseL(ult[kI]); if(li) setLineasIncremental(li); }
-          }
-        } catch(e) {}
+      try {
+        const dTrack = await (await fetch(`${SCRIPT_URL}?sheet=TrackingObjetivos`)).json();
+        if (dTrack && Array.isArray(dTrack) && dTrack.length > 0) {
+          const ult = dTrack[dTrack.length - 1], fk = (obj, k) => Object.keys(obj).find(key => key.toLowerCase() === k.toLowerCase());
+          const parseL = (v) => { try { return typeof v === 'string' && v.trim() ? JSON.parse(v) : (Array.isArray(v) ? v : null); } catch { return null; } };
+          const kT = fk(ult, 'lineastotal') || fk(ult, 'ventastotales'), kR = fk(ult, 'lineasreno') || fk(ult, 'renovacion'), kI = fk(ult, 'lineasincr') || fk(ult, 'incremental');
+          if(kT) { const lt = parseL(ult[kT]); if(lt) setLineasVentaTotal(lt); }
+          if(kR) { const lr = parseL(ult[kR]); if(lr) setLineasRenovacion(lr); }
+          if(kI) { const li = parseL(ult[kI]); if(li) setLineasIncremental(li); }
+        }
+      } catch(e) {}
 
-        if (preciosProcesados.length > 0 && escenarios.length === 0) setEscenarios([{ id: Date.now(), cliente: clientesProcesados[0] || 'Nuevo Cliente', tipoIdx: 0, cantidad: 1, sueldoBruto: preciosProcesados[0].sueldoSugerido || 0, ventaUnit: preciosProcesados[0].valor || 0, costoDirecto: preciosProcesados[0].costoFijo || 0 }]);
-        setIsReady(true);
-      } catch (err) {
-        setDataSheets(p => ({ ...p, loading: false, error: 'Error cargando datos.' })); setIsReady(true);
+      if (!isReady && preciosProcesados.length > 0 && escenarios.length === 0) {
+        setEscenarios([{ id: Date.now(), cliente: clientesProcesados[0] || 'Nuevo Cliente', tipoIdx: 0, cantidad: 1, sueldoBruto: preciosProcesados[0].sueldoSugerido || 0, ventaUnit: preciosProcesados[0].valor || 0, costoDirecto: preciosProcesados[0].costoFijo || 0 }]);
       }
-    };
-    cargarDatos();
-  }, []);
+      setIsReady(true);
+    } catch (err) {
+      setDataSheets(p => ({ ...p, loading: false, error: 'Error cargando datos.' })); setIsReady(true);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    recargarDatosDesdeNube();
+  }, []); // Carga inicial
 
   useEffect(() => {
     if (!isReady || isLoadingFromCloud || !Array.isArray(escenarios)) return;
@@ -383,7 +392,7 @@ function App() {
     );
   };
 
-  if (dataSheets.loading) return <div className="p-10 sm:p-20 text-center font-black text-purple-600 animate-pulse text-sm sm:text-base">SINCRONIZANDO CON HORIZON CLOUD...</div>;
+  if (dataSheets.loading && !isReady) return <div className="p-10 sm:p-20 text-center font-black text-purple-600 animate-pulse text-sm sm:text-base">SINCRONIZANDO CON HORIZON CLOUD...</div>;
   if (dataSheets.error) return <div className="p-10 sm:p-20 text-center font-black text-red-600 text-sm sm:text-base">{dataSheets.error}</div>;
   if (!usuarioActual) return <LoginScreen usuarios={dataSheets.usuarios} onLogin={setUsuarioActual} />;
 
@@ -402,13 +411,33 @@ function App() {
           </div>
           <div className="flex flex-wrap gap-2 sm:gap-3 items-center w-full lg:w-auto">
             {tienePermiso('busqueda') && <button onClick={() => setMostrarModalValores(true)} title="Ver Valores" className="bg-white border border-purple-200 rounded-lg px-3 py-2 text-purple-600 hover:bg-purple-50 transition shadow-sm text-lg print:hidden shrink-0">🔍</button>}
+            
+            {/* Botón Refrescar */}
+            <button 
+              onClick={recargarDatosDesdeNube} 
+              disabled={isRefreshing}
+              className={`bg-white border border-blue-200 rounded-lg px-3 py-2 text-blue-600 hover:bg-blue-50 transition shadow-sm text-sm font-bold uppercase flex items-center gap-1 print:hidden shrink-0 ${isRefreshing ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              {isRefreshing ? '⏳ Recargando...' : '🔄 Refrescar'}
+            </button>
+
             <HeaderMetric label="Gastos Op." value={gastosOperativos} onChange={setGastosOperativos} isCurrency={true} borderClass="border-purple-100" labelClass="text-purple-400" inputClass="text-red-600" />
             <HeaderMetric label="Indirectos" value={pctIndirectos} onChange={setPctIndirectos} isCurrency={false} borderClass="border-blue-100" labelClass="text-blue-400" inputClass="text-blue-600" />
             <HeaderMetric label="Costo Lab." value={pctCostoLaboral} onChange={setPctCostoLaboral} isCurrency={false} borderClass="border-pink-100" labelClass="text-pink-400" inputClass="text-pink-600" />
             <HeaderMetric label="Margen Obj." value={margenObjetivo} onChange={setMargenObjetivo} isCurrency={false} borderClass="border-purple-100" labelClass="text-purple-400" inputClass="text-purple-600" />
-            <div className="bg-purple-100 px-3 py-2 rounded-lg text-[10px] sm:text-xs font-bold text-purple-700 flex items-center gap-2 shrink-0">
-              👤 <span className="max-w-[80px] truncate">{usuarioActual.nombre}</span>
-              <button onClick={() => setUsuarioActual(null)} className="text-purple-400 hover:text-red-500 ml-1 print:hidden" title="Cerrar">✕</button>
+            
+            {/* Info Usuario con link para Cerrar Sesión */}
+            <div className="bg-purple-100 px-3 py-2 rounded-lg text-[10px] sm:text-xs font-bold text-purple-700 flex flex-col items-center shrink-0 min-w-[100px] border border-purple-200">
+              <div className="flex items-center gap-1">
+                👤 <span className="max-w-[80px] truncate">{usuarioActual.nombre}</span>
+              </div>
+              <button 
+                onClick={() => setUsuarioActual(null)} 
+                className="text-red-500 hover:text-red-700 text-[9px] mt-0.5 uppercase tracking-wider print:hidden font-black"
+                title="Cerrar sesión"
+              >
+                Cerrar Sesión
+              </button>
             </div>
           </div>
         </div>
