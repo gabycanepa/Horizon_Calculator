@@ -452,7 +452,7 @@ function App() {
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-8">
           <div className="w-full lg:w-auto">
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight bg-gradient-to-r from-purple-600 via-pink-500 to-blue-500 bg-clip-text text-transparent uppercase break-words">Horizon Finance Engine 2026</h1>
-            <p className="text-slate-500 text-xs sm:text-sm mt-1">Resultados Proyectado </p>
+            <p className="text-slate-500 text-xs sm:text-sm mt-1">Resultados Proyectados </p>
           </div>
           <div className="flex flex-wrap gap-2 sm:gap-3 items-center w-full lg:w-auto">
             {tienePermiso('busqueda') && <button onClick={() => setMostrarModalValores(true)} title="Ver Valores" className="bg-white border border-purple-200 rounded-lg px-3 py-2 text-purple-600 hover:bg-purple-50 transition shadow-sm text-lg print:hidden shrink-0">🔍</button>}
@@ -582,9 +582,13 @@ function App() {
             <div className="p-4 sm:p-6 space-y-4 max-h-[40vh] overflow-y-auto pr-2">
               {Object.entries(propuesta.porCliente).map(([nombre, datos]) => {
                 const res = datos.ventas - datos.costos, mgn = datos.ventas ? (res / datos.ventas) * 100 : 0;
+                
+                // LOGICA DE COLOR PARA EL RESULTADO POR CLIENTE
+                const resColorCli = res < 0 ? 'text-red-600' : res === 0 ? 'text-yellow-500' : 'text-green-600';
+
                 return (
                   <div key={nombre} className="group">
-                    <div className="flex justify-between items-center mb-1"><span className="text-xs sm:text-sm font-bold text-slate-700 truncate pr-2">{nombre}</span><span className="text-[10px] sm:text-xs font-black text-green-600 shrink-0">{format(res)}</span></div>
+                    <div className="flex justify-between items-center mb-1"><span className="text-xs sm:text-sm font-bold text-slate-700 truncate pr-2">{nombre}</span><span className={`text-[10px] sm:text-xs font-black shrink-0 ${resColorCli}`}>{format(res)}</span></div>
                     <div className="flex justify-between text-[9px] sm:text-[10px] text-slate-400 mb-2"><span className="truncate">Venta: {format(datos.ventas)}</span><span className="shrink-0 pl-2">Margen: {mgn.toFixed(1)}%</span></div>
                     <div className="w-full bg-slate-100 h-2 sm:h-3 rounded-full overflow-hidden relative flex">
                       <div className={`h-full transition-all duration-500 z-10 ${mgn >= margenObjetivo ? 'bg-gradient-to-r from-green-400 to-emerald-500' : 'bg-gradient-to-r from-orange-400 to-orange-500'}`} style={{ width: `${Math.min(100, Math.max(0, mgn * 2))}%` }}></div>
