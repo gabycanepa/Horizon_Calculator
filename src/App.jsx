@@ -42,7 +42,10 @@ const fetchSheet = async (sheetName) => {
   const lines = text.split('\n').filter(l => l.trim() !== '');
   if (lines.length === 0) return [];
   const parseCSVLine = (line) => line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)|;(?=(?:(?:[^"]*"){2})*[^"]*$)/g).map(c => c.replace(/^"|"$/g, '').trim());
-  const headers = parseCSVLine(lines[0]);
+  
+  // SOLUCIÓN: Asegurarnos de que las columnas sin cabecera no se pierdan
+  const headers = parseCSVLine(lines[0]).map((h, i) => h.trim() ? h.trim() : `col_${i}`);
+  
   return lines.slice(1).map(line => {
     const cells = parseCSVLine(line);
     return headers.reduce((obj, h, i) => ({ ...obj, [h]: cells[i] !== undefined ? cells[i] : '' }), {});
@@ -76,7 +79,6 @@ const EERRRow = ({ label, base, prop, tot, refBase, refProp, refTot, isNegProp, 
   const pProp = refProp ? (prop / refProp) * 100 : 0;
   const pTot = refTot ? (tot / refTot) * 100 : 0;
 
-  // Función para determinar el color según el valor (Rojo, Amarillo, o el Default de la columna)
   const getStatusColor = (val, defaultColor) => {
     if (val < 0) return 'text-red-600';
     if (val === 0) return 'text-yellow-500';
@@ -190,7 +192,7 @@ function App() {
   const [margenObjetivo, setMargenObjetivo] = useState(0);
   
   // Títulos Dinámicos
-  const [eerrTitulo, setEerrTitulo] = useState('EERR Base');
+  const [eerrTitulo, setEerrTitulo] = useState('2026');
   const [tituloConcepto, setTituloConcepto] = useState('Concepto');
   const [tituloPropuesta, setTituloPropuesta] = useState('Propuesta Comercial');
   const [tituloEERR, setTituloEERR] = useState('EERR Total Proyectado');
@@ -221,12 +223,23 @@ function App() {
 
       const configObj = {};
       cfg.forEach(row => { 
-        const k = row['Parámetro'] ?? row['Parametro'] ?? row['Key'] ?? Object.values(row)[0]; 
+        const vals = Object.values(row); // Extraemos la fila completa en formato de array
+        const k = row['Parámetro'] ?? row['Parametro'] ?? row['Key'] ?? vals[0]; 
+        
         if (k) {
           const keyStr = String(k).trim();
-          const val = row['Valor'] ?? row['Value'] ?? Object.values(row)[1];
-          // Guarda como texto si contiene "titulo", de lo contrario intenta convertir a número
-          configObj[keyStr] = keyStr.toLowerCase().includes('titulo') ? val : cleanNum(val);
+          
+          // SOLUCIÓN: Buscamos horizontalmente si es la fila de columnas
+          if (keyStr.toLowerCase().includes('estado de resultados (columnas)')) {
+            configObj['Titulo Concepto'] = vals[1] || 'Concepto';
+            configObj['Titulo'] = vals[2] || '2026';
+            configObj['Titulo Propuesta'] = vals[3] || 'Propuesta Comercial';
+            configObj['Titulo EERR'] = vals[4] || 'EERR Total Proyectado';
+          } else {
+            const val = row['Valor'] ?? row['Value'] ?? vals[1];
+            // Si es un título, guardamos como texto, si no, lo limpiamos como número
+            configObj[keyStr] = keyStr.toLowerCase().includes('titulo') ? val : cleanNum(val);
+          }
         }
       });
 
@@ -259,7 +272,7 @@ function App() {
       setGastosOperativos(tolerantGet(configObj, 'Gastos Operativos') || 0); 
       setMargenObjetivo(tolerantGet(configObj, 'Margen Objetivo') || tolerantGet(configObj, 'Margen Objetivo (%)') || 25);
       
-      // Asignación de Títulos Dinámicos
+      // Asignación de Títulos Dinámicos usando las nuevas claves
       setEerrTitulo(tolerantGetString(configObj, 'Titulo') || '2026');
       setTituloConcepto(tolerantGetString(configObj, 'Titulo Concepto') || 'Concepto');
       setTituloPropuesta(tolerantGetString(configObj, 'Titulo Propuesta') || 'Propuesta Comercial');
