@@ -91,7 +91,7 @@ const EERRRow = ({ label, base, prop, tot, refBase, refProp, refTot, isNegProp, 
         <td className="p-3 sm:p-4 text-right font-black border-r border-purple-200">{formatPct(pBase)}</td>
         <td className={`p-3 sm:p-4 text-right font-mono font-black bg-green-100 border-r border-green-300 text-[10px] sm:text-xs ${getStatusColor(prop, 'text-green-700')}`}>{format(prop)}</td>
         <td className="p-3 sm:p-4 text-right font-black bg-green-100 border-r border-green-300">{formatPct(pProp)}</td>
-        <td className={`p-3 sm:p-4 text-right font-mono font-black bg-blue-100 border-r border-blue-300 text-[10px] sm:text-xs ${getStatusColor(tot, 'text-blue-700')}`}>{format(tot)}</td>
+        <td className={`p-3 sm:p-4 text-right font-mono font-black bg-blue-100 border-r border-blue-300 text-[10px] sm:text-xs ${getStatusColor(tot, 'text-green-700')}`}>{format(tot)}</td>
         <td className="p-3 sm:p-4 text-right font-black bg-blue-100">{formatPct(pTot)}</td>
       </tr>
     );
@@ -459,7 +459,7 @@ function App() {
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-8">
           <div className="w-full lg:w-auto">
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight bg-gradient-to-r from-purple-600 via-pink-500 to-blue-500 bg-clip-text text-transparent uppercase break-words">Horizon Finance Engine 2026</h1>
-            <p className="text-slate-500 text-xs sm:text-sm mt-1">Resultados Proyectado </p>
+            <p className="text-slate-500 text-xs sm:text-sm mt-1">Resultados Proyectados </p>
           </div>
           <div className="flex flex-wrap gap-2 sm:gap-3 items-center w-full lg:w-auto">
             {tienePermiso('busqueda') && <button onClick={() => setMostrarModalValores(true)} title="Ver Valores" className="bg-white border border-purple-200 rounded-lg px-3 py-2 text-purple-600 hover:bg-purple-50 transition shadow-sm text-lg print:hidden shrink-0">🔍</button>}
