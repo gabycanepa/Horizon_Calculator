@@ -183,11 +183,18 @@ function App() {
   const [mostrarModalValores, setMostrarModalValores] = useState(false);
   const [escenarios, setEscenarios] = useState([]);
   const [historial, setHistorial] = useState([]);
+  
   const [pctIndirectos, setPctIndirectos] = useState(0);
   const [pctCostoLaboral, setPctCostoLaboral] = useState(0);
   const [gastosOperativos, setGastosOperativos] = useState(0);
   const [margenObjetivo, setMargenObjetivo] = useState(0);
+  
+  // Títulos Dinámicos
   const [eerrTitulo, setEerrTitulo] = useState('EERR Base');
+  const [tituloConcepto, setTituloConcepto] = useState('Concepto');
+  const [tituloPropuesta, setTituloPropuesta] = useState('Propuesta Comercial');
+  const [tituloEERR, setTituloEERR] = useState('EERR Total Proyectado');
+
   const [isReady, setIsReady] = useState(false);
   const [isLoadingFromCloud, setIsLoadingFromCloud] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false); 
@@ -218,7 +225,8 @@ function App() {
         if (k) {
           const keyStr = String(k).trim();
           const val = row['Valor'] ?? row['Value'] ?? Object.values(row)[1];
-          configObj[keyStr] = keyStr.toLowerCase() === 'titulo' ? val : cleanNum(val);
+          // Guarda como texto si contiene "titulo", de lo contrario intenta convertir a número
+          configObj[keyStr] = keyStr.toLowerCase().includes('titulo') ? val : cleanNum(val);
         }
       });
 
@@ -251,7 +259,11 @@ function App() {
       setGastosOperativos(tolerantGet(configObj, 'Gastos Operativos') || 0); 
       setMargenObjetivo(tolerantGet(configObj, 'Margen Objetivo') || tolerantGet(configObj, 'Margen Objetivo (%)') || 25);
       
+      // Asignación de Títulos Dinámicos
       setEerrTitulo(tolerantGetString(configObj, 'Titulo') || '2026');
+      setTituloConcepto(tolerantGetString(configObj, 'Titulo Concepto') || 'Concepto');
+      setTituloPropuesta(tolerantGetString(configObj, 'Titulo Propuesta') || 'Propuesta Comercial');
+      setTituloEERR(tolerantGetString(configObj, 'Titulo EERR') || 'EERR Total Proyectado');
 
       try {
         const dataNube = await (await fetch(`${SCRIPT_URL}?sheet=HistorialCompartido`)).json();
@@ -623,11 +635,11 @@ function App() {
               <table className="w-full text-left border-collapse text-[10px] sm:text-xs min-w-[700px]">
                 <thead>
                   <tr className="bg-purple-50 text-purple-600 font-bold uppercase text-[9px] sm:text-[10px]">
-                    <th className="p-2 sm:p-3 border-r border-purple-100">Concepto</th>
+                    <th className="p-2 sm:p-3 border-r border-purple-100">{tituloConcepto}</th>
                     <th className="p-2 sm:p-3 text-right border-r border-purple-100">{eerrTitulo}</th>
                     <th className="p-2 sm:p-3 text-right border-r border-purple-100">%</th>
-                    <th className="p-2 sm:p-3 text-right bg-green-50 border-r border-green-200">Propuesta Comercial</th><th className="p-2 sm:p-3 text-right bg-green-50 border-r border-green-200">%</th>
-                    <th className="p-2 sm:p-3 text-right bg-blue-50 border-r border-blue-200">EERR Total Proyectado</th><th className="p-2 sm:p-3 text-right bg-blue-50">%</th>
+                    <th className="p-2 sm:p-3 text-right bg-green-50 border-r border-green-200">{tituloPropuesta}</th><th className="p-2 sm:p-3 text-right bg-green-50 border-r border-green-200">%</th>
+                    <th className="p-2 sm:p-3 text-right bg-blue-50 border-r border-blue-200">{tituloEERR}</th><th className="p-2 sm:p-3 text-right bg-blue-50">%</th>
                   </tr>
                 </thead>
                 <tbody>
