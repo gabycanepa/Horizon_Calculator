@@ -75,16 +75,23 @@ const EERRRow = ({ label, base, prop, tot, refBase, refProp, refTot, isNegProp, 
   const pBase = refBase ? (base / refBase) * 100 : 0;
   const pProp = refProp ? (prop / refProp) * 100 : 0;
   const pTot = refTot ? (tot / refTot) * 100 : 0;
+
+  // Función para determinar el color según el valor (Rojo, Amarillo, o el Default de la columna)
+  const getStatusColor = (val, defaultColor) => {
+    if (val < 0) return 'text-red-600';
+    if (val === 0) return 'text-yellow-500';
+    return defaultColor;
+  };
   
   if (isTotalRow) {
     return (
       <tr className="bg-gradient-to-r from-purple-100 to-pink-100 border-t-2 sm:border-t-4 border-purple-400">
         <td className="p-3 sm:p-4 font-black text-slate-900 text-xs sm:text-sm">{label}</td>
-        <td className="p-3 sm:p-4 text-right font-mono font-black text-purple-700 border-r border-purple-200 text-[10px] sm:text-xs">{format(base)}</td>
+        <td className={`p-3 sm:p-4 text-right font-mono font-black border-r border-purple-200 text-[10px] sm:text-xs ${getStatusColor(base, 'text-purple-700')}`}>{format(base)}</td>
         <td className="p-3 sm:p-4 text-right font-black border-r border-purple-200">{formatPct(pBase)}</td>
-        <td className="p-3 sm:p-4 text-right font-mono font-black text-green-700 bg-green-100 border-r border-green-300 text-[10px] sm:text-xs">{format(prop)}</td>
+        <td className={`p-3 sm:p-4 text-right font-mono font-black bg-green-100 border-r border-green-300 text-[10px] sm:text-xs ${getStatusColor(prop, 'text-green-700')}`}>{format(prop)}</td>
         <td className="p-3 sm:p-4 text-right font-black bg-green-100 border-r border-green-300">{formatPct(pProp)}</td>
-        <td className="p-3 sm:p-4 text-right font-mono font-black text-blue-700 bg-blue-100 border-r border-blue-300 text-[10px] sm:text-xs">{format(tot)}</td>
+        <td className={`p-3 sm:p-4 text-right font-mono font-black bg-blue-100 border-r border-blue-300 text-[10px] sm:text-xs ${getStatusColor(tot, 'text-blue-700')}`}>{format(tot)}</td>
         <td className="p-3 sm:p-4 text-right font-black bg-blue-100">{formatPct(pTot)}</td>
       </tr>
     );
@@ -92,13 +99,13 @@ const EERRRow = ({ label, base, prop, tot, refBase, refProp, refTot, isNegProp, 
   return (
     <tr className="border-b border-purple-50 hover:bg-purple-50/30">
       <td className={`p-2 sm:p-3 font-bold text-slate-700 ${indent ? 'pl-4 sm:pl-6' : ''}`}>{label}</td>
-      <td className={`p-2 sm:p-3 text-right font-mono border-r border-purple-100 ${cProp.includes('red') && isNegTot ? 'text-red-600' : ''}`}>{format(base)}</td>
+      <td className={`p-2 sm:p-3 text-right font-mono border-r border-purple-100 ${getStatusColor(base, 'text-slate-700')} ${cProp.includes('red') && isNegTot ? 'text-red-600' : ''}`}>{format(base)}</td>
       <td className="p-2 sm:p-3 text-right font-bold border-r border-purple-100">{formatPct(pBase)}</td>
-      <td className={`p-2 sm:p-3 text-right font-mono font-bold bg-green-50 border-r border-green-200 ${cProp}`}>
+      <td className={`p-2 sm:p-3 text-right font-mono font-bold bg-green-50 border-r border-green-200 ${getStatusColor(prop, cProp || 'text-slate-700')}`}>
         {prop === 0 ? <span className="text-slate-400">0.00</span> : `${isNegProp ? '-' : ''}${format(prop)}`}
       </td>
       <td className="p-2 sm:p-3 text-right font-bold bg-green-50 border-r border-green-200">{formatPct(pProp)}</td>
-      <td className={`p-2 sm:p-3 text-right font-mono font-bold bg-blue-50 border-r border-blue-200 ${cTot}`}>
+      <td className={`p-2 sm:p-3 text-right font-mono font-bold bg-blue-50 border-r border-blue-200 ${getStatusColor(tot, cTot || 'text-slate-700')}`}>
         {`${isNegTot ? '-' : ''}${format(tot)}`}
       </td>
       <td className="p-2 sm:p-3 text-right font-bold bg-blue-50">{formatPct(pTot)}</td>
@@ -452,7 +459,7 @@ function App() {
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-8">
           <div className="w-full lg:w-auto">
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight bg-gradient-to-r from-purple-600 via-pink-500 to-blue-500 bg-clip-text text-transparent uppercase break-words">Horizon Finance Engine 2026</h1>
-            <p className="text-slate-500 text-xs sm:text-sm mt-1">Resultados Proyectados </p>
+            <p className="text-slate-500 text-xs sm:text-sm mt-1">Resultados Proyectado </p>
           </div>
           <div className="flex flex-wrap gap-2 sm:gap-3 items-center w-full lg:w-auto">
             {tienePermiso('busqueda') && <button onClick={() => setMostrarModalValores(true)} title="Ver Valores" className="bg-white border border-purple-200 rounded-lg px-3 py-2 text-purple-600 hover:bg-purple-50 transition shadow-sm text-lg print:hidden shrink-0">🔍</button>}
@@ -626,9 +633,9 @@ function App() {
                 <tbody>
                   <EERRRow label="Ingreso" base={eerr.ingresoBase} prop={propuesta.ventasTotales} tot={eerr.ingresoTotal} refBase={eerr.ingresoBase} refProp={propuesta.ventasTotales} refTot={eerr.ingresoTotal} cProp="text-green-700" cTot="text-blue-700" />
                   <EERRRow label="Costo de ingresos" base={eerr.costoIngresoBase} prop={propuesta.costosLaborales} tot={eerr.costoIngresosTotal} refBase={eerr.ingresoBase} refProp={propuesta.ventasTotales} refTot={eerr.ingresoTotal} isNegProp={true} isNegTot={true} cProp="text-red-600" cTot="text-red-600" />
-                  <EERRRow label="Ganancia bruta" base={eerr.gananciaBrutaBase} prop={propuesta.margenBruto} tot={eerr.gananciaBrutaTotal} refBase={eerr.ingresoBase} refProp={propuesta.ventasTotales} refTot={eerr.ingresoTotal} />
+                  <EERRRow label="Ganancia bruta" base={eerr.gananciaBrutaBase} prop={propuesta.margenBruto} tot={eerr.gananciaBrutaTotal} refBase={eerr.ingresoBase} refProp={propuesta.ventasTotales} refTot={eerr.ingresoTotal} isTotalRow={true} />
                   <EERRRow label="Menos gasto de operación" base={eerr.gastoOperacionBase} prop={propuesta.costosIndirectos} tot={eerr.gastoOperacionTotal} refBase={eerr.ingresoBase} refProp={propuesta.ventasTotales} refTot={eerr.ingresoTotal} indent={true} isNegProp={true} isNegTot={true} cProp="text-red-600" cTot="text-red-600" />
-                  <EERRRow label="Ingreso de operación (o pérdida)" base={eerr.ingresoOperacionBase || (eerr.gananciaBrutaBase - eerr.gastoOperacionBase)} prop={propuesta.ventasTotales - propuesta.costosTotales} tot={eerr.ingresoOperacionTotal} refBase={eerr.ingresoBase} refProp={propuesta.ventasTotales} refTot={eerr.ingresoTotal} cProp="text-green-700" cTot="text-blue-700" />
+                  <EERRRow label="Ingreso de operación (o pérdida)" base={eerr.ingresoOperacionBase || (eerr.gananciaBrutaBase - eerr.gastoOperacionBase)} prop={propuesta.ventasTotales - propuesta.costosTotales} tot={eerr.ingresoOperacionTotal} refBase={eerr.ingresoBase} refProp={propuesta.ventasTotales} refTot={eerr.ingresoTotal} cProp="text-green-700" cTot="text-blue-700" isTotalRow={true} />
                   <EERRRow label="Más otros ingresos" base={eerr.otrosIngresosBase} prop={0} tot={eerr.otrosIngresosTotal} refBase={eerr.ingresoBase} refProp={propuesta.ventasTotales} refTot={eerr.ingresoTotal} cProp="text-slate-400" />
                   <EERRRow label="Menos gastos de otro tipo" base={eerr.otrosGastosBase} prop={0} tot={eerr.otrosGastosTotal} refBase={eerr.ingresoBase} refProp={propuesta.ventasTotales} refTot={eerr.ingresoTotal} isNegTot={true} cProp="text-slate-400" cTot="text-red-600" />
                   <EERRRow label="Ganancia neta" base={eerr.gananciaNetaBase} prop={propuesta.ventasTotales - propuesta.costosTotales} tot={eerr.gananciaNetaTotal} refBase={eerr.ingresoBase} refProp={propuesta.ventasTotales} refTot={eerr.ingresoTotal} isTotalRow={true} />
