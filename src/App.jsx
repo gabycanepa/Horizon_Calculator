@@ -244,7 +244,7 @@ function App() {
       setGastosOperativos(tolerantGet(configObj, 'Gastos Operativos') || 0); 
       setMargenObjetivo(tolerantGet(configObj, 'Margen Objetivo') || tolerantGet(configObj, 'Margen Objetivo (%)') || 25);
       
-      setEerrTitulo(tolerantGetString(configObj, 'Titulo') || 'EERR Base');
+      setEerrTitulo(tolerantGetString(configObj, 'Titulo') || '2026');
 
       try {
         const dataNube = await (await fetch(`${SCRIPT_URL}?sheet=HistorialCompartido`)).json();
@@ -527,6 +527,10 @@ function App() {
                     } 
                   }
                   const res = (e.cantidad * e.ventaUnit) - cTot, mgn = e.ventaUnit ? (res / (e.cantidad * e.ventaUnit)) * 100 : 0;
+                  
+                  // LOGICA DE COLOR PARA EL RESULTADO
+                  const resColor = res < 0 ? 'text-red-600' : res === 0 ? 'text-yellow-500' : 'text-green-600';
+
                   return (
                     <tr key={e.id} className="border-t border-purple-50 hover:bg-purple-50/30 transition">
                       <td className="p-2 sm:p-4"><select value={e.cliente} onChange={(ev) => actualizarFila(e.id, 'cliente', ev.target.value)} className="w-full bg-transparent focus:outline-none font-medium truncate">{dataSheets.clientes.map(c => <option key={c} value={c}>{c}</option>)}</select></td>
@@ -536,7 +540,7 @@ function App() {
                       <td className="p-2 sm:p-4 text-right">{isStaff ? <input type="text" value={Number(e.sueldoBruto||0).toLocaleString('es-AR')} onChange={(ev) => actualizarFila(e.id, 'sueldoBruto', ev.target.value)} className="w-20 sm:w-24 text-right bg-pink-50 text-pink-700 font-bold rounded px-1 sm:px-2 border border-pink-200" /> : <span className="text-slate-300">-</span>}</td>
                       <td className="p-2 sm:p-4 text-right">{isWks ? <input type="text" value={Number(e.costoDirecto||0).toLocaleString('es-AR')} onChange={(ev) => actualizarFila(e.id, 'costoDirecto', ev.target.value)} className="w-20 sm:w-28 text-right bg-orange-50 text-orange-700 font-bold rounded px-1 sm:px-2 border border-orange-300" /> : <span className="text-slate-300">-</span>}</td>
                       <td className="p-2 sm:p-4 text-right font-mono text-red-500 text-[10px] sm:text-xs">-{format(cTot)}</td>
-                      <td className="p-2 sm:p-4 text-right font-bold text-green-600 text-xs sm:text-sm">{format(res)}</td>
+                      <td className={`p-2 sm:p-4 text-right font-bold ${resColor} text-xs sm:text-sm`}>{format(res)}</td>
                       <td className="p-2 sm:p-4 text-center"><span className={`text-[9px] sm:text-[10px] font-black px-1.5 sm:px-2 py-1 rounded ${mgn >= margenObjetivo ? 'bg-green-100 text-green-700' : mgn >= 15 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>{mgn.toFixed(1)}%</span></td>
                       <td className="p-2 sm:p-4 text-right print:hidden"><button onClick={() => setEscenarios(p => p.filter(x => x.id !== e.id))} className="text-slate-300 hover:text-red-500 font-bold">✕</button></td>
                     </tr>
@@ -611,8 +615,8 @@ function App() {
                     <th className="p-2 sm:p-3 border-r border-purple-100">Concepto</th>
                     <th className="p-2 sm:p-3 text-right border-r border-purple-100">{eerrTitulo}</th>
                     <th className="p-2 sm:p-3 text-right border-r border-purple-100">%</th>
-                    <th className="p-2 sm:p-3 text-right bg-green-50 border-r border-green-200">Propuesta</th><th className="p-2 sm:p-3 text-right bg-green-50 border-r border-green-200">%</th>
-                    <th className="p-2 sm:p-3 text-right bg-blue-50 border-r border-blue-200">EERR Proyectado</th><th className="p-2 sm:p-3 text-right bg-blue-50">%</th>
+                    <th className="p-2 sm:p-3 text-right bg-green-50 border-r border-green-200">Propuesta Comercial</th><th className="p-2 sm:p-3 text-right bg-green-50 border-r border-green-200">%</th>
+                    <th className="p-2 sm:p-3 text-right bg-blue-50 border-r border-blue-200">EERR Total Proyectado</th><th className="p-2 sm:p-3 text-right bg-blue-50">%</th>
                   </tr>
                 </thead>
                 <tbody>
