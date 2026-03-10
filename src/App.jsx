@@ -43,7 +43,6 @@ const fetchSheet = async (sheetName) => {
   if (lines.length === 0) return [];
   const parseCSVLine = (line) => line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)|;(?=(?:(?:[^"]*"){2})*[^"]*$)/g).map(c => c.replace(/^"|"$/g, '').trim());
   
-  // SOLUCIÓN: Asegurarnos de que las columnas sin cabecera no se pierdan
   const headers = parseCSVLine(lines[0]).map((h, i) => h.trim() ? h.trim() : `col_${i}`);
   
   return lines.slice(1).map(line => {
@@ -178,11 +177,48 @@ function ModalValoresServicios({ datos, onClose }) {
   );
 }
 
+// ─── MODAL AYUDA ─────────────────────────────────────────────────────────────
+function ModalAyuda({ datos, onClose }) {
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex justify-between items-center p-4 bg-gradient-to-r from-blue-600 to-indigo-500 text-white shrink-0">
+          <h2 className="font-black text-sm uppercase">💡 Centro de Ayuda</h2>
+          <button onClick={onClose} className="text-white/80 hover:text-white font-black text-lg print:hidden">✕</button>
+        </div>
+        <div className="overflow-auto p-2">
+          {datos.length === 0 ? <p className="text-center text-slate-400 py-10 text-sm italic">Cargando información de ayuda...</p> : (
+            <table className="w-full text-xs border-collapse min-w-[600px]">
+              <thead className="sticky top-0 bg-blue-50 shadow-sm">
+                <tr>{Object.keys(datos[0]).map(h => <th key={h} className="p-3 text-left font-bold text-blue-700 uppercase border-b border-blue-100 whitespace-nowrap bg-blue-50">{h}</th>)}</tr>
+              </thead>
+              <tbody>
+                {datos.map((row, i) => (
+                  <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-blue-50/30'}>
+                    {Object.values(row).map((val, j) => <td key={j} className="p-3 border-b border-slate-100 text-slate-700">{val}</td>)}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── APP PRINCIPAL ───────────────────────────────────────────────────────────
 function App() {
   const [dataSheets, setDataSheets] = useState({ preciosNuevos: [], clientes: [], config: {}, eerrBase: {}, eerrBaseNorm: {}, usuarios: [], valoresServicios: [], loading: true, error: null });
   const [usuarioActual, setUsuarioActual] = useState(null);
+  
+  // Modales
   const [mostrarModalValores, setMostrarModalValores] = useState(false);
+  const [mostrarModalAyuda, setMostrarModalAyuda] = useState(false);
+  
+  // Datos de Ayuda
+  const [datosAyuda, setDatosAyuda] = useState([]);
+
   const [escenarios, setEscenarios] = useState([]);
   const [historial, setHistorial] = useState([]);
   
@@ -217,19 +253,26 @@ function App() {
   const recargarDatosDesdeNube = async () => {
     setIsRefreshing(true);
     try {
-      const [precios, clientes, cfg, eerr, usuarios, valoresServ] = await Promise.all([
-        fetchSheet('PreciosNuevos'), fetchSheet('Clientes'), fetchSheet('Configuracion'), fetchSheet('EERRBase'), fetchSheet('Usuarios'), fetchSheet('Valores_Servicios')
+      const [precios, clientes, cfg, eerr, usuarios, valoresServ, ayudaSheetData] = await Promise.all([
+        fetchSheet('PreciosNuevos'), 
+        fetchSheet('Clientes'), 
+        fetchSheet('Configuracion'), 
+        fetchSheet('EERRBase'), 
+        fetchSheet('Usuarios'), 
+        fetchSheet('Valores_Servicios'),
+        fetchSheet('Ayuda') // Agregamos la lectura de la pestaña Ayuda
       ]);
+
+      setDatosAyuda(ayudaSheetData); // Guardamos la data de ayuda en el estado
 
       const configObj = {};
       cfg.forEach(row => { 
-        const vals = Object.values(row); // Extraemos la fila completa en formato de array
+        const vals = Object.values(row); 
         const k = row['Parámetro'] ?? row['Parametro'] ?? row['Key'] ?? vals[0]; 
         
         if (k) {
           const keyStr = String(k).trim();
           
-          // SOLUCIÓN: Buscamos horizontalmente si es la fila de columnas
           if (keyStr.toLowerCase().includes('estado de resultados (columnas)')) {
             configObj['Titulo Concepto'] = vals[1] || 'Concepto';
             configObj['Titulo'] = vals[2] || '2026';
@@ -237,7 +280,6 @@ function App() {
             configObj['Titulo EERR'] = vals[4] || 'EERR Total Proyectado';
           } else {
             const val = row['Valor'] ?? row['Value'] ?? vals[1];
-            // Si es un título, guardamos como texto, si no, lo limpiamos como número
             configObj[keyStr] = keyStr.toLowerCase().includes('titulo') ? val : cleanNum(val);
           }
         }
@@ -272,7 +314,6 @@ function App() {
       setGastosOperativos(tolerantGet(configObj, 'Gastos Operativos') || 0); 
       setMargenObjetivo(tolerantGet(configObj, 'Margen Objetivo') || tolerantGet(configObj, 'Margen Objetivo (%)') || 25);
       
-      // Asignación de Títulos Dinámicos usando las nuevas claves
       setEerrTitulo(tolerantGetString(configObj, 'Titulo') || '2026');
       setTituloConcepto(tolerantGetString(configObj, 'Titulo Concepto') || 'Concepto');
       setTituloPropuesta(tolerantGetString(configObj, 'Titulo Propuesta') || 'Propuesta Comercial');
@@ -478,7 +519,10 @@ function App() {
   return (
     <div className="p-4 sm:p-8 bg-gradient-to-br from-slate-50 to-purple-50 min-h-screen font-sans text-slate-900 overflow-x-hidden">
       <style>{`@media print { @page { size: landscape; margin: 10mm; } body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; background-color: #f8fafc !important; } .overflow-x-auto, .overflow-y-auto, .overflow-auto, .max-h-48, .max-h-[80vh], .max-h-[90vh] { overflow: visible !important; max-height: none !important; } .shadow-sm, .shadow-lg, .shadow-2xl { box-shadow: none !important; border: 1px solid #e2e8f0; } }`}</style>
+      
+      {/* Modales */}
       {mostrarModalValores && <ModalValoresServicios datos={dataSheets.valoresServicios} onClose={() => setMostrarModalValores(false)} />}
+      {mostrarModalAyuda && <ModalAyuda datos={datosAyuda} onClose={() => setMostrarModalAyuda(false)} />}
       
       <div className="max-w-7xl mx-auto">
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-8">
@@ -487,6 +531,9 @@ function App() {
             <p className="text-slate-500 text-xs sm:text-sm mt-1">Resultados Proyectados </p>
           </div>
           <div className="flex flex-wrap gap-2 sm:gap-3 items-center w-full lg:w-auto">
+            {/* BOTÓN DE AYUDA */}
+            <button onClick={() => setMostrarModalAyuda(true)} title="Ver Ayuda" className="bg-white border border-blue-200 rounded-lg px-3 py-2 text-blue-600 hover:bg-blue-50 transition shadow-sm text-lg print:hidden shrink-0">💡</button>
+            
             {tienePermiso('busqueda') && <button onClick={() => setMostrarModalValores(true)} title="Ver Valores" className="bg-white border border-purple-200 rounded-lg px-3 py-2 text-purple-600 hover:bg-purple-50 transition shadow-sm text-lg print:hidden shrink-0">🔍</button>}
             
             <button 
